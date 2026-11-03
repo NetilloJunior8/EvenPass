@@ -120,15 +120,148 @@ export class EventService {
     return this.selectedEvent()?.itinerary || [];
   });
 
+  // --- SMART REAL-TIME CLOCK & ITINERARY AUTO-PROGRESSION ---
+  simulatedTime = signal<string | null>(null);
+  autoProgressionEnabled = signal<boolean>(true);
+
+  currentEffectiveTime = computed<string>(() => {
+    if (this.simulatedTime()) return this.simulatedTime()!;
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    return `${hh}:${mm}`;
+  });
+
+  isEventLocked(ev?: EventItem | null): boolean {
+    const target = ev !== undefined ? ev : this.selectedEvent();
+    if (!target) return false;
+    return target.status === 'FINALIZADO';
+  }
+
+  setSimulatedTime(timeStr: string | null): void {
+    this.simulatedTime.set(timeStr);
+    this.autoAdvanceItineraryForCurrentEvent();
+    if (timeStr) {
+      this.notificationService.show('info', 'Simulación de Horario Activada', `Reloj del sistema ajustado a las ${timeStr} hrs.`);
+    } else {
+      this.notificationService.show('success', 'Reloj Real Restaurado', 'Sincronizado con la hora de tu dispositivo.');
+    }
+  }
+
+  autoAdvanceItineraryForCurrentEvent(): void {
+    if (!this.autoProgressionEnabled()) return;
+    const activeEv = this.selectedEvent();
+    if (!activeEv || !activeEv.itinerary || activeEv.itinerary.length === 0) return;
+    if (activeEv.status === 'FINALIZADO') return; // Read-only locked
+
+    const timeStr = this.currentEffectiveTime();
+    const parts = timeStr.split(':').map(n => parseInt(n, 10));
+    if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return;
+    const [currH, currM] = parts;
+    const currTotalMins = currH * 60 + currM;
+
+    // Standard event starts at 19:00 (1140 mins)
+    const eventStartMins = 19 * 60;
+    const isMorningBeforeEvent = currH >= 6 && currTotalMins < eventStartMins;
+
+    if (isMorningBeforeEvent) {
+      // Event has not begun yet; in morning it is pending
+      let changed = false;
+      let newStatus = activeEv.status;
+      if (activeEv.status === 'EN_PROGRESO') {
+        newStatus = 'PENDIENTE';
+        changed = true;
+      }
+      const updatedItinerary = activeEv.itinerary.map(item => {
+        if (item.status !== 'UPCOMING') {
+          changed = true;
+          return { ...item, status: 'UPCOMING' as const };
+        }
+        return item;
+      });
+
+      if (changed) {
+        this.events.update(list => list.map(e => 
+          e.id === activeEv.id ? { ...e, status: newStatus, itinerary: updatedItinerary } : e
+        ));
+      }
+      return;
+    }
+
+    // Normalized minutes for evening to early morning (00:00 to 05:59 treated as next day 24h+)
+    let normalizedCurr = currTotalMins;
+    if (currH < 6) {
+      normalizedCurr += 24 * 60;
+    }
+
+    const itemsWithMinutes = activeEv.itinerary.map(item => {
+      const p = item.time.split(':').map(n => parseInt(n, 10));
+      let m = (isNaN(p[0]) ? 0 : p[0]) * 60 + (isNaN(p[1]) ? 0 : p[1]);
+      if (p[0] < 6) m += 24 * 60;
+      return { item, startMins: m };
+    });
+
+    let anyChanged = false;
+    const updatedItinerary: ItineraryItem[] = itemsWithMinutes.map((entry, idx) => {
+      const startMins = entry.startMins;
+      const nextEntry = itemsWithMinutes[idx + 1];
+      const endMins = nextEntry ? nextEntry.startMins : (startMins + 60);
+
+      let expectedStatus: 'UPCOMING' | 'IN_PROGRESS' | 'COMPLETED' = 'UPCOMING';
+      if (normalizedCurr >= endMins) {
+        expectedStatus = 'COMPLETED';
+      } else if (normalizedCurr >= startMins && normalizedCurr < endMins) {
+        expectedStatus = 'IN_PROGRESS';
+      } else {
+        expectedStatus = 'UPCOMING';
+      }
+
+      if (entry.item.status !== expectedStatus) {
+        anyChanged = true;
+      }
+      return { ...entry.item, status: expectedStatus };
+    });
+
+    const lastEntry = itemsWithMinutes[itemsWithMinutes.length - 1];
+    const eventFinishMins = lastEntry ? lastEntry.startMins + 60 : (24 + 3) * 60;
+
+    let newEventStatus: EventStatus = activeEv.status;
+    if (normalizedCurr >= eventFinishMins) {
+      newEventStatus = 'FINALIZADO';
+      anyChanged = true;
+    } else if (normalizedCurr >= eventStartMins) {
+      if (activeEv.status === 'PENDIENTE') {
+        newEventStatus = 'EN_PROGRESO';
+        anyChanged = true;
+      }
+    }
+
+    if (anyChanged) {
+      this.events.update(list => list.map(e => 
+        e.id === activeEv.id ? { ...e, status: newEventStatus, itinerary: updatedItinerary } : e
+      ));
+
+      if (newEventStatus === 'FINALIZADO') {
+        this.notificationService.show('info', 'Evento Concluido', `"${activeEv.name}" ha finalizado según el cronograma. Modo histórico activado.`);
+      }
+    }
+  }
+
   constructor(private notificationService: NotificationService) {
     this.initDemoData();
     this.listenForIncomingTickets();
+    // Auto-advance checking every 10 seconds based on clock
+    setInterval(() => {
+      this.autoAdvanceItineraryForCurrentEvent();
+    }, 10000);
+    this.autoAdvanceItineraryForCurrentEvent();
   }
 
   selectEvent(id: number): void {
     const found = this.events().find(e => e.id === id);
     if (found) {
       this.activeEventId.set(id);
+      this.autoAdvanceItineraryForCurrentEvent();
       this.notificationService.show('info', 'Evento Activo', `Ahora gestionando: ${found.name}`);
     }
   }
@@ -138,16 +271,16 @@ export class EventService {
     const demoEvents: EventItem[] = [
       {
         id: 1,
-        name: 'Boda de Sofía & Mateo',
+        name: 'Gran Gala Nupcial · Sofía & Mateo',
         hostName: 'Laura Méndez',
         description: 'Ceremonia religiosa en Catedral y recepción de gala en Hacienda Los Olivos.',
         eventType: 'Boda',
-        eventDate: '2026-11-24T18:00:00',
+        eventDate: '2026-11-03T19:00:00',
         createdAt: '2026-10-25T10:00:00',
         venueName: 'Hacienda Los Olivos (Salón Imperial)',
         locationAddress: 'Carretera a Imala Km 4.5, Culiacán',
         maxCapacity: 250,
-        status: 'EN_PROGRESO',
+        status: 'PENDIENTE',
         templateSlug: 'miriam-isidro',
         invitationMode: 'TEMPLATE',
         tierPlan: 'PREMIUM',
@@ -156,18 +289,15 @@ export class EventService {
         numTables: 16,
         totalGuests: 140,
         confirmedGuests: 140,
-        attendedGuests: 48,
+        attendedGuests: 0,
         itinerary: [
-          { id: 1, time: '15:30', title: 'Montaje & Pruebas Técnicas de Audio', description: 'Revisión con grupo musical, DJ y pruebas de iluminación escénica', status: 'COMPLETED', location: 'Salón Imperial' },
-          { id: 2, time: '17:00', title: 'Ceremonia Religiosa', description: 'Catedral Basílica de Culiacán con cortejo nupcial', status: 'COMPLETED', location: 'Catedral Basílica' },
-          { id: 3, time: '18:15', title: 'Sesión de Fotografía & Cóctel de Bienvenida', description: 'Jardín central con barra de mixología y música acústica', status: 'COMPLETED', location: 'Jardín Central' },
-          { id: 4, time: '19:30', title: 'Apertura de Puertas & Ubicación en Mesas', description: 'Check-in por escaneo QR y orientación a mesas asignadas', status: 'IN_PROGRESS', location: 'Acceso Principal' },
-          { id: 5, time: '20:15', title: 'Entrada Triunfal de Novios & Primer Vals', description: 'Pista de baile central con pirotecnia fría y vals de esposos', status: 'UPCOMING', location: 'Pista Central' },
-          { id: 6, time: '20:45', title: 'Vals Familiar & Palabras de Padrinos', description: 'Baile con padres y brindis de honor con champaña', status: 'UPCOMING', location: 'Pista Central' },
-          { id: 7, time: '21:15', title: 'Cena Formal de 3 Tiempos con Maridaje', description: 'Servicio gastronómico a comensales en mesas', status: 'UPCOMING', location: 'Mesas del Salón' },
-          { id: 8, time: '22:30', title: 'Apertura de Barra Libre & DJ Set Estelar', description: 'Comienza baile general con grupo versátil en vivo', status: 'UPCOMING', location: 'Escenario Principal' },
-          { id: 9, time: '01:00', title: 'Lanzamiento de Ramo & Corte de Pastel', description: 'Tradicional ramo, liga y mesa de postres finos', status: 'UPCOMING', location: 'Mesa de Pastel' },
-          { id: 10, time: '02:30', title: 'Tornaboda & Estación de Chilaquiles', description: 'Banda sinaloense en vivo y despedida de la recepción', status: 'UPCOMING', location: 'Jardín & Salón' }
+          { id: 1, time: '19:00', title: 'Recepción & Cóctel de Bienvenida en Jardín', description: 'Recepción con mixología de autor y cuarteto acústico', status: 'UPCOMING', location: 'Jardín Central' },
+          { id: 2, time: '19:45', title: 'Apertura del Salón Real & Asignación de Mesas', description: 'Check-in por código QR y ubicación de comensales en sus mesas', status: 'UPCOMING', location: 'Acceso Salón Real' },
+          { id: 3, time: '20:30', title: 'Entrada Triunfal de Novios & Primer Vals', description: 'Vals nupcial con pirotecnia fría y brindis de honor', status: 'UPCOMING', location: 'Pista Central' },
+          { id: 4, time: '21:15', title: 'Cena Formal de Gala de 3 Tiempos', description: 'Servicio gastronómico a comensales en mesas', status: 'UPCOMING', location: 'Mesas del Salón' },
+          { id: 5, time: '22:30', title: 'Apertura de Pista & Show DJ Estelar', description: 'Comienza fiesta general y barra libre internacional', status: 'UPCOMING', location: 'Escenario Principal' },
+          { id: 6, time: '01:00', title: 'Corte de Pastel & Lanzamiento de Ramo', description: 'Tradición de ramo y mesa de postres gourmet', status: 'UPCOMING', location: 'Mesa de Pastel' },
+          { id: 7, time: '02:00', title: 'Tornaboda & Clausura del Evento', description: 'Música en vivo y despedida formal de la recepción', status: 'UPCOMING', location: 'Salón Real' }
         ]
       },
       {
@@ -670,6 +800,11 @@ export class EventService {
 
   // --- AUTOMATIC INTELLIGENT SEATING ALGORITHM ---
   autoAssignTables(): AutoAssignResult {
+    if (this.isEventLocked()) {
+      this.notificationService.show('warning', 'Evento Concluido', 'Este evento ha finalizado. La distribución de mesas está archivada en modo de solo lectura.');
+      return { salonId: 0, salonName: '', totalGuestsAssigned: 0, totalPassesAssigned: 0, tablesUtilized: 0, remainingUnassignedGuests: 0, message: 'Evento concluido en modo histórico.', tables: [] };
+    }
+
     const salon = this.currentSalon();
     if (!salon || !salon.tables || salon.tables.length === 0) {
       throw new Error('No hay mesas configuradas en el salón');
@@ -765,9 +900,14 @@ export class EventService {
     message: string;
     guest?: Guest;
   } {
+    const activeEv = this.selectedEvent();
+    if (this.isEventLocked(activeEv)) {
+      this.notificationService.show('error', 'Evento Concluido', 'Este evento ha finalizado. El registro de accesos en puerta está cerrado.');
+      return { success: false, type: 'INVALID', message: 'ACCESO CERRADO · Este evento ya ha concluido.' };
+    }
+
     const clean = token.trim().toUpperCase();
     const guest = this.allGuests().find(g => g.qrCodeToken.toUpperCase() === clean);
-    const activeEv = this.selectedEvent();
 
     if (!guest) {
       const log: CheckInLog = {
@@ -860,6 +1000,10 @@ export class EventService {
 
   // --- GUEST MANAGEMENT ---
   addGuest(guest: Partial<Guest>): void {
+    if (this.isEventLocked()) {
+      this.notificationService.show('warning', 'Evento Concluido', 'Este evento ha finalizado y está en modo histórico. No se pueden agregar nuevos invitados.');
+      return;
+    }
     const activeEvId = this.activeEventId();
     const numCompanions = guest.numCompanions || 0;
     const newGuest: Guest = {
@@ -885,6 +1029,10 @@ export class EventService {
   }
 
   deleteGuest(id: number): void {
+    if (this.isEventLocked()) {
+      this.notificationService.show('warning', 'Evento Concluido', 'Este evento ha finalizado y está en modo histórico. No se pueden eliminar invitados.');
+      return;
+    }
     const activeEvId = this.activeEventId();
     this.allGuests.update(list => list.filter(g => g.id !== id));
     this.events.update(list => list.map(ev => 
@@ -894,6 +1042,10 @@ export class EventService {
   }
 
   assignTableToGuest(guestId: number, tableId: number): void {
+    if (this.isEventLocked()) {
+      this.notificationService.show('warning', 'Evento Concluido', 'Este evento ha finalizado. La asignación de mesas está bloqueada.');
+      return;
+    }
     const curSalon = this.currentSalon();
     const table = curSalon?.tables.find(t => t.id === tableId);
     if (!table) return;
@@ -932,6 +1084,10 @@ export class EventService {
   }
 
   unassignGuestTable(guestId: number): void {
+    if (this.isEventLocked()) {
+      this.notificationService.show('warning', 'Evento Concluido', 'Este evento ha finalizado. La asignación de mesas está bloqueada.');
+      return;
+    }
     this.allGuests.update(list => list.map(g => {
       if (g.id === guestId) {
         return {
@@ -948,6 +1104,10 @@ export class EventService {
 
   // --- MANUAL REASSIGNMENT TO SPECIFIC TABLE (UPON GUEST REQUEST) ---
   reassignGuestToTable(guestId: number, targetTableId: number): boolean {
+    if (this.isEventLocked()) {
+      this.notificationService.show('warning', 'Evento Concluido', 'Este evento ha finalizado. La reasignación de mesas está deshabilitada.');
+      return false;
+    }
     const guest = this.allGuests().find(g => g.id === guestId);
     if (!guest) {
       this.notificationService.show('error', 'Error', 'Invitado no encontrado.');
@@ -1166,6 +1326,10 @@ export class EventService {
   }
 
   addTableToCurrentSalon(table: Partial<SalonTable>): void {
+    if (this.isEventLocked()) {
+      this.notificationService.show('warning', 'Evento Concluido', 'Este evento ha finalizado. El plano arquitectónico está archivado en modo de solo lectura.');
+      return;
+    }
     const cur = this.currentSalon();
     if (!cur) return;
 
@@ -1190,6 +1354,12 @@ export class EventService {
   }
 
   updateTableInCurrentSalon(tableId: number, changes: Partial<SalonTable>, silent: boolean = false): void {
+    if (this.isEventLocked()) {
+      if (!silent) {
+        this.notificationService.show('warning', 'Evento Concluido', 'Este evento ha finalizado. El plano arquitectónico está archivado.');
+      }
+      return;
+    }
     const cur = this.currentSalon();
     if (!cur) return;
 
@@ -1206,6 +1376,10 @@ export class EventService {
   }
 
   deleteTableFromCurrentSalon(tableId: number): void {
+    if (this.isEventLocked()) {
+      this.notificationService.show('warning', 'Evento Concluido', 'Este evento ha finalizado. El plano arquitectónico está archivado.');
+      return;
+    }
     const cur = this.currentSalon();
     if (!cur) return;
 
@@ -1227,6 +1401,10 @@ export class EventService {
 
   // --- ITINERARY UPDATE & BULK TIME SHIFT ---
   toggleItineraryStatus(itemId: number): void {
+    if (this.isEventLocked()) {
+      this.notificationService.show('warning', 'Evento Concluido', 'Este evento ha finalizado. El cronograma está archivado como histórico.');
+      return;
+    }
     const activeEv = this.selectedEvent();
     if (!activeEv) return;
 
@@ -1245,6 +1423,10 @@ export class EventService {
   }
 
   shiftItineraryTimes(minutes: number): void {
+    if (this.isEventLocked()) {
+      this.notificationService.show('warning', 'Evento Concluido', 'Este evento ha finalizado. El cronograma está archivado.');
+      return;
+    }
     const activeEv = this.selectedEvent();
     if (!activeEv || !activeEv.itinerary) return;
 
@@ -1284,6 +1466,10 @@ export class EventService {
   }
 
   addMilestone(item: Partial<ItineraryItem>): void {
+    if (this.isEventLocked()) {
+      this.notificationService.show('warning', 'Evento Concluido', 'El cronograma ha finalizado y no admite nuevos hitos.');
+      return;
+    }
     const activeEv = this.selectedEvent();
     if (!activeEv) return;
 
@@ -1304,6 +1490,10 @@ export class EventService {
   }
 
   deleteMilestone(id: number): void {
+    if (this.isEventLocked()) {
+      this.notificationService.show('warning', 'Evento Concluido', 'Este evento ha finalizado. No se pueden eliminar hitos.');
+      return;
+    }
     const activeEv = this.selectedEvent();
     if (!activeEv) return;
 
@@ -1519,6 +1709,10 @@ export class EventService {
   syncWithSupabase(eventId: number): { success: boolean; newGuests: number; message: string } {
     const ev = this.events().find(e => e.id === eventId) || this.selectedEvent();
     if (!ev) return { success: false, newGuests: 0, message: 'Evento no seleccionado' };
+    if (this.isEventLocked(ev)) {
+      this.notificationService.show('warning', 'Evento Concluido', 'Este evento ha finalizado. La sincronización de confirmaciones está deshabilitada en modo histórico.');
+      return { success: false, newGuests: 0, message: 'Evento finalizado en modo histórico.' };
+    }
 
     const sim1 = this.simulateExternalRsvp(ev.id, 'SUPABASE');
     const sim2 = this.simulateExternalRsvp(ev.id, 'SUPABASE');

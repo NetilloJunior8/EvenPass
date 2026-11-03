@@ -113,16 +113,16 @@ public class DataInitializer implements CommandLineRunner {
 
         templateRepository.saveAll(List.of(t1, t2, t3));
 
-        // 3. Evento Principal
+        // 3. Evento Principal (Programado para hoy a las 19:00 hrs)
         Event event = Event.builder()
-                .name("Boda de Sofía & Mateo (Miriam & Isidro)")
+                .name("Gran Gala Nupcial · Sofía & Mateo")
                 .description("Ceremonia religiosa en Catedral y recepción de gala en Hacienda Los Olivos.")
                 .eventType("Boda")
-                .eventDate(LocalDateTime.now().plusWeeks(3))
-                .venueName("Hacienda Los Olivos")
+                .eventDate(LocalDateTime.now().withHour(19).withMinute(0).withSecond(0))
+                .venueName("Hacienda Los Olivos · Salón Real")
                 .locationAddress("Carretera a Imala Km 4.5, Culiacán, Sin.")
                 .maxCapacity(250)
-                .status("PUBLISHED")
+                .status("PENDIENTE")
                 .templateSlug("miriam-isidro")
                 .organizer(admin)
                 .build();

@@ -70,6 +70,17 @@ import jsQR from 'jsqr';
       <!-- ============================================================== -->
       <ng-container *ngIf="isScannerIncluded()">
 
+      <!-- Locked Banner when Event Finished -->
+      <div *ngIf="eventService.isEventLocked()" class="event-locked-banner">
+        <div class="locked-icon-bubble">
+          <app-icon name="lock" [size]="20"></app-icon>
+        </div>
+        <div class="locked-text-wrap">
+          <strong>Evento Concluido · Escáner Bloqueado (Solo Lectura)</strong>
+          <p>Este evento ya finalizó. El control de acceso en puerta se encuentra cerrado. El registro de auditoría e historial se mantiene accesible para consulta.</p>
+        </div>
+      </div>
+
       <!-- Header Box -->
       <div class="scanner-header-card">
         <div>
@@ -141,8 +152,9 @@ import jsQR from 'jsqr';
                 type="button" 
                 class="btn-cam-control" 
                 [class.active]="isCameraActive()" 
+                [disabled]="eventService.isEventLocked()"
                 (click)="toggleCamera()"
-                [title]="isCameraActive() ? 'Detener cámara' : 'Iniciar escáner de cámara'"
+                [title]="eventService.isEventLocked() ? 'Evento finalizado (bloqueado)' : (isCameraActive() ? 'Detener cámara' : 'Iniciar escáner de cámara')"
               >
                 <app-icon [name]="isCameraActive() ? 'x' : 'camera'" [size]="14"></app-icon>
                 <span>{{ isCameraActive() ? 'Apagar Cámara' : 'Iniciar Cámara' }}</span>
@@ -184,7 +196,7 @@ import jsQR from 'jsqr';
                 <app-icon name="camera" [size]="38"></app-icon>
               </div>
               <p class="cam-guide-text">Cámara en espera</p>
-              <button type="button" class="btn-action btn-sm" (click)="startCamera()">
+              <button type="button" class="btn-action btn-sm" [disabled]="eventService.isEventLocked()" (click)="startCamera()">
                 <app-icon name="camera" [size]="14"></app-icon>
                 <span>Activar Escaneo en Vivo</span>
               </button>
@@ -227,9 +239,10 @@ import jsQR from 'jsqr';
                 type="text" 
                 [(ngModel)]="qrInput" 
                 placeholder="Ej. EP-9902" 
-                (keyup.enter)="executeScan(qrInput)"
+                [disabled]="eventService.isEventLocked()"
+                (keyup.enter)="!eventService.isEventLocked() && executeScan(qrInput)"
               >
-              <button class="btn-action" (click)="executeScan(qrInput)">Validar Pase</button>
+              <button class="btn-action" [disabled]="eventService.isEventLocked()" (click)="executeScan(qrInput)">Validar Pase</button>
             </div>
           </div>
 
@@ -240,15 +253,16 @@ import jsQR from 'jsqr';
               <button 
                 *ngFor="let sample of getSampleGuestsForTesting()" 
                 class="btn-outline btn-xs" 
+                [disabled]="eventService.isEventLocked()"
                 (click)="executeScan(sample.qrCodeToken)"
                 [title]="sample.fullName + ' · ' + sample.qrCodeToken"
               >
                 Pase: {{ sample.fullName.split(' ')[0] }} ({{ sample.qrCodeToken }})
               </button>
-              <button class="btn-outline btn-xs btn-test-dup" (click)="executeScan('EP-9901')">
+              <button class="btn-outline btn-xs btn-test-dup" [disabled]="eventService.isEventLocked()" (click)="executeScan('EP-9901')">
                 Probar Duplicado (EP-9901)
               </button>
-              <button class="btn-outline btn-xs btn-test-inv" (click)="executeScan('EP-0000')">
+              <button class="btn-outline btn-xs btn-test-inv" [disabled]="eventService.isEventLocked()" (click)="executeScan('EP-0000')">
                 Probar Inválido (EP-0000)
               </button>
             </div>
@@ -491,6 +505,42 @@ import jsQR from 'jsqr';
     .btn-return-link:hover {
       background: var(--bg-input);
       border-color: var(--brand-blue);
+    }
+
+    /* Locked Banner */
+    .event-locked-banner {
+      background: color-mix(in srgb, #ef4444 8%, var(--bg-card));
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      border-radius: var(--radius-lg);
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .locked-icon-bubble {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(239, 68, 68, 0.18);
+      color: #ef4444;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+
+    .locked-text-wrap strong {
+      font-size: 0.96rem;
+      color: #b91c1c;
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .locked-text-wrap p {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      margin: 0;
     }
 
     .scanner-header-card {
@@ -1064,6 +1114,10 @@ export class ScannerComponent implements OnDestroy {
 
   // Camera Management
   async startCamera(): Promise<void> {
+    if (this.eventService.isEventLocked()) {
+      this.notificationService.show('warning', 'Evento Concluido', 'El escaneo en vivo está inhabilitado porque el evento ha finalizado.');
+      return;
+    }
     try {
       this.stopCamera();
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -1333,6 +1387,10 @@ export class ScannerComponent implements OnDestroy {
   }
 
   executeScan(token: string): void {
+    if (this.eventService.isEventLocked()) {
+      this.notificationService.show('warning', 'Evento Concluido', 'No es posible validar pases para un evento finalizado.');
+      return;
+    }
     if (!token) return;
     const clean = token.trim().toUpperCase();
 

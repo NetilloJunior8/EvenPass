@@ -13,6 +13,72 @@ import { IconComponent } from '../icon.component';
   template: `
     <div class="itinerary-page-container">
 
+      <!-- Locked Banner when Event Finished -->
+      <div *ngIf="eventService.isEventLocked()" class="event-locked-banner">
+        <div class="locked-icon-bubble">
+          <app-icon name="lock" [size]="20"></app-icon>
+        </div>
+        <div class="locked-text-wrap">
+          <strong>Evento Concluido · Cronograma Archivado (Solo Lectura)</strong>
+          <p>Este evento ya finalizó. La agenda completa ha concluido y se encuentra archivada en modo histórico. No se admiten modificaciones.</p>
+        </div>
+      </div>
+
+      <!-- Real-Time Smart Clock & Simulation Controller -->
+      <div class="smart-clock-card">
+        <div class="clock-info-col">
+          <div class="clock-title-row">
+            <span class="live-pulse-dot" [class.is-simulated]="eventService.simulatedTime() !== null"></span>
+            <strong class="clock-display">Reloj del Sistema: {{ eventService.currentEffectiveTime() }} hrs</strong>
+            <span class="clock-badge-tag" [class.badge-simulated]="eventService.simulatedTime() !== null">
+              {{ eventService.simulatedTime() ? '⚡ SIMULACIÓN ACTIVA' : '● HORA REAL' }}
+            </span>
+          </div>
+          <p class="clock-desc">
+            <b>Automatización Inteligente:</b> Los momentos de la agenda se marcan solos según el reloj si el anfitrión no los marca manualmente.
+            <span *ngIf="eventService.selectedEvent()?.status === 'PENDIENTE'" class="status-cue pending">
+              Evento a las 19:00 hrs (En Espera).
+            </span>
+            <span *ngIf="eventService.selectedEvent()?.status === 'EN_PROGRESO'" class="status-cue live">
+              Evento en curso en este momento.
+            </span>
+            <span *ngIf="eventService.selectedEvent()?.status === 'FINALIZADO'" class="status-cue done">
+              Evento finalizado por completo.
+            </span>
+          </p>
+        </div>
+
+        <div class="clock-sim-actions-col">
+          <span class="sim-label-text">Probar Horario (Simulador):</span>
+          <div class="sim-buttons-flex">
+            <button class="btn-sim-pill" [class.active]="eventService.simulatedTime() === '09:25'" (click)="eventService.setSimulatedTime('09:25')">
+              09:25 (Mañana)
+            </button>
+            <button class="btn-sim-pill" [class.active]="eventService.simulatedTime() === '19:00'" (click)="eventService.setSimulatedTime('19:00')">
+              19:00 (Recepción)
+            </button>
+            <button class="btn-sim-pill" [class.active]="eventService.simulatedTime() === '19:45'" (click)="eventService.setSimulatedTime('19:45')">
+              19:45 (Apertura)
+            </button>
+            <button class="btn-sim-pill" [class.active]="eventService.simulatedTime() === '20:30'" (click)="eventService.setSimulatedTime('20:30')">
+              20:30 (Vals)
+            </button>
+            <button class="btn-sim-pill" [class.active]="eventService.simulatedTime() === '21:15'" (click)="eventService.setSimulatedTime('21:15')">
+              21:15 (Cena)
+            </button>
+            <button class="btn-sim-pill" [class.active]="eventService.simulatedTime() === '22:30'" (click)="eventService.setSimulatedTime('22:30')">
+              22:30 (DJ)
+            </button>
+            <button class="btn-sim-pill" [class.active]="eventService.simulatedTime() === '02:30'" (click)="eventService.setSimulatedTime('02:30')">
+              02:30 (Finalizar)
+            </button>
+            <button class="btn-sim-reset" *ngIf="eventService.simulatedTime() !== null" (click)="eventService.setSimulatedTime(null)">
+              ↺ Hora Real
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Header Card with Quick Add -->
       <div class="itinerary-header-card">
         <div class="itinerary-title-block">
@@ -29,7 +95,7 @@ import { IconComponent } from '../icon.component';
         </div>
 
         <div class="header-actions-row">
-          <button class="btn-action" (click)="showAddModal.set(true)">
+          <button class="btn-action" [disabled]="eventService.isEventLocked()" (click)="showAddModal.set(true)">
             <app-icon name="plus" [size]="16"></app-icon>
             <span>+ Agregar Momento al Itinerario</span>
           </button>
@@ -37,7 +103,7 @@ import { IconComponent } from '../icon.component';
       </div>
 
       <!-- Bulk Time Shift (Ajuste de Desfase en Bloque) Toolbar -->
-      <div class="time-shift-card">
+      <div class="time-shift-card" [class.is-disabled]="eventService.isEventLocked()">
         <div class="shift-info-col">
           <div class="shift-title-row">
             <app-icon name="clock" [size]="18" class="shift-icon"></app-icon>
@@ -50,15 +116,15 @@ import { IconComponent } from '../icon.component';
 
         <div class="shift-actions-row">
           <div class="quick-shift-buttons">
-            <button class="btn-shift-pill positive" (click)="applyTimeShift(15)">+15 min</button>
-            <button class="btn-shift-pill positive" (click)="applyTimeShift(30)">+30 min</button>
-            <button class="btn-shift-pill positive" (click)="applyTimeShift(45)">+45 min</button>
-            <button class="btn-shift-pill negative" (click)="applyTimeShift(-15)">-15 min</button>
+            <button class="btn-shift-pill positive" [disabled]="eventService.isEventLocked()" (click)="applyTimeShift(15)">+15 min</button>
+            <button class="btn-shift-pill positive" [disabled]="eventService.isEventLocked()" (click)="applyTimeShift(30)">+30 min</button>
+            <button class="btn-shift-pill positive" [disabled]="eventService.isEventLocked()" (click)="applyTimeShift(45)">+45 min</button>
+            <button class="btn-shift-pill negative" [disabled]="eventService.isEventLocked()" (click)="applyTimeShift(-15)">-15 min</button>
           </div>
 
           <div class="custom-shift-input-group">
-            <input type="number" [(ngModel)]="customShiftMinutes" placeholder="± Minutos" class="shift-num-input">
-            <button class="btn-outline btn-apply-shift" (click)="applyCustomShift()" [disabled]="!customShiftMinutes">
+            <input type="number" [(ngModel)]="customShiftMinutes" placeholder="± Minutos" class="shift-num-input" [disabled]="eventService.isEventLocked()">
+            <button class="btn-outline btn-apply-shift" (click)="applyCustomShift()" [disabled]="!customShiftMinutes || eventService.isEventLocked()">
               Aplicar Desfase
             </button>
           </div>
@@ -99,7 +165,7 @@ import { IconComponent } from '../icon.component';
                   {{ item.location }}
                 </small>
                 <div class="spotlight-actions">
-                  <button class="btn-action btn-finish-now" (click)="eventService.toggleItineraryStatus(item.id)">
+                  <button class="btn-action btn-finish-now" [disabled]="eventService.isEventLocked()" (click)="eventService.toggleItineraryStatus(item.id)">
                     <app-icon name="check" [size]="14"></app-icon>
                     <span>Concluir Momento</span>
                   </button>
@@ -136,11 +202,11 @@ import { IconComponent } from '../icon.component';
                 <div class="card-title-row">
                   <strong>{{ item.title }}</strong>
                   <div class="item-action-btns">
-                    <button class="btn-start-phase" (click)="eventService.toggleItineraryStatus(item.id)" title="Iniciar momento ahora">
+                    <button class="btn-start-phase" [disabled]="eventService.isEventLocked()" (click)="eventService.toggleItineraryStatus(item.id)" title="Iniciar momento ahora">
                       <app-icon name="play" [size]="12"></app-icon>
                       <span>Iniciar</span>
                     </button>
-                    <button class="btn-del-phase" (click)="eventService.deleteMilestone(item.id)" title="Eliminar de la agenda">
+                    <button class="btn-del-phase" [disabled]="eventService.isEventLocked()" (click)="eventService.deleteMilestone(item.id)" title="Eliminar de la agenda">
                       <app-icon name="trash" [size]="12"></app-icon>
                     </button>
                   </div>
@@ -180,7 +246,7 @@ import { IconComponent } from '../icon.component';
               <div class="card-details-col">
                 <div class="card-title-row">
                   <strong class="text-completed-title">{{ item.title }}</strong>
-                  <button class="btn-reopen" (click)="eventService.toggleItineraryStatus(item.id)" title="Reabrir / Regresar a Próximo">
+                  <button class="btn-reopen" [disabled]="eventService.isEventLocked()" (click)="eventService.toggleItineraryStatus(item.id)" title="Reabrir / Regresar a Próximo">
                     <span>Reabrir</span>
                   </button>
                 </div>
@@ -246,6 +312,185 @@ import { IconComponent } from '../icon.component';
       display: flex;
       flex-direction: column;
       gap: 20px;
+    }
+
+    /* Event Locked Banner */
+    .event-locked-banner {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(185, 28, 28, 0.05));
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      border-radius: var(--radius-lg);
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .locked-icon-bubble {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(239, 68, 68, 0.18);
+      color: #ef4444;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+
+    .locked-text-wrap strong {
+      font-size: 0.96rem;
+      color: #b91c1c;
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .locked-text-wrap p {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      margin: 0;
+    }
+
+    /* Smart Real-Time Clock & Simulator Card */
+    .smart-clock-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-ui);
+      border-radius: var(--radius-lg);
+      padding: 18px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .clock-info-col {
+      flex: 1;
+      min-width: 280px;
+    }
+
+    .clock-title-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+
+    .live-pulse-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.6);
+      animation: pulse 1.8s infinite;
+    }
+
+    .live-pulse-dot.is-simulated {
+      background: #f59e0b;
+      box-shadow: 0 0 10px rgba(245, 158, 11, 0.6);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(1.15); }
+    }
+
+    .clock-display {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: var(--text-main);
+      font-family: monospace;
+    }
+
+    .clock-badge-tag {
+      font-size: 0.68rem;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: rgba(16, 185, 129, 0.12);
+      color: #059669;
+    }
+
+    .clock-badge-tag.badge-simulated {
+      background: rgba(245, 158, 11, 0.15);
+      color: #b45309;
+    }
+
+    .clock-desc {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin: 0;
+    }
+
+    .status-cue.pending { color: #d97706; font-weight: 700; }
+    .status-cue.live { color: #059669; font-weight: 700; }
+    .status-cue.done { color: #6b7280; font-weight: 700; }
+
+    .clock-sim-actions-col {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .sim-label-text {
+      font-size: 0.73rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .sim-buttons-flex {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .btn-sim-pill {
+      font-size: 0.74rem;
+      font-weight: 700;
+      padding: 5px 9px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-ui);
+      background: var(--bg-main);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-sim-pill:hover {
+      background: var(--bg-hover);
+      color: var(--text-main);
+      border-color: var(--brand-blue);
+    }
+
+    .btn-sim-pill.active {
+      background: var(--brand-blue);
+      color: #ffffff;
+      border-color: var(--brand-blue);
+      box-shadow: 0 0 8px rgba(2, 132, 199, 0.35);
+    }
+
+    .btn-sim-reset {
+      font-size: 0.74rem;
+      font-weight: 700;
+      padding: 5px 10px;
+      border-radius: var(--radius-sm);
+      border: 1px dashed #ef4444;
+      background: rgba(239, 68, 68, 0.08);
+      color: #dc2626;
+      cursor: pointer;
+    }
+
+    .btn-sim-reset:hover {
+      background: #dc2626;
+      color: #ffffff;
+    }
+
+    .time-shift-card.is-disabled {
+      opacity: 0.55;
+      pointer-events: none;
     }
 
     /* Header */

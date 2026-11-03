@@ -70,6 +70,17 @@ import jsPDF from 'jspdf';
       <!-- ============================================================== -->
       <ng-container *ngIf="isCroquisIncluded()">
 
+      <!-- Locked Banner when Event Finished -->
+      <div *ngIf="eventService.isEventLocked()" class="event-locked-banner">
+        <div class="locked-icon-bubble">
+          <app-icon name="lock" [size]="20"></app-icon>
+        </div>
+        <div class="locked-text-wrap">
+          <strong>Evento Concluido · Plano CAD en Modo Histórico (Solo Lectura)</strong>
+          <p>Este evento ya finalizó. El croquis arquitectónico, la distribución de mesas y el aforo están archivados y no admiten modificaciones.</p>
+        </div>
+      </div>
+
       <!-- Salon Selection & Global Controls Bar -->
       <div class="salon-selection-header-card">
         <div class="salon-title-col">
@@ -103,19 +114,19 @@ import jsPDF from 'jspdf';
           </div>
 
           <div class="croquis-primary-actions-row">
-            <button class="btn-outline" (click)="openAiDetectorModal()">
+            <button class="btn-outline" [disabled]="eventService.isEventLocked()" (click)="openAiDetectorModal()">
               <app-icon name="sparkles" [size]="15"></app-icon>
               <span>Auto-Detectar con IA</span>
             </button>
-            <button class="btn-outline" (click)="showNewSalonModal.set(true)">
+            <button class="btn-outline" [disabled]="eventService.isEventLocked()" (click)="showNewSalonModal.set(true)">
               <app-icon name="plus" [size]="15"></app-icon>
               <span>+ Nuevo Salón</span>
             </button>
-            <button class="btn-outline" (click)="openEditSalonModal()" title="Modificar nombre, aforo y medidas del salón actual">
+            <button class="btn-outline" [disabled]="eventService.isEventLocked()" (click)="openEditSalonModal()" title="Modificar nombre, aforo y medidas del salón actual">
               <app-icon name="edit" [size]="15"></app-icon>
               <span>Editar Salón</span>
             </button>
-            <button class="btn-outline" (click)="showNewTableModal.set(true)">
+            <button class="btn-outline" [disabled]="eventService.isEventLocked()" (click)="showNewTableModal.set(true)">
               <app-icon name="plus" [size]="15"></app-icon>
               <span>+ Agregar Mesa</span>
             </button>
@@ -123,7 +134,7 @@ import jsPDF from 'jspdf';
               <app-icon name="download" [size]="15"></app-icon>
               <span>Descargar Dossier / Reportes</span>
             </button>
-            <button class="btn-action btn-auto-assign" (click)="runAutoAssign()">
+            <button class="btn-action btn-auto-assign" [disabled]="eventService.isEventLocked()" (click)="runAutoAssign()">
               <app-icon name="sparkles" [size]="15"></app-icon>
               <span>Asignar Automáticamente</span>
             </button>
@@ -1194,6 +1205,42 @@ import jsPDF from 'jspdf';
       display: flex;
       flex-direction: column;
       gap: 20px;
+    }
+
+    /* Event Locked Banner */
+    .event-locked-banner {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(185, 28, 28, 0.05));
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      border-radius: var(--radius-lg);
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .locked-icon-bubble {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(239, 68, 68, 0.18);
+      color: #ef4444;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+
+    .locked-text-wrap strong {
+      font-size: 0.96rem;
+      color: #b91c1c;
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .locked-text-wrap p {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      margin: 0;
     }
 
     /* Restricted Mode When Event Plan Does Not Include Croquis */
@@ -2736,6 +2783,9 @@ export class CroquisComponent {
   onTablePointerDown(event: PointerEvent, table: SalonTable): void {
     event.stopPropagation();
     this.selectedTable.set(table);
+    if (this.eventService.isEventLocked()) {
+      return; // Locked event mode
+    }
     this.draggedTable = table;
     this.dragStartPointerX = event.clientX;
     this.dragStartPointerY = event.clientY;

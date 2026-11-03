@@ -14,6 +14,17 @@ import jsPDF from 'jspdf';
   template: `
     <div class="guests-page-container">
 
+      <!-- Locked Banner when Event Finished -->
+      <div *ngIf="eventService.isEventLocked()" class="event-locked-banner">
+        <div class="locked-icon-bubble">
+          <app-icon name="lock" [size]="20"></app-icon>
+        </div>
+        <div class="locked-text-wrap">
+          <strong>Evento Concluido · Padrón de Invitados Cerrado (Solo Lectura)</strong>
+          <p>Este evento ya finalizó. No es posible registrar, modificar ni dar de baja invitados. La consulta y la exportación de reportes continúan habilitadas.</p>
+        </div>
+      </div>
+
       <!-- Header & Actions -->
       <div class="guests-header-card">
         <div>
@@ -26,7 +37,7 @@ import jsPDF from 'jspdf';
 
         <div class="header-actions-row">
           <!-- 1-Click Sync Button -->
-          <button class="btn-outline" (click)="syncSupabaseNow()" title="Sincronizar confirmaciones de las invitaciones en tiempo real">
+          <button class="btn-outline" [disabled]="eventService.isEventLocked()" (click)="syncSupabaseNow()" title="Sincronizar confirmaciones de las invitaciones en tiempo real">
             <app-icon name="refresh" [size]="15"></app-icon>
             <span>Sincronizar Confirmaciones</span>
           </button>
@@ -39,7 +50,7 @@ import jsPDF from 'jspdf';
             style="display: none;" 
             (change)="onCsvFileSelected($event)"
           >
-          <button class="btn-outline" (click)="csvFileInput.click()" title="Buscar archivo CSV o TXT en este equipo o celular">
+          <button class="btn-outline" [disabled]="eventService.isEventLocked()" (click)="csvFileInput.click()" title="Buscar archivo CSV o TXT en este equipo o celular">
             <app-icon name="upload" [size]="15"></app-icon>
             <span>Buscar en mi equipo (CSV)</span>
           </button>
@@ -47,7 +58,7 @@ import jsPDF from 'jspdf';
             <app-icon name="download" [size]="15"></app-icon>
             <span>Exportar Lista</span>
           </button>
-          <button class="btn-action" (click)="showAddModal.set(true)">
+          <button class="btn-action" [disabled]="eventService.isEventLocked()" (click)="showAddModal.set(true)">
             <app-icon name="plus" [size]="15"></app-icon>
             <span>Nuevo Invitado</span>
           </button>
@@ -149,7 +160,7 @@ import jsPDF from 'jspdf';
                   </button>
 
                   <!-- Delete -->
-                  <button class="action-btn-circle text-danger" (click)="eventService.deleteGuest(guest.id)" title="Eliminar">
+                  <button class="action-btn-circle text-danger" [disabled]="eventService.isEventLocked()" (click)="eventService.deleteGuest(guest.id)" title="Eliminar">
                     <app-icon name="trash" [size]="15"></app-icon>
                   </button>
                 </div>
@@ -392,6 +403,42 @@ import jsPDF from 'jspdf';
       display: flex;
       flex-direction: column;
       gap: 20px;
+    }
+
+    /* Event Locked Banner */
+    .event-locked-banner {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(185, 28, 28, 0.05));
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      border-radius: var(--radius-lg);
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .locked-icon-bubble {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(239, 68, 68, 0.18);
+      color: #ef4444;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+
+    .locked-text-wrap strong {
+      font-size: 0.96rem;
+      color: #b91c1c;
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .locked-text-wrap p {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      margin: 0;
     }
 
     .guests-header-card {
