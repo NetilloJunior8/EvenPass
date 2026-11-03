@@ -6,8 +6,10 @@ services:
     rootDir: evenpass-backend
     dockerfilePath: ./Dockerfile
     plan: free
-    healthCheckPath: /api/v1/events
+    healthCheckPath: /api/public/health
     envVars:
+      - key: PORT
+        value: 8080
       - key: SPRING_PROFILES_ACTIVE
         value: prod
       - key: SPRING_DATASOURCE_URL
