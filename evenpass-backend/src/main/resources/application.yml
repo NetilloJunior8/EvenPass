@@ -50,14 +50,19 @@ spring:
       idle-timeout: 300000
       max-lifetime: 600000
       connection-timeout: 20000
+  sql:
+    init:
+      mode: never
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: none
+      ddl-auto: update
     properties:
       hibernate:
-        temp:
-          use_jdbc_metadata_defaults: false
+        format_sql: false
+        jdbc:
+          lob:
+            non_contextual_creation: true
 
 ---
 # EvenPass Application & Security Config
