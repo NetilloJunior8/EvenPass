@@ -12,8 +12,8 @@ services:
       - key: SPRING_PROFILES_ACTIVE
         value: prod
       - key: SPRING_DATASOURCE_URL
-        # Reemplazar con la URL JDBC de tu proyecto Supabase (Settings -> Database -> Connection String URI)
-        value: jdbc:postgresql://db.xxxx.supabase.co:5432/postgres?sslmode=require
+        # URL JDBC de tu proyecto Supabase (wxvueavcyylgnbpksplr)
+        value: jdbc:postgresql://db.wxvueavcyylgnbpksplr.supabase.co:5432/postgres?sslmode=require
       - key: SPRING_DATASOURCE_USERNAME
         value: postgres
       - key: SPRING_DATASOURCE_PASSWORD

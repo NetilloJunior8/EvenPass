@@ -55,7 +55,7 @@ export class EventService {
   });
 
   supabaseConfig = signal<SupabaseConfig>({
-    url: 'https://evenpass-cloud.supabase.co',
+    url: 'https://wxvueavcyylgnbpksplr.supabase.co',
     anonKey: 'sb_anon_live_ep889214kldsf90234u1209384kjhsdkfh293847',
     tableName: 'guests',
     connected: true,

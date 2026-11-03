@@ -20,8 +20,8 @@ Esta guía contiene las instrucciones exactas y ordenadas para desplegar **EvenP
    - Se activarán los triggers de auto-recálculo de comensales y aforo.
    - Se insertarán los datos iniciales de recintos arquitectónicos, plantillas de gala y cuentas de operadores del sistema.
 6. En el menú lateral, ve a **Project Settings** -> **Database**:
-   - En la sección **Connection string**, selecciona la pestaña **URI** o **JDBC**.
-   - Copia la URL de conexión (se verá como `jdbc:postgresql://db.xxxxxx.supabase.co:5432/postgres?sslmode=require`).
+   - Tu host de conexión asignado: `db.wxvueavcyylgnbpksplr.supabase.co`
+   - Tu URL JDBC de conexión: `jdbc:postgresql://db.wxvueavcyylgnbpksplr.supabase.co:5432/postgres?sslmode=require`
 
 ---
 
@@ -30,7 +30,7 @@ Esta guía contiene las instrucciones exactas y ordenadas para desplegar **EvenP
 ### Opción A: Despliegue de la Aplicación Angular (`evenpass-frontend`)
 1. Entra a [https://vercel.com](https://vercel.com) e inicia sesión con tu cuenta de GitHub.
 2. Haz clic en **"Add New..."** -> **"Project"**.
-3. Importa tu repositorio `EvenPass`.
+3. Importa tu repositorio `EvenPass` (de `NetilloJunior8/EvenPass`).
 4. En la configuración del proyecto:
    - **Root Directory:** Selecciona `evenpass-frontend`.
    - **Framework Preset:** `Angular`.
@@ -55,7 +55,7 @@ Ya dejamos preparado el archivo de infraestructura como código [`render.yaml`](
 2. Haz clic en **"New +"** -> **"Blueprint"**.
 3. Conecta tu repositorio `EvenPass`. Render detectará automáticamente el archivo `render.yaml`.
 4. En los campos de variables, introduce:
-   - `SPRING_DATASOURCE_URL`: La URL de Supabase obtenida en el Paso 1 (`jdbc:postgresql://db.xxxxxx.supabase.co:5432/postgres?sslmode=require`).
+   - `SPRING_DATASOURCE_URL`: `jdbc:postgresql://db.wxvueavcyylgnbpksplr.supabase.co:5432/postgres?sslmode=require`
    - `SPRING_DATASOURCE_USERNAME`: `postgres`
    - `SPRING_DATASOURCE_PASSWORD`: La contraseña de tu base de datos de Supabase.
 5. Haz clic en **"Apply"**. Render compilará con Maven y levantará el servicio backend.
@@ -71,7 +71,7 @@ Ya dejamos preparado el archivo de infraestructura como código [`render.yaml`](
    - **Start Command:** `java -jar target/evenpass-backend-1.0.0.jar --spring.profiles.active=prod`
 4. En **Environment Variables**, agrega:
    - `SPRING_PROFILES_ACTIVE` = `prod`
-   - `SPRING_DATASOURCE_URL` = `jdbc:postgresql://db.xxxxxx.supabase.co:5432/postgres?sslmode=require`
+   - `SPRING_DATASOURCE_URL` = `jdbc:postgresql://db.wxvueavcyylgnbpksplr.supabase.co:5432/postgres?sslmode=require`
    - `SPRING_DATASOURCE_USERNAME` = `postgres`
    - `SPRING_DATASOURCE_PASSWORD` = (contraseña de tu proyecto Supabase)
    - `EVENPASS_CORS_ALLOWED_ORIGINS` = `*` (o tu URL de Vercel)
