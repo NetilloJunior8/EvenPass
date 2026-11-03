@@ -11,9 +11,9 @@ services:
       - key: SPRING_PROFILES_ACTIVE
         value: prod
       - key: SPRING_DATASOURCE_URL
-        value: jdbc:postgresql://db.wxvueavcyylgnbpksplr.supabase.co:5432/postgres?sslmode=require
+        sync: false
       - key: SPRING_DATASOURCE_USERNAME
-        value: postgres
+        sync: false
       - key: SPRING_DATASOURCE_PASSWORD
         sync: false
       - key: EVENPASS_JWT_SECRET
