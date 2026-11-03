@@ -2,17 +2,15 @@ services:
   # 1. EvenPass Backend (Spring Boot 3 + Java 21)
   - type: web
     name: evenpass-backend
-    env: java
+    runtime: docker
     rootDir: evenpass-backend
-    buildCommand: mvn clean package -DskipTests
-    startCommand: java -jar target/evenpass-backend-1.0.0.jar --spring.profiles.active=prod
+    dockerfilePath: ./Dockerfile
     plan: free
     healthCheckPath: /api/v1/events
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: prod
       - key: SPRING_DATASOURCE_URL
-        # URL JDBC de tu proyecto Supabase (wxvueavcyylgnbpksplr)
         value: jdbc:postgresql://db.wxvueavcyylgnbpksplr.supabase.co:5432/postgres?sslmode=require
       - key: SPRING_DATASOURCE_USERNAME
         value: postgres
@@ -26,7 +24,7 @@ services:
   # 2. EvenPass Frontend (Angular PWA + Client Portal)
   - type: web
     name: evenpass-frontend
-    env: static
+    runtime: static
     rootDir: evenpass-frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist/evenpass-frontend/browser
