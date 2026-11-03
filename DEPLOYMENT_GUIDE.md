@@ -20,8 +20,9 @@ Esta guía contiene las instrucciones exactas y ordenadas para desplegar **EvenP
    - Se activarán los triggers de auto-recálculo de comensales y aforo.
    - Se insertarán los datos iniciales de recintos arquitectónicos, plantillas de gala y cuentas de operadores del sistema.
 6. En el menú lateral, ve a **Project Settings** -> **Database**:
-   - Tu host de conexión asignado: `db.wxvueavcyylgnbpksplr.supabase.co`
-   - Tu URL JDBC de conexión: `jdbc:postgresql://db.wxvueavcyylgnbpksplr.supabase.co:5432/postgres?sslmode=require`
+   - Tu host de conexión Pooler (IPv4): `aws-1-us-west-2.pooler.supabase.com`
+   - Tu URL JDBC de conexión: `jdbc:postgresql://aws-1-us-west-2.pooler.supabase.com:5432/postgres?sslmode=require`
+   - Tu usuario de conexión: `postgres.wxvueavcyylgnbpksplr`
 
 ---
 
@@ -55,8 +56,8 @@ Ya dejamos preparado el archivo de infraestructura como código [`render.yaml`](
 2. Haz clic en **"New +"** -> **"Blueprint"**.
 3. Conecta tu repositorio `EvenPass`. Render detectará automáticamente el archivo `render.yaml`.
 4. En los campos de variables, introduce:
-   - `SPRING_DATASOURCE_URL`: `jdbc:postgresql://db.wxvueavcyylgnbpksplr.supabase.co:5432/postgres?sslmode=require`
-   - `SPRING_DATASOURCE_USERNAME`: `postgres`
+   - `SPRING_DATASOURCE_URL`: `jdbc:postgresql://aws-1-us-west-2.pooler.supabase.com:5432/postgres?sslmode=require`
+   - `SPRING_DATASOURCE_USERNAME`: `postgres.wxvueavcyylgnbpksplr`
    - `SPRING_DATASOURCE_PASSWORD`: La contraseña de tu base de datos de Supabase.
 5. Haz clic en **"Apply"**. Render compilará con Maven y levantará el servicio backend.
 

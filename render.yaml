@@ -11,9 +11,9 @@ services:
       - key: SPRING_PROFILES_ACTIVE
         value: prod
       - key: SPRING_DATASOURCE_URL
-        sync: false
+        value: jdbc:postgresql://aws-1-us-west-2.pooler.supabase.com:5432/postgres?sslmode=require
       - key: SPRING_DATASOURCE_USERNAME
-        sync: false
+        value: postgres.wxvueavcyylgnbpksplr
       - key: SPRING_DATASOURCE_PASSWORD
         sync: false
       - key: EVENPASS_JWT_SECRET
