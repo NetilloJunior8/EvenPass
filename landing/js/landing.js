@@ -334,7 +334,7 @@ function initCroquisDemo() {
 
     if (requestTableBtn) {
       const msg = `Hola EvenPass! Me interesa solicitar para mi evento una distribución con croquis inteligente similar a ${data.title}.`;
-      requestTableBtn.href = `https://wa.me/526671234567?text=${encodeURIComponent(msg)}`;
+      requestTableBtn.href = `https://wa.me/526676118835?text=${encodeURIComponent(msg)}`;
     }
   }
 
@@ -537,7 +537,7 @@ function initClientEventSimulator() {
 
 ¿Me podrían brindar información de disponibilidad para mi fecha y paquetes de atención?`;
 
-      waBtn.href = `https://wa.me/526671234567?text=${encodeURIComponent(msg)}`;
+      waBtn.href = `https://wa.me/526676118835?text=${encodeURIComponent(msg)}`;
     }
   }
 
@@ -579,7 +579,7 @@ function initClientSupport() {
       } else {
         msg = `Hola EvenPass, tengo una duda sobre mi evento:\n${val || '¿Podrían brindarme información?'}`;
       }
-      waUrgentBtn.href = `https://wa.me/526671234567?text=${encodeURIComponent(msg)}`;
+      waUrgentBtn.href = `https://wa.me/526676118835?text=${encodeURIComponent(msg)}`;
     });
   }
 
@@ -639,7 +639,7 @@ function initClientSupport() {
           <div style="font-size:0.95rem; font-weight:700;">¡Reporte ${folio} Enviado con Éxito!</div>
           <div style="font-size:0.82rem; margin-top:4px;">Tu solicitud fue transferida al panel de soporte técnico.</div>
           <div style="margin-top:10px;">
-            <a href="https://wa.me/526671234567?text=${encodeURIComponent(`[REPORTE ${folio}] Hola EvenPass, registré una solicitud de soporte para el evento "${eventName}":\n\nDetalle: ${desc}\n\nContacto: ${name} (${phone})`)}" target="_blank" class="btn btn-whatsapp btn-sm" style="display:inline-flex;">
+            <a href="https://wa.me/526676118835?text=${encodeURIComponent(`[REPORTE ${folio}] Hola EvenPass, registré una solicitud de soporte para el evento "${eventName}":\n\nDetalle: ${desc}\n\nContacto: ${name} (${phone})`)}" target="_blank" class="btn btn-whatsapp btn-sm" style="display:inline-flex;">
               Confirmar por WhatsApp con Folio ${folio}
             </a>
           </div>

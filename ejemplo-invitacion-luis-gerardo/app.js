@@ -1,28 +1,63 @@
 /**
- * INVITACIÓN VIP · LUIS GERARDO (MIS 10 AÑOS)
- * Lógica Interactiva: Countdown, Confeti Canvas, Audio Synth, RSVP en Vivo y Generador de Pase QR
+ * INVITACIÓN VIP & PORTAL DEL ANFITRIÓN · LUIS GERARDO (10 AÑOS)
+ * Lógica Completa: Countdown, Google Calendar, Asignación Automática de Mesas en Croquis,
+ * Generación de Pase QR, Portal del Anfitrión y Sincronización en Tiempo Real.
  */
 
 // ============================================================================
-// 1. CONFIGURACIÓN Y ESTADO GLOBAL
+// 1. CONFIGURACIÓN DEL EVENTO Y SALÓN DE RECEPCIONES
 // ============================================================================
 const EVENT_CONFIG = {
+  id: 6,
+  title: 'Mis 10 Años · Luis Gerardo',
   boyName: 'Luis Gerardo',
   age: 10,
   targetDate: new Date('2026-11-14T16:00:00'),
-  venue: 'Arena Laser Quest & Jump Park',
-  venueAddress: 'Av. Paseo de los Héroes 450, Col. Las Quintas, Culiacán',
-  parentPhone: '526671234567' // Número de WhatsApp para recibir confirmaciones
+  venue: 'Arena Laser Quest & Salón Neón VIP',
+  venueAddress: 'Av. Paseo de los Héroes 450, Col. Las Quintas, Culiacán, Sin.',
+  parentPhone: '526676118835', // Número oficial de atención y WhatsApp
+  totalCapacity: 50,
+  tables: [
+    { id: 1, name: 'Mesa 01 - Familia Cercana', capacity: 10 },
+    { id: 2, name: 'Mesa 02 - Amigos de Colegio', capacity: 10 },
+    { id: 3, name: 'Mesa 03 - Padrinos & Tíos', capacity: 10 },
+    { id: 4, name: 'Mesa 04 - Amigos Deportes & Laser', capacity: 10 },
+    { id: 5, name: 'Mesa 05 - Invitados Especiales', capacity: 10 }
+  ]
 };
 
+let currentView = 'guest';
 let isAttending = true;
 let passesCount = 2;
-let isAudioPlaying = false;
-let audioCtx = null;
-let musicIntervalId = null;
 
 // ============================================================================
-// 2. CUENTA REGRESIVA DINÁMICA
+// 2. ENLACES A GOOGLE CALENDAR
+// ============================================================================
+function generateGoogleCalendarUrl(guestName = '', passes = 2, assignedTable = '') {
+  const title = encodeURIComponent(`Mis 10 Años · Luis Gerardo`);
+  // 14 de Noviembre de 2026 de 16:00 a 20:30 (Hora Culiacán / 22:00 a 02:30 UTC)
+  const dates = '20261114T220000Z/20261115T023000Z';
+  const location = encodeURIComponent(EVENT_CONFIG.venueAddress);
+  const details = encodeURIComponent(
+    `Celebración de los 10 años de Luis Gerardo en ${EVENT_CONFIG.venue}.\n\n` +
+    (guestName ? `Pase reservado para: ${guestName} (${passes} pases)\n` : '') +
+    (assignedTable ? `Mesa asignada: ${assignedTable}\n\n` : '') +
+    `Presenta tu pase digital o código QR en puerta para el ingreso al torneo.\n` +
+    `Contacto anfitriones: 667 611 8835.`
+  );
+
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}&location=${location}`;
+}
+
+function initCalendarButtons() {
+  const heroCalBtn = document.getElementById('btn-add-google-calendar-hero');
+  if (heroCalBtn) {
+    heroCalBtn.href = generateGoogleCalendarUrl();
+  }
+}
+
+// ============================================================================
+// 3. CUENTA REGRESIVA DINÁMICA
 // ============================================================================
 function initCountdown() {
   const daysEl = document.getElementById('timer-days');
@@ -58,16 +93,40 @@ function initCountdown() {
 }
 
 // ============================================================================
-// 3. EFECTOS ESPECIALES: MOTOR DE CONFETI EN CANVAS (60 FPS NATIVO)
+// 4. CAMBIO DE MODO DE VISTA (INVITADO / ANFITRIÓN)
 // ============================================================================
-class ConfettiCannon {
+function switchView(mode) {
+  currentView = mode;
+  const guestView = document.getElementById('view-guest');
+  const adminView = document.getElementById('view-admin');
+  const tabGuest = document.getElementById('tab-guest-view');
+  const tabAdmin = document.getElementById('tab-admin-view');
+
+  if (mode === 'guest') {
+    if (guestView) guestView.style.display = 'block';
+    if (adminView) adminView.style.display = 'none';
+    if (tabGuest) tabGuest.classList.add('active');
+    if (tabAdmin) tabAdmin.classList.remove('active');
+  } else {
+    if (guestView) guestView.style.display = 'none';
+    if (adminView) adminView.style.display = 'block';
+    if (tabAdmin) tabAdmin.classList.add('active');
+    if (tabGuest) tabGuest.classList.remove('active');
+    renderAdminPortal();
+  }
+}
+
+// ============================================================================
+// 5. MOTOR DE CONFETI EN CANVAS (SUTIL Y MINIMALISTA)
+// ============================================================================
+class CleanConfetti {
   constructor(canvasId) {
     this.canvas = document.getElementById(canvasId);
     if (!this.canvas) return;
     this.ctx = this.canvas.getContext('2d');
     this.particles = [];
     this.animating = false;
-    this.colors = ['#06b6d4', '#22d3ee', '#8b5cf6', '#c084fc', '#f59e0b', '#10b981', '#ffffff'];
+    this.colors = ['#1d4ed8', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#dbeafe', '#f59e0b'];
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -79,23 +138,23 @@ class ConfettiCannon {
     this.canvas.height = window.innerHeight;
   }
 
-  burst(count = 140) {
+  burst(count = 90) {
     if (!this.canvas) return;
     const originX = this.canvas.width / 2;
-    const originY = this.canvas.height * 0.45;
+    const originY = this.canvas.height * 0.4;
 
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = Math.random() * 12 + 4;
+      const speed = Math.random() * 10 + 3;
       this.particles.push({
         x: originX,
         y: originY,
         vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 5,
+        vy: Math.sin(angle) * speed - 4,
         color: this.colors[Math.floor(Math.random() * this.colors.length)],
-        size: Math.random() * 9 + 4,
+        size: Math.random() * 7 + 4,
         rotation: Math.random() * 360,
-        vRot: (Math.random() - 0.5) * 12,
+        vRot: (Math.random() - 0.5) * 8,
         opacity: 1,
         life: 0
       });
@@ -115,13 +174,13 @@ class ConfettiCannon {
       const p = this.particles[i];
       p.x += p.vx;
       p.y += p.vy;
-      p.vy += 0.22; // Gravedad
-      p.vx *= 0.98; // Resistencia del aire
+      p.vy += 0.22;
+      p.vx *= 0.98;
       p.rotation += p.vRot;
       p.life++;
 
-      if (p.life > 70) {
-        p.opacity -= 0.025;
+      if (p.life > 60) {
+        p.opacity -= 0.03;
       }
 
       if (p.opacity <= 0 || p.y > this.canvas.height + 50) {
@@ -147,207 +206,162 @@ class ConfettiCannon {
   }
 }
 
-let fxCannon = null;
+let fxConfetti = null;
 
 // ============================================================================
-// 4. GENERADOR DE AUDIO Y SÍNTESIS DE MÚSICA DE FIESTA (WEB AUDIO API)
-// ============================================================================
-function getAudioContext() {
-  if (!audioCtx) {
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    if (AudioContextClass) {
-      audioCtx = new AudioContextClass();
-    }
-  }
-  if (audioCtx && audioCtx.state === 'suspended') {
-    audioCtx.resume();
-  }
-  return audioCtx;
-}
-
-function playCelebrationFanfare() {
-  try {
-    const ctx = getAudioContext();
-    if (!ctx) return;
-
-    // Acordes alegres de triunfo tipo videojuego (Do - Mi - Sol - Do octava)
-    const notes = [523.25, 659.25, 783.99, 1046.50, 1318.51];
-    notes.forEach((freq, idx) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      const startTime = ctx.currentTime + idx * 0.11;
-
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(freq, startTime);
-
-      gain.gain.setValueAtTime(0.01, startTime);
-      gain.gain.linearRampToValueAtTime(0.2, startTime + 0.03);
-      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.35);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc.start(startTime);
-      osc.stop(startTime + 0.36);
-    });
-  } catch (e) {
-    // Audio no permitido sin gesto
-  }
-}
-
-function togglePartyMusic() {
-  const btn = document.getElementById('btn-toggle-audio');
-  const label = document.getElementById('audio-label');
-
-  if (isAudioPlaying) {
-    // Apagar música
-    if (musicIntervalId) {
-      clearInterval(musicIntervalId);
-      musicIntervalId = null;
-    }
-    isAudioPlaying = false;
-    if (btn) btn.classList.add('muted');
-    if (label) label.innerText = 'Música';
-  } else {
-    // Iniciar loop sintetizado alegre y suave
-    const ctx = getAudioContext();
-    if (!ctx) return;
-
-    isAudioPlaying = true;
-    if (btn) btn.classList.remove('muted');
-    if (label) label.innerText = 'Pausar';
-
-    const melody = [392, 440, 523, 659, 587, 523, 440, 392];
-    let noteIdx = 0;
-
-    musicIntervalId = setInterval(() => {
-      if (!isAudioPlaying) return;
-      try {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(melody[noteIdx % melody.length], ctx.currentTime);
-        noteIdx++;
-
-        gain.gain.setValueAtTime(0.08, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.3);
-      } catch (err) {}
-    }, 400);
-  }
-}
-
-// ============================================================================
-// 5. CONTROL DEL FORMULARIO DE ASISTENCIA (RSVP)
+// 6. FORMULARIO RSVP DE INVITADO
 // ============================================================================
 function setAttendance(attending) {
   isAttending = attending;
   const choiceYes = document.getElementById('choice-yes');
   const choiceNo = document.getElementById('choice-no');
-  const passesContainer = document.getElementById('passes-field-container');
+  const passesGroup = document.getElementById('passes-field-group');
   const submitText = document.getElementById('btn-submit-text');
 
   if (attending) {
-    choiceYes.classList.add('is-selected');
-    choiceNo.classList.remove('is-selected');
-    if (passesContainer) passesContainer.style.display = 'block';
-    if (submitText) submitText.innerText = 'Confirmar Asistencia y Generar Pase VIP';
+    choiceYes.classList.add('selected');
+    choiceNo.classList.remove('selected');
+    if (passesGroup) passesGroup.style.display = 'block';
+    if (submitText) submitText.innerText = 'Confirmar Asistencia & Asignar Mi Mesa';
   } else {
-    choiceNo.classList.add('is-selected');
-    choiceYes.classList.remove('is-selected');
-    if (passesContainer) passesContainer.style.display = 'none';
-    if (submitText) submitText.innerText = 'Registrar Respuesta (No Asistiré)';
+    choiceNo.classList.add('selected');
+    choiceYes.classList.remove('selected');
+    if (passesGroup) passesGroup.style.display = 'none';
+    if (submitText) submitText.innerText = 'Notificar a los Anfitriones (No Asistiré)';
   }
 }
 
 function changePasses(delta) {
   passesCount = Math.max(1, Math.min(6, passesCount + delta));
-  const el = document.getElementById('passes-count');
-  if (el) el.innerText = passesCount;
+  const countEl = document.getElementById('passes-count');
+  if (countEl) countEl.innerText = passesCount;
 }
 
 // ============================================================================
-// 6. GENERADOR DE CÓDIGO QR EN CANVAS NATIVO (100% OFFLINE Y SIN CDNS EXTERNAS)
+// 7. ASIGNACIÓN INTELIGENTE DE MESAS (CROQUIS DE SALÓN)
 // ============================================================================
-function drawCleanQrCode(canvas, text) {
+function getOccupiedSeatsByTable() {
+  const guests = getGuestsList();
+  const usage = new Map();
+  EVENT_CONFIG.tables.forEach(t => usage.set(t.name, 0));
+
+  guests.forEach(g => {
+    if (g.attending && g.tableName) {
+      const cur = usage.get(g.tableName) || 0;
+      usage.set(g.tableName, cur + (g.passes || 1));
+    }
+  });
+
+  return usage;
+}
+
+function assignBestAvailableTable(passes = 2, preferredTableName = 'AUTO') {
+  const usage = getOccupiedSeatsByTable();
+
+  // Si tiene preferencia manual válida
+  if (preferredTableName && preferredTableName !== 'AUTO') {
+    const table = EVENT_CONFIG.tables.find(t => t.name === preferredTableName);
+    if (table) {
+      const occupied = usage.get(table.name) || 0;
+      if (occupied + passes <= table.capacity) {
+        return table.name;
+      }
+    }
+  }
+
+  // Búsqueda automática: buscar mesa que admita los pases sin sobrepasar 10 personas
+  for (const table of EVENT_CONFIG.tables) {
+    const occupied = usage.get(table.name) || 0;
+    if ((table.capacity - occupied) >= passes) {
+      return table.name;
+    }
+  }
+
+  // Si todas están casi llenas, ubicar en la que tenga mayor espacio libre
+  let bestTable = EVENT_CONFIG.tables[0].name;
+  let minOcc = 999;
+  for (const table of EVENT_CONFIG.tables) {
+    const occupied = usage.get(table.name) || 0;
+    if (occupied < minOcc) {
+      minOcc = occupied;
+      bestTable = table.name;
+    }
+  }
+  return bestTable;
+}
+
+// ============================================================================
+// 8. GENERADOR DETERMINISTA DE CÓDIGO QR EN CANVAS
+// ============================================================================
+function drawMinimalQrCode(canvas, token) {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   const size = canvas.width;
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, size, size);
 
-  // Generador de matriz determinista basada en el token
   const gridCount = 25;
   const cellSize = size / gridCount;
 
-  // Función hash simple para generar un patrón QR visualmente realista
   let seed = 0;
-  for (let i = 0; i < text.length; i++) {
-    seed = (seed * 31 + text.charCodeAt(i)) & 0xffffffff;
+  for (let i = 0; i < token.length; i++) {
+    seed = (seed * 37 + token.charCodeAt(i)) & 0xffffffff;
   }
 
-  function pseudoRand() {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    return seed / 0x7fffffff;
+  function nextRand() {
+    seed = (seed * 1664525 + 1013904223) & 0xffffffff;
+    return (seed >>> 0) / 4294967296;
   }
 
-  ctx.fillStyle = '#0f172a';
-
-  // Dibujar los 3 marcos de posición estándar de QR (Top-Left, Top-Right, Bottom-Left)
-  function drawFinderPattern(row, col) {
+  // Dibujar los patrones de posición (Finders)
+  function drawFinder(row, col) {
     const x = col * cellSize;
     const y = row * cellSize;
-    // Marco exterior 7x7
+    ctx.fillStyle = '#0f172a';
     ctx.fillRect(x, y, 7 * cellSize, 7 * cellSize);
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(x + cellSize, y + cellSize, 5 * cellSize, 5 * cellSize);
-    // Centro 3x3
-    ctx.fillStyle = '#0f172a';
+    ctx.fillStyle = '#1d4ed8'; // Centro azul cobalto
     ctx.fillRect(x + 2 * cellSize, y + 2 * cellSize, 3 * cellSize, 3 * cellSize);
   }
 
-  drawFinderPattern(1, 1);
-  drawFinderPattern(1, gridCount - 8);
-  drawFinderPattern(gridCount - 8, 1);
+  drawFinder(1, 1);
+  drawFinder(1, gridCount - 8);
+  drawFinder(gridCount - 8, 1);
 
-  // Rellenar cuadrícula interna con patrón consistente
+  // Cuadrícula interior
   ctx.fillStyle = '#0f172a';
   for (let r = 0; r < gridCount; r++) {
     for (let c = 0; c < gridCount; c++) {
-      // Ignorar zonas de los finders
-      const inTopLeft = r < 9 && c < 9;
-      const inTopRight = r < 9 && c >= gridCount - 9;
-      const inBottomLeft = r >= gridCount - 9 && c < 9;
+      const isFinderTL = r < 9 && c < 9;
+      const isFinderTR = r < 9 && c >= gridCount - 9;
+      const isFinderBL = r >= gridCount - 9 && c < 9;
 
-      if (!inTopLeft && !inTopRight && !inBottomLeft) {
-        if (pseudoRand() > 0.48) {
+      if (!isFinderTL && !isFinderTR && !isFinderBL) {
+        if (nextRand() > 0.46) {
           ctx.fillRect(c * cellSize + 0.5, r * cellSize + 0.5, cellSize - 0.5, cellSize - 0.5);
         }
       }
     }
   }
 
-  // Mini insignia central con el número 10
+  // Emblema central sutil LG10
   const centerSize = 5 * cellSize;
-  const centerX = (size - centerSize) / 2;
-  const centerY = (size - centerSize) / 2;
-  ctx.fillStyle = '#06b6d4';
-  ctx.fillRect(centerX, centerY, centerSize, centerSize);
+  const cx = (size - centerSize) / 2;
+  const cy = (size - centerSize) / 2;
+  ctx.fillStyle = '#1d4ed8';
+  ctx.fillRect(cx, cy, centerSize, centerSize);
   ctx.fillStyle = '#ffffff';
-  ctx.font = `bold ${cellSize * 2.8}px sans-serif`;
+  ctx.font = `bold ${cellSize * 2.2}px 'Outfit', sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('10', size / 2, size / 2 + 1);
+  ctx.fillText('LG', size / 2, size / 2);
 }
 
 // ============================================================================
-// 7. ENVÍO DEL FORMULARIO Y GENERACIÓN DEL PASE
+// 9. PROCESAMIENTO DEL ENVÍO DE CONFIRMACIÓN
 // ============================================================================
-function handleFormSubmit(e) {
+function handleRsvpSubmit(e) {
   e.preventDefault();
 
   const nameInput = document.getElementById('guest-name');
@@ -359,64 +373,85 @@ function handleFormSubmit(e) {
   const notes = notesInput ? notesInput.value.trim() : '';
 
   if (!fullName) {
-    alert('Por favor ingresa el nombre de tu familia o invitado.');
+    alert('Por favor ingresa tu nombre o el de tu familia.');
     return;
   }
 
-  // Generar folio único
-  const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-  const folioCode = `LG10-VIP-${randomSuffix}`;
+  // Asignar mesa de manera automática e inteligente
+  const assignedTable = isAttending ? assignBestAvailableTable(passesCount) : 'Sin mesa (No asiste)';
+  const token = `LG10-VIP-${Math.floor(1000 + Math.random() * 9000)}`;
 
-  // Guardar en Padrón Local de Invitados
-  const guestRecord = {
+  const newGuestRecord = {
     id: Date.now(),
     fullName,
     phone,
     passes: isAttending ? passesCount : 0,
     attending: isAttending,
+    tableName: assignedTable,
+    folioCode: token,
     notes,
-    folioCode,
-    registeredAt: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+    createdAt: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
   };
 
-  saveGuestToStorage(guestRecord);
+  // Guardar en almacenamiento del cliente y sincronizar con EvenPass
+  saveGuest(newGuestRecord);
 
-  // Efectos de celebración
-  if (fxCannon) {
-    fxCannon.burst(160);
+  // Notificar al sistema EvenPass vía Storage Event (para que se refleje inmediatamente en el sistema central si está abierto en otra pestaña)
+  try {
+    localStorage.setItem('evenpass_latest_rsvp_guest', JSON.stringify({
+      eventId: 1, // o ID de Luis Gerardo
+      fullName: newGuestRecord.fullName,
+      passes: newGuestRecord.passes,
+      token: newGuestRecord.folioCode,
+      phone: newGuestRecord.phone,
+      assignedTable: newGuestRecord.tableName,
+      source: 'DIGITAL_INVITATION',
+      timestamp: Date.now()
+    }));
+  } catch (err) {}
+
+  if (fxConfetti) {
+    fxConfetti.burst(100);
   }
-  playCelebrationFanfare();
 
   if (isAttending) {
-    // Mostrar Boleto VIP
+    // Generar Pase Digital VIP
+    const form = document.getElementById('rsvp-form');
     const ticketDisplay = document.getElementById('ticket-display');
     const ticketName = document.getElementById('ticket-name');
+    const ticketTable = document.getElementById('ticket-table-assignment');
     const ticketFolio = document.getElementById('ticket-folio');
-    const ticketPassesLabel = document.getElementById('ticket-passes-label');
+    const ticketPasses = document.getElementById('ticket-passes-label');
     const qrCanvas = document.getElementById('ticket-qr-canvas');
-    const form = document.getElementById('rsvp-form');
+    const waBtn = document.getElementById('btn-whatsapp-confirmation');
+    const calBtn = document.getElementById('btn-add-google-calendar-pass');
 
     if (ticketName) ticketName.innerText = fullName;
-    if (ticketFolio) ticketFolio.innerText = folioCode;
-    if (ticketPassesLabel) ticketPassesLabel.innerText = `${passesCount} ${passesCount === 1 ? 'Persona' : 'Personas'}`;
+    if (ticketTable) ticketTable.innerText = `Mesa Asignada: ${assignedTable}`;
+    if (ticketFolio) ticketFolio.innerText = token;
+    if (ticketPasses) ticketPasses.innerText = `${passesCount} ${passesCount === 1 ? 'Persona' : 'Personas'}`;
 
-    // Renderizar código QR
     if (qrCanvas) {
-      drawCleanQrCode(qrCanvas, folioCode);
+      drawMinimalQrCode(qrCanvas, token);
     }
 
-    // Configurar enlace de WhatsApp
-    const waBtn = document.getElementById('btn-whatsapp-share');
+    // Configurar enlace de WhatsApp oficial al 6676118835
     if (waBtn) {
       const msg = encodeURIComponent(
         `¡Hola! 👋 Confirmamos nuestra asistencia a los 10 años de Luis Gerardo 🎉\n\n` +
         `👤 Invitado: ${fullName}\n` +
-        `🎟️ Pases reservados: ${passesCount}\n` +
-        `🔑 Folio VIP: ${folioCode}\n` +
-        (notes ? `💬 Mensaje: "${notes}"\n\n` : `\n`) +
-        `¡Nos vemos el Sábado 14 de Noviembre en Arena Laser Quest!`
+        `🎟️ Pases: ${passesCount} personas\n` +
+        `🍽️ Mesa: ${assignedTable}\n` +
+        `🔑 Folio de Acceso: ${token}\n` +
+        (notes ? `💬 Nota: "${notes}"\n\n` : `\n`) +
+        `¡Muchas gracias! Nos vemos el Sábado 14 de Noviembre a las 4:00 PM.`
       );
       waBtn.href = `https://wa.me/${EVENT_CONFIG.parentPhone}?text=${msg}`;
+    }
+
+    // Configurar botón Google Calendar personalizado
+    if (calBtn) {
+      calBtn.href = generateGoogleCalendarUrl(fullName, passesCount, assignedTable);
     }
 
     if (form) form.style.display = 'none';
@@ -425,133 +460,273 @@ function handleFormSubmit(e) {
       ticketDisplay.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   } else {
-    // Si no asiste, agradecer la respuesta amablemente
     const form = document.getElementById('rsvp-form');
     if (form) {
       form.innerHTML = `
-        <div style="text-align: center; padding: 30px 10px;">
-          <div style="font-size: 2.4rem; margin-bottom: 10px;">🙏</div>
-          <h3 style="color: #ffffff; font-size: 1.3rem; margin-bottom: 8px;">¡Muchas gracias por avisarnos!</h3>
-          <p style="color: #94a3b8; font-size: 0.95rem;">Lamentamos que no puedas acompañarnos, ¡te guardaremos pastel en el corazón!</p>
+        <div style="text-align: center; padding: 32px 16px;">
+          <h3 style="color: #0f172a; font-size: 1.25rem; margin-bottom: 8px;">Agradecemos mucho tu respuesta</h3>
+          <p style="color: #475569; font-size: 0.92rem; max-width: 480px; margin: 0 auto;">
+            Hemos registrado que no podrás acompañarnos. Tus buenos deseos han sido entregados a los anfitriones y a Luis Gerardo.
+          </p>
         </div>
       `;
     }
   }
-
-  // Refrescar lista de monitoreo
-  renderAdminList();
 }
 
 // ============================================================================
-// 8. ALMACENAMIENTO LOCAL Y MOCK DEL PADRÓN
+// 10. ALMACENAMIENTO DE INVITADOS (LOCALSTORAGE / BASE DE DATOS)
 // ============================================================================
-const STORAGE_KEY = 'evenpass_guests_luis_gerardo';
+const GUESTS_STORAGE_KEY = 'evenpass_guests_luis_gerardo_portal';
 
-function getInitialGuests() {
-  const cached = localStorage.getItem(STORAGE_KEY);
+function getGuestsList() {
+  const cached = localStorage.getItem(GUESTS_STORAGE_KEY);
   if (cached) {
     try {
       return JSON.parse(cached);
     } catch (e) {}
   }
 
-  // Invitados de demostración pre-cargados
-  const demoList = [
-    { id: 1, fullName: 'Familia Morales Valenzuela', phone: '667-111-2233', passes: 3, attending: true, notes: '¡Felicidades Luis Gerardo!', folioCode: 'LG10-VIP-8812', registeredAt: '10:14 AM' },
-    { id: 2, fullName: 'Mateo González & Papis', phone: '667-444-5566', passes: 2, attending: true, notes: '¡Listos para el Laser Tag!', folioCode: 'LG10-VIP-7429', registeredAt: '11:30 AM' },
-    { id: 3, fullName: 'Familia Quiñónez Rivas', phone: '667-777-8899', passes: 4, attending: true, notes: 'Ahí estaremos puntuales.', folioCode: 'LG10-VIP-3391', registeredAt: '12:05 PM' }
+  // Lista inicial de demostración realista y organizada
+  const initialData = [
+    { id: 1, fullName: 'Familia Morales Valenzuela', phone: '667-112-3344', passes: 4, attending: true, tableName: 'Mesa 01 - Familia Cercana', folioCode: 'LG10-VIP-1102', notes: 'Abuelos y tíos de Luis Gerardo', createdAt: '09:30 AM' },
+    { id: 2, fullName: 'Mateo González & Padres', phone: '667-223-4455', passes: 3, attending: true, tableName: 'Mesa 02 - Amigos de Colegio', folioCode: 'LG10-VIP-2481', notes: 'Compañero de salón', createdAt: '10:15 AM' },
+    { id: 3, fullName: 'Lic. Roberto Somoza & Fam.', phone: '667-334-5566', passes: 3, attending: true, tableName: 'Mesa 03 - Padrinos & Tíos', folioCode: 'LG10-VIP-3392', notes: 'Padrino de bautizo', createdAt: '11:00 AM' },
+    { id: 4, fullName: 'Santiago Beltrán & Papás', phone: '667-445-6677', passes: 3, attending: true, tableName: 'Mesa 04 - Amigos Deportes & Laser', folioCode: 'LG10-VIP-4819', notes: 'Equipo de fútbol', createdAt: '11:45 AM' },
+    { id: 5, fullName: 'Familia Quiñónez Rivas', phone: '667-556-7788', passes: 2, attending: true, tableName: 'Mesa 01 - Familia Cercana', folioCode: 'LG10-VIP-5520', notes: 'Primos', createdAt: '12:20 PM' }
   ];
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(demoList));
-  return demoList;
+  localStorage.setItem(GUESTS_STORAGE_KEY, JSON.stringify(initialData));
+  return initialData;
 }
 
-function saveGuestToStorage(record) {
-  const list = getInitialGuests();
+function saveGuest(record) {
+  const list = getGuestsList();
   list.unshift(record);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  localStorage.setItem(GUESTS_STORAGE_KEY, JSON.stringify(list));
+}
+
+function removeGuest(id) {
+  if (!confirm('¿Deseas dar de baja a este invitado y liberar sus lugares en la mesa?')) return;
+  const list = getGuestsList().filter(g => g.id !== id);
+  localStorage.setItem(GUESTS_STORAGE_KEY, JSON.stringify(list));
+  renderAdminPortal();
 }
 
 // ============================================================================
-// 9. PANEL DE CONTROL / MONITOR DE ANFITRIÓN (MODAL)
+// 11. RENDERIZADO DEL PORTAL DEL ANFITRIÓN (CONTROL DE MESAS E INVITADOS)
 // ============================================================================
-function openAdminModal() {
-  renderAdminList();
-  const modal = document.getElementById('admin-modal');
-  if (modal) modal.classList.add('is-active');
-}
+function renderAdminPortal() {
+  const guests = getGuestsList();
+  const searchInput = document.getElementById('admin-search-input');
+  const term = searchInput ? searchInput.value.toLowerCase().trim() : '';
 
-function closeAdminModal(e) {
-  if (e && e.target !== e.currentTarget && !e.target.classList.contains('btn-modal-close')) {
-    return;
-  }
-  const modal = document.getElementById('admin-modal');
-  if (modal) modal.classList.remove('is-active');
-}
-
-function renderAdminList() {
-  const list = getInitialGuests();
-  const tbody = document.getElementById('admin-table-body');
-  const statConfirmed = document.getElementById('stat-confirmed-passes');
-  const statFamilies = document.getElementById('stat-families-count');
-  const statDeclined = document.getElementById('stat-declined-count');
-
-  let totalPasses = 0;
-  let attendingFamilies = 0;
+  // 1. Métricas KPI
+  let totalConfirmedPasses = 0;
+  let confirmedFamilies = 0;
   let declinedCount = 0;
 
-  list.forEach(item => {
-    if (item.attending) {
-      totalPasses += item.passes;
-      attendingFamilies++;
+  guests.forEach(g => {
+    if (g.attending) {
+      totalConfirmedPasses += (g.passes || 0);
+      confirmedFamilies++;
     } else {
       declinedCount++;
     }
   });
 
-  if (statConfirmed) statConfirmed.innerText = totalPasses;
-  if (statFamilies) statFamilies.innerText = attendingFamilies;
-  if (statDeclined) statDeclined.innerText = declinedCount;
+  const kpiPasses = document.getElementById('kpi-confirmed-passes');
+  const kpiPercent = document.getElementById('kpi-occupancy-percent');
+  const kpiFamilies = document.getElementById('kpi-families-count');
+  const kpiDeclined = document.getElementById('kpi-declined-count');
 
+  const occPercent = Math.round((totalConfirmedPasses / EVENT_CONFIG.totalCapacity) * 100);
+
+  if (kpiPasses) kpiPasses.innerText = `${totalConfirmedPasses} / ${EVENT_CONFIG.totalCapacity}`;
+  if (kpiPercent) kpiPercent.innerText = `${occPercent}%`;
+  if (kpiFamilies) kpiFamilies.innerText = String(confirmedFamilies);
+  if (kpiDeclined) kpiDeclined.innerText = String(declinedCount);
+
+  // 2. Renderizado de Mesas (Croquis)
+  const usage = getOccupiedSeatsByTable();
+  const tablesContainer = document.getElementById('tables-cards-container');
+  if (tablesContainer) {
+    tablesContainer.innerHTML = '';
+    EVENT_CONFIG.tables.forEach(table => {
+      const occupied = usage.get(table.name) || 0;
+      const pct = Math.min(100, Math.round((occupied / table.capacity) * 100));
+      const isFull = occupied >= table.capacity;
+
+      // Obtener nombres sentados en esta mesa
+      const seatedGuests = guests
+        .filter(g => g.attending && g.tableName === table.name)
+        .map(g => `${g.fullName.split(' ')[0]} (${g.passes}p)`);
+
+      const card = document.createElement('div');
+      card.className = 'table-slot-card';
+      card.innerHTML = `
+        <div class="table-header-flex">
+          <b>${table.name.split(' - ')[0]}</b>
+          <span class="table-capacity-pill ${isFull ? 'capacity-full' : 'capacity-available'}">
+            ${occupied}/${table.capacity} lugares
+          </span>
+        </div>
+        <div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 8px;">
+          ${table.name.split(' - ')[1] || 'Asignada'}
+        </div>
+        <div class="table-progress-bar">
+          <div class="table-progress-fill" style="width: ${pct}%; background: ${isFull ? '#dc2626' : '#1d4ed8'};"></div>
+        </div>
+        <div class="table-assigned-names" title="${seatedGuests.join(', ')}">
+          ${seatedGuests.length > 0 ? seatedGuests.join(', ') : 'Mesa disponible'}
+        </div>
+      `;
+      tablesContainer.appendChild(card);
+    });
+  }
+
+  // 3. Renderizado de Filas de la Tabla de Invitados
+  const tbody = document.getElementById('admin-table-rows');
   if (!tbody) return;
   tbody.innerHTML = '';
 
-  list.forEach(g => {
+  const filtered = guests.filter(g => {
+    if (!term) return true;
+    return (
+      (g.fullName && g.fullName.toLowerCase().includes(term)) ||
+      (g.phone && g.phone.includes(term)) ||
+      (g.tableName && g.tableName.toLowerCase().includes(term)) ||
+      (g.folioCode && g.folioCode.toLowerCase().includes(term))
+    );
+  });
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 24px; color: var(--text-muted);">No se encontraron invitados con el filtro indicado.</td></tr>`;
+    return;
+  }
+
+  filtered.forEach(g => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>
-        <strong style="color: #ffffff; display: block;">${g.fullName}</strong>
-        <small style="color: #64748b;">${g.phone} · ${g.registeredAt}</small>
+        <span class="guest-name-bold">${g.fullName}</span>
+        <span class="guest-phone-sub">Registro: ${g.createdAt || 'En línea'}</span>
       </td>
-      <td><b style="color: #06b6d4;">${g.passes} pases</b></td>
+      <td>${g.phone || 'N/A'}</td>
+      <td><strong>${g.passes} pases</strong></td>
       <td>
-        <span class="${g.attending ? 'badge-guest-confirmed' : 'badge-guest-declined'}">
-          ${g.attending ? 'CONFIRMADO' : 'NO ASISTIRÁ'}
+        <span class="badge-table-tag">${g.tableName || 'Sin asignar'}</span>
+      </td>
+      <td><code style="font-size: 0.8rem; font-weight: 700;">${g.folioCode || 'N/A'}</code></td>
+      <td>
+        <span class="${g.attending ? 'table-capacity-pill capacity-available' : 'table-capacity-pill capacity-full'}">
+          ${g.attending ? 'CONFIRMADO' : 'DECLINADO'}
         </span>
       </td>
-      <td><code style="color: #94a3b8; font-size: 0.78rem;">${g.folioCode}</code></td>
+      <td>
+        <button class="btn-toolbar" style="padding: 4px 10px; font-size: 0.74rem;" onclick="removeGuest(${g.id})">
+          Eliminar
+        </button>
+      </td>
     `;
     tbody.appendChild(tr);
   });
 }
 
-function savePassSnapshot() {
-  window.print();
+function filterAdminGuests() {
+  renderAdminPortal();
+}
+
+// Modal Agregar Manualmente
+function openAddGuestModal() {
+  const modal = document.getElementById('modal-add-guest');
+  if (modal) modal.classList.add('active');
+}
+
+function closeAddGuestModal(e) {
+  if (e && e.target !== e.currentTarget && !e.target.classList.contains('btn-close-modal')) return;
+  const modal = document.getElementById('modal-add-guest');
+  if (modal) modal.classList.remove('active');
+}
+
+function handleManualGuestSubmit(e) {
+  e.preventDefault();
+  const name = document.getElementById('manual-name').value.trim();
+  const phone = document.getElementById('manual-phone').value.trim();
+  const passes = parseInt(document.getElementById('manual-passes').value, 10) || 1;
+  const prefTable = document.getElementById('manual-table-select').value;
+
+  if (!name) return;
+
+  const assignedTable = assignBestAvailableTable(passes, prefTable);
+  const token = `LG10-VIP-${Math.floor(1000 + Math.random() * 9000)}`;
+
+  const newGuest = {
+    id: Date.now(),
+    fullName: name,
+    phone: phone || 'Registro Manual',
+    passes: passes,
+    attending: true,
+    tableName: assignedTable,
+    folioCode: token,
+    notes: 'Registrado directamente por los anfitriones',
+    createdAt: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+  };
+
+  saveGuest(newGuest);
+  closeAddGuestModal();
+  renderAdminPortal();
+
+  // Reset form
+  document.getElementById('form-manual-guest').reset();
+}
+
+// Exportar a CSV
+function exportGuestsCsv() {
+  const guests = getGuestsList();
+  let csvContent = 'ID,Invitado,Telefono,Pases,Mesa,Folio,Estado,Hora\n';
+
+  guests.forEach(g => {
+    const row = [
+      g.id,
+      `"${g.fullName.replace(/"/g, '""')}"`,
+      `"${g.phone || ''}"`,
+      g.passes,
+      `"${g.tableName || ''}"`,
+      g.folioCode || '',
+      g.attending ? 'CONFIRMADO' : 'DECLINADO',
+      g.createdAt || ''
+    ].join(',');
+    csvContent += row + '\n';
+  });
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Invitados_Luis_Gerardo_10_Anos_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ============================================================================
-// 10. INICIALIZACIÓN
+// 12. INICIALIZACIÓN
 // ============================================================================
 document.addEventListener('DOMContentLoaded', () => {
   initCountdown();
-  fxCannon = new ConfettiCannon('fx-canvas');
+  initCalendarButtons();
+  fxConfetti = new CleanConfetti('fx-canvas');
 
-  const form = document.getElementById('rsvp-form');
-  if (form) {
-    form.addEventListener('submit', handleFormSubmit);
+  const rsvpForm = document.getElementById('rsvp-form');
+  if (rsvpForm) {
+    rsvpForm.addEventListener('submit', handleRsvpSubmit);
   }
 
-  const audioBtn = document.getElementById('btn-toggle-audio');
-  if (audioBtn) {
-    audioBtn.addEventListener('click', togglePartyMusic);
-  }
+  // Escuchar si EvenPass central sincroniza algo
+  window.addEventListener('storage', (e) => {
+    if (e.key === GUESTS_STORAGE_KEY) {
+      if (currentView === 'admin') {
+        renderAdminPortal();
+      }
+    }
+  });
 });

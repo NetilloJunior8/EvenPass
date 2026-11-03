@@ -3,11 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>¡Mis 10 Años! · Luis Gerardo | Invitación VIP</title>
-  <meta name="description" content="Invitación digital exclusiva para la fiesta de 10 años de Luis Gerardo. Confirma tu asistencia y obtén tu pase digital de acceso.">
+  <title>Luis Gerardo · Mis 10 Años | Invitación VIP & Portal</title>
+  <meta name="description" content="Invitación digital exclusiva y portal de anfitrión para el festejo de los 10 años de Luis Gerardo.">
   
-  <!-- Favicon & Theme Color -->
-  <meta name="theme-color" content="#070913">
+  <meta name="theme-color" content="#1d4ed8">
 
   <!-- Google Fonts: Outfit & Plus Jakarta Sans -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,412 +17,512 @@
 </head>
 <body>
 
-  <!-- Ambient Grid Background -->
-  <div class="ambient-grid"></div>
-
-  <!-- Special FX Canvas (Fireworks & Confetti) -->
+  <!-- Canvas Sutil para Confeti -->
   <canvas id="fx-canvas"></canvas>
 
-  <!-- Floating Audio / Ambient Music Control -->
-  <div class="floating-audio-bar">
-    <button id="btn-toggle-audio" class="btn-audio-toggle muted" title="Activar/Desactivar música de fiesta">
-      <div class="audio-soundwave">
-        <span></span>
-        <span></span>
-        <span></span>
+  <!-- Barra Superior de Navegación con Selector de Vista -->
+  <header class="top-navigation-bar">
+    <div class="nav-container-flex">
+      <div class="brand-monogram">
+        <div class="logo-symbol">LG</div>
+        <div class="logo-title">Luis Gerardo · 10 Años</div>
       </div>
-      <span id="audio-label">Música</span>
-    </button>
-  </div>
 
-  <div class="page-wrapper">
+      <!-- Selector de Modo de Vista -->
+      <div class="view-mode-tabs">
+        <button id="tab-guest-view" class="tab-btn active" onclick="switchView('guest')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+          <span>Invitación Digital</span>
+        </button>
+        <button id="tab-admin-view" class="tab-btn" onclick="switchView('admin')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          <span>Portal del Anfitrión (Mis Invitados)</span>
+        </button>
+      </div>
+    </div>
+  </header>
 
-    <!-- ================================================================ -->
-    <!-- HERO SECTION                                                     -->
-    <!-- ================================================================ -->
-    <header class="hero-section">
-      <div class="level-tag-badge">
+  <!-- ================================================================== -->
+  <!-- VISTA 1: INVITACIÓN DIGITAL PARA INVITADOS                         -->
+  <!-- ================================================================== -->
+  <main id="view-guest" class="page-container">
+
+    <!-- Cabecera Hero -->
+    <section class="invitation-hero">
+      <div class="hero-pill-badge">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-        <span>MISIÓN ESPECIAL · NIVEL 10 DESBLOQUEADO</span>
+        <span>INVITACIÓN EXCLUSIVA DE ANIVERSARIO</span>
       </div>
 
-      <h1 class="hero-title-main">LUIS GERARDO</h1>
-      
-      <div class="hero-subtitle">
-        <span class="sparkle-icon">✨</span>
-        <span>¡Festejemos juntos mis 10 Años!</span>
-        <span class="sparkle-icon">🎮</span>
-      </div>
+      <h1 class="hero-main-name">LUIS GERARDO</h1>
+      <div class="hero-sub-motive">Celebración de Cumpleaños · Mis 10 Años</div>
 
-      <p class="hero-intro-text">
-        He alcanzado un nuevo nivel y quiero celebrarlo con mis mejores amigos y familia. 
-        Prepárate para una tarde llena de juegos, laser tag, trampolines, pizza y sorpresas.
+      <p class="hero-lead-text">
+        Te invito cordialmente a compartir conmigo este momento especial. 
+        Hemos preparado una tarde inolvidable con torneos de recreación, arena de trampolines, banquete y momentos memorables.
       </p>
 
-      <div class="hero-chips-row">
-        <div class="hero-chip">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+      <div class="hero-metadata-strip">
+        <div class="meta-chip">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
           <span>Sábado 14 de Noviembre, 2026</span>
         </div>
-        <div class="hero-chip">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        <div class="meta-chip">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
           <span>4:00 PM (16:00 hrs)</span>
         </div>
-        <div class="hero-chip">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-          <span>Arena Laser Quest &amp; Jump Park</span>
+        <div class="meta-chip">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+          <span>Arena Laser Quest &amp; Salón Neón VIP</span>
         </div>
       </div>
 
-      <a href="#confirmacion" class="hero-cta-btn">
-        <span>Confirmar Mi Asistencia</span>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-      </a>
-    </header>
+      <div class="hero-action-buttons">
+        <a href="#confirmacion" class="btn-primary-blue">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <span>Confirmar Asistencia</span>
+        </a>
 
-    <!-- ================================================================ -->
-    <!-- COUNTDOWN TIMER                                                  -->
-    <!-- ================================================================ -->
-    <section class="countdown-card">
-      <h3>TIEMPO RESTANTE PARA LA MISIÓN</h3>
-      <div class="countdown-grid">
-        <div class="count-unit-box">
-          <span class="count-number" id="timer-days">00</span>
-          <span class="count-label">Días</span>
+        <a id="btn-add-google-calendar-hero" href="#" target="_blank" class="btn-secondary-outline">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+          <span>Agregar a Google Calendar</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- Contador Regresivo -->
+    <section class="minimal-countdown-card">
+      <div class="countdown-title">Tiempo Restante para la Celebración</div>
+      <div class="countdown-grid-four">
+        <div class="countdown-unit-cell">
+          <div class="unit-number" id="timer-days">00</div>
+          <div class="unit-label">Días</div>
         </div>
-        <div class="count-unit-box">
-          <span class="count-number" id="timer-hours">00</span>
-          <span class="count-label">Horas</span>
+        <div class="countdown-unit-cell">
+          <div class="unit-number" id="timer-hours">00</div>
+          <div class="unit-label">Horas</div>
         </div>
-        <div class="count-unit-box">
-          <span class="count-number" id="timer-minutes">00</span>
-          <span class="count-label">Min</span>
+        <div class="countdown-unit-cell">
+          <div class="unit-number" id="timer-minutes">00</div>
+          <div class="unit-label">Minutos</div>
         </div>
-        <div class="count-unit-box">
-          <span class="count-number" id="timer-seconds">00</span>
-          <span class="count-label">Seg</span>
+        <div class="countdown-unit-cell">
+          <div class="unit-number" id="timer-seconds">00</div>
+          <div class="unit-label">Segundos</div>
         </div>
       </div>
     </section>
 
-    <!-- ================================================================ -->
-    <!-- VENUE & LOCATION                                                 -->
-    <!-- ================================================================ -->
-    <section class="card-section">
-      <div class="section-header-row">
-        <div class="section-icon-bubble">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+    <!-- Ubicación & Navegación -->
+    <section class="minimal-content-card">
+      <div class="card-title-row">
+        <div class="card-icon-frame">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
         </div>
-        <div class="section-title-wrap">
-          <h2>Ubicación del Evento</h2>
-          <p>Dónde se llevará a cabo la gran aventura</p>
+        <div class="card-title-texts">
+          <h2>Sede &amp; Ubicación</h2>
+          <p>Instalaciones y vías de acceso al recinto</p>
         </div>
       </div>
 
-      <div class="venue-meta-box">
-        <div class="venue-name-lead">Arena Laser Quest &amp; Jump Park · Salón Neón VIP</div>
-        <div class="venue-address-text">
+      <div class="location-highlight-box">
+        <div class="venue-primary-name">Arena Laser Quest &amp; Salón Neón VIP</div>
+        <div class="venue-street-address">
           Av. Paseo de los Héroes 450, Col. Las Quintas, Culiacán, Sinaloa (Frente a Plaza Forum).
         </div>
-        <div class="venue-badges-flex">
-          <span class="venue-badge-pill">★ Estacionamiento privado</span>
-          <span class="venue-badge-pill">★ Área climatizada para papás</span>
-          <span class="venue-badge-pill">★ Seguridad privada</span>
+        <div class="venue-tags-row">
+          <span class="venue-tag">Estacionamiento Privado con Vigilancia</span>
+          <span class="venue-tag">Área Climatizada para Padres de Familia</span>
+          <span class="venue-tag">Servicio de Recepción y Guardarropa</span>
         </div>
       </div>
 
-      <div class="location-actions-grid">
-        <a href="https://maps.google.com/?q=Av.+Paseo+de+los+Heroes+450+Culiacan" target="_blank" rel="noopener noreferrer" class="btn-nav-map google">
+      <div class="action-buttons-grid-duo">
+        <a href="https://www.google.com/maps/search/?api=1&query=Av.+Paseo+de+los+H%C3%A9roes+450+Culiac%C3%A1n+Sinaloa" target="_blank" rel="noopener noreferrer" class="btn-secondary-outline">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>
-          <span>Abrir con Google Maps</span>
+          <span>Abrir en Google Maps</span>
         </a>
-        <a href="https://waze.com/ul?q=Av.+Paseo+de+los+Heroes+450+Culiacan" target="_blank" rel="noopener noreferrer" class="btn-nav-map waze">
+        <a href="https://waze.com/ul?q=Av.+Paseo+de+los+Heroes+450+Culiacan" target="_blank" rel="noopener noreferrer" class="btn-secondary-outline">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg>
-          <span>Abrir con Waze</span>
+          <span>Abrir en Waze</span>
         </a>
       </div>
     </section>
 
-    <!-- ================================================================ -->
-    <!-- PARTY ITINERARY (TIMELINE)                                       -->
-    <!-- ================================================================ -->
-    <section class="card-section">
-      <div class="section-header-row">
-        <div class="section-icon-bubble purple">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+    <!-- Itinerario Protocolario -->
+    <section class="minimal-content-card">
+      <div class="card-title-row">
+        <div class="card-icon-frame">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
         </div>
-        <div class="section-title-wrap">
-          <h2>Cronograma de Actividades</h2>
-          <p>No te pierdas ninguna misión de la tarde</p>
+        <div class="card-title-texts">
+          <h2>Cronograma del Evento</h2>
+          <p>Horarios oficiales de las actividades programadas</p>
         </div>
       </div>
 
-      <div class="timeline-track">
-        <div class="timeline-item-row">
-          <div class="timeline-node-dot"></div>
-          <div class="timeline-content-card">
-            <span class="timeline-time-badge">4:00 PM</span>
-            <div class="timeline-activity-title">Check-in VIP &amp; Bienvenida con Snacks</div>
-            <div class="timeline-activity-desc">Registro en puerta, entrega de brazaletes de juego y mesa de malteadas de bienvenida.</div>
+      <div class="minimal-timeline-list">
+        <div class="timeline-step">
+          <div class="step-bullet"></div>
+          <div class="step-card">
+            <span class="step-time-badge">4:00 PM</span>
+            <div class="step-title">Recepción &amp; Registro de Invitados</div>
+            <div class="step-desc">Acreditación mediante pase digital en puerta, entrega de gafetes de juego y cóctel de bienvenida.</div>
           </div>
         </div>
 
-        <div class="timeline-item-row">
-          <div class="timeline-node-dot"></div>
-          <div class="timeline-content-card">
-            <span class="timeline-time-badge">4:45 PM</span>
-            <div class="timeline-activity-title">Torneo Laser Tag &amp; Trampolines Extremos</div>
-            <div class="timeline-activity-desc">Batalla por equipos en el laberinto neón y circuito de obstáculos para todos los invitados.</div>
+        <div class="timeline-step">
+          <div class="step-bullet"></div>
+          <div class="step-card">
+            <span class="step-time-badge">4:45 PM</span>
+            <div class="step-title">Torneo Laser Quest &amp; Circuito de Trampolines</div>
+            <div class="step-desc">Competencia organizada por equipos en el laberinto láser y dinámicas recreativas.</div>
           </div>
         </div>
 
-        <div class="timeline-item-row">
-          <div class="timeline-node-dot"></div>
-          <div class="timeline-content-card">
-            <span class="timeline-time-badge">6:15 PM</span>
-            <div class="timeline-activity-title">Pizza Party &amp; Barra de Hamburguesas</div>
-            <div class="timeline-activity-desc">Comida para recargar energía, barra de refrescos y bocadillos especiales para adultos.</div>
+        <div class="timeline-step">
+          <div class="step-bullet"></div>
+          <div class="step-card">
+            <span class="step-time-badge">6:15 PM</span>
+            <div class="step-title">Banquete &amp; Servicio de Comedor</div>
+            <div class="step-desc">Servicio de alimentos a comensales en mesas asignadas, barra de refrescos y bocadillos gourmet.</div>
           </div>
         </div>
 
-        <div class="timeline-item-row">
-          <div class="timeline-node-dot"></div>
-          <div class="timeline-content-card">
-            <span class="timeline-time-badge">7:00 PM</span>
-            <div class="timeline-activity-title">Pastel, Mañanitas &amp; Piñata Smash</div>
-            <div class="timeline-activity-desc">Momento estelar para cantar las mañanitas a Luis Gerardo y quebrar la piñata tematica.</div>
+        <div class="timeline-step">
+          <div class="step-bullet"></div>
+          <div class="step-card">
+            <span class="step-time-badge">7:00 PM</span>
+            <div class="step-title">Canto Tradicional de Mañanitas &amp; Pastel</div>
+            <div class="step-desc">Corte del pastel de aniversario, piñata tradicional y mensaje de los anfitriones.</div>
           </div>
         </div>
 
-        <div class="timeline-item-row">
-          <div class="timeline-node-dot"></div>
-          <div class="timeline-content-card">
-            <span class="timeline-time-badge">8:00 PM</span>
-            <div class="timeline-activity-title">Entrega de Sorpresas VIP &amp; Clausura</div>
-            <div class="timeline-activity-desc">Bolsas de dulces de colección, fotos de recuerdo y despedida.</div>
+        <div class="timeline-step">
+          <div class="step-bullet"></div>
+          <div class="step-card">
+            <span class="step-time-badge">8:00 PM</span>
+            <div class="step-title">Entrega de Souvenirs &amp; Clausura</div>
+            <div class="step-desc">Agradecimiento a los asistentes, entrega de recuerdos institucionales y cierre de instalaciones.</div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ================================================================ -->
-    <!-- DRESS CODE & GIFTS                                               -->
-    <!-- ================================================================ -->
-    <section class="card-section">
-      <div class="notes-grid-duo">
-        <div class="note-subcard">
-          <div class="note-subcard-icon">👟</div>
+    <!-- Código de Vestimenta y Regalos -->
+    <section class="minimal-content-card">
+      <div class="two-columns-info">
+        <div class="info-sub-box">
+          <div class="info-icon-small">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.38 3.46L16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"></path></svg>
+          </div>
           <h4>Código de Vestimenta</h4>
-          <p>Sport cómodo / Tenis. Se recomienda traer calcetines antiderrapantes para el área de trampolines.</p>
+          <p>Casual deportivo y calzado cómodo. Se requiere el uso de calcetines antiderrapantes para el área de trampolines.</p>
         </div>
-        <div class="note-subcard">
-          <div class="note-subcard-icon">🎁</div>
-          <h4>Mesa de Regalos</h4>
-          <p>Tu presencia y cariño es mi mayor regalo. Si deseas obsequiarme un detalle: lluvia de sobres o tarjeta Liverpool.</p>
+
+        <div class="info-sub-box">
+          <div class="info-icon-small">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
+          </div>
+          <h4>Detalle de Aniversario</h4>
+          <p>Tu distinguida presencia es el mayor obsequio. Si deseas tener un gesto adicional: lluvia de sobres o certificado Liverpool.</p>
         </div>
       </div>
     </section>
 
     <!-- ================================================================ -->
-    <!-- RSVP CONFIRMATION FORM PANEL                                     -->
+    <!-- FORMULARIO DE CONFIRMACIÓN (RSVP)                                -->
     <!-- ================================================================ -->
-    <section id="confirmacion" class="rsvp-section-card">
-      <div class="section-header-row">
-        <div class="section-icon-bubble gold">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg>
+    <section id="confirmacion" class="minimal-content-card" style="border-color: var(--border-blue-active);">
+      <div class="card-title-row">
+        <div class="card-icon-frame">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
         </div>
-        <div class="section-title-wrap">
-          <h2>Panel de Confirmación (RSVP)</h2>
-          <p>Favor de confirmar antes del 10 de Noviembre para asignar tu acceso</p>
+        <div class="card-title-texts">
+          <h2>Confirmación de Asistencia (RSVP)</h2>
+          <p>Agradecemos confirmar a la brevedad para reservar tu lugar y asignar tu mesa</p>
         </div>
       </div>
 
-      <!-- FORM -->
       <form id="rsvp-form">
-        <!-- Attendance Option -->
-        <div class="form-group-field">
-          <label class="form-label-top">¿ASISTIRÁS AL EVENTO?</label>
-          <div class="attendance-radio-grid">
-            <div class="radio-choice-card is-selected" id="choice-yes" onclick="setAttendance(true)">
-              <div class="radio-choice-icon">🎉</div>
-              <div class="radio-choice-title">¡Sí, ahí estaré!</div>
-              <div class="radio-choice-sub">Cuenten con nosotros</div>
+        <!-- Decisión de Asistencia -->
+        <div class="form-field-group">
+          <label class="field-label">¿Podrás acompañarnos?</label>
+          <div class="decision-tabs-grid">
+            <div id="choice-yes" class="decision-card selected" onclick="setAttendance(true)">
+              <div class="decision-indicator-title">Sí, asistiremos con gusto</div>
+              <div class="decision-indicator-desc">Confirmar presencia y pases</div>
             </div>
-            <div class="radio-choice-card is-declined" id="choice-no" onclick="setAttendance(false)">
-              <div class="radio-choice-icon">😢</div>
-              <div class="radio-choice-title">No podré asistir</div>
-              <div class="radio-choice-sub">Lo siento mucho</div>
+            <div id="choice-no" class="decision-card declined" onclick="setAttendance(false)">
+              <div class="decision-indicator-title">No podré asistir</div>
+              <div class="decision-indicator-desc">Notificar a los anfitriones</div>
             </div>
           </div>
         </div>
 
-        <!-- Guest / Family Name -->
-        <div class="form-group-field">
-          <label class="form-label-top" for="guest-name">NOMBRE DE LA FAMILIA O INVITADO *</label>
+        <!-- Nombre de Familia o Invitado -->
+        <div class="form-field-group">
+          <label class="field-label" for="guest-name">Nombre Completo del Invitado o Familia *</label>
           <input 
             type="text" 
             id="guest-name" 
-            class="form-input-text" 
-            placeholder="Ej. Familia López Morales / Mateo González" 
+            class="input-text-clean" 
+            placeholder="Ej. Familia Morales Valenzuela / Roberto Somoza" 
             required
             autocomplete="name"
           >
         </div>
 
-        <!-- Phone / WhatsApp -->
-        <div class="form-group-field">
-          <label class="form-label-top" for="guest-phone">TELÉFONO O WHATSAPP *</label>
+        <!-- Teléfono de Contacto -->
+        <div class="form-field-group">
+          <label class="field-label" for="guest-phone">Teléfono Móvil o WhatsApp *</label>
           <input 
             type="tel" 
             id="guest-phone" 
-            class="form-input-text" 
+            class="input-text-clean" 
             placeholder="Ej. 667 123 4567" 
             required
             autocomplete="tel"
           >
         </div>
 
-        <!-- Number of Passes Counter (visible if attending) -->
-        <div class="form-group-field" id="passes-field-container">
-          <label class="form-label-top">TOTAL DE PASES A UTILIZAR</label>
-          <div class="passes-counter-row">
-            <div class="passes-label-meta">
-              <strong>Número de Asistentes</strong>
+        <!-- Contador de Pases (Visible si confirma asistencia) -->
+        <div id="passes-field-group" class="form-field-group">
+          <label class="field-label">Número de Pases a Reservar</label>
+          <div class="passes-stepper-box">
+            <div class="stepper-label-col">
+              <strong>Asistentes Totales</strong>
               <small>Incluye niños y adultos acompañantes</small>
             </div>
-            <div class="counter-controls-group">
-              <button type="button" class="btn-counter-step" onclick="changePasses(-1)">-</button>
-              <span class="counter-value-display" id="passes-count">2</span>
-              <button type="button" class="btn-counter-step" onclick="changePasses(1)">+</button>
+            <div class="stepper-actions">
+              <button type="button" class="stepper-btn" onclick="changePasses(-1)">-</button>
+              <span id="passes-count" class="stepper-value">2</span>
+              <button type="button" class="stepper-btn" onclick="changePasses(1)">+</button>
             </div>
           </div>
         </div>
 
-        <!-- Message / Dedication for Luis Gerardo -->
-        <div class="form-group-field">
-          <label class="form-label-top" for="guest-notes">MENSAJE O DEDICATORIA PARA LUIS GERARDO (OPCIONAL)</label>
+        <!-- Mensaje o Felicitación Opcional -->
+        <div class="form-field-group">
+          <label class="field-label" for="guest-notes">Dedicatoria para Luis Gerardo (Opcional)</label>
           <textarea 
             id="guest-notes" 
-            class="form-input-text" 
+            class="input-text-clean" 
             rows="3" 
-            placeholder="¡Felicidades Luis Gerardo por tus 10 años! Nos vemos en el torneo..."
+            placeholder="Escribe aquí un mensaje especial para el festejado..."
           ></textarea>
         </div>
 
-        <!-- Submit Button -->
-        <button type="submit" id="btn-submit" class="btn-submit-rsvp">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
-          <span id="btn-submit-text">Confirmar Asistencia y Generar Pase VIP</span>
+        <button type="submit" id="btn-submit-form" class="btn-primary-blue" style="width: 100%; margin-top: 10px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <span id="btn-submit-text">Confirmar Asistencia &amp; Asignar Mi Mesa</span>
         </button>
       </form>
 
       <!-- ============================================================== -->
-      <!-- GENERATED VIP DIGITAL TICKET (Appears after confirmation)      -->
+      <!-- PASE DIGITAL VIP GENERADO                                      -->
       <!-- ============================================================== -->
-      <div id="ticket-display" class="ticket-wrapper-card" style="display: none;">
-        <div class="ticket-header-strip">
-          <div class="ticket-brand-logo">EVENPASS · PASE OFICIAL VIP</div>
-          <div class="ticket-badge-tag">NIVEL 10 · LUIS GERARDO</div>
+      <div id="ticket-display" class="ticket-editorial-card" style="display: none;">
+        <div class="ticket-top-meta">
+          <div class="ticket-issuer-tag">EVENPASS · PASE DIGITAL OFICIAL</div>
+          <div class="ticket-status-badge">ACCESO CONFIRMADO</div>
         </div>
 
-        <div class="ticket-guest-name" id="ticket-name">Familia Invitada</div>
-        <div class="ticket-status-pill">● ASISTENCIA CONFIRMADA Y REGISTRADA EN VIVO</div>
-
-        <!-- Real Canvas QR Code -->
-        <div class="ticket-qr-center-box">
-          <canvas id="ticket-qr-canvas" width="180" height="180"></canvas>
+        <div class="ticket-recipient-name" id="ticket-name">Familia Morales Valenzuela</div>
+        
+        <!-- Mesa Asignada Dinámicamente según el Plan Croquis -->
+        <div class="ticket-table-assignment" id="ticket-table-assignment">
+          Mesa Asignada: Mesa 02 - Familia &amp; Amigos
         </div>
 
-        <div class="ticket-folio-code" id="ticket-folio">LG10-VIP-0000</div>
+        <div class="ticket-qr-frame">
+          <canvas id="ticket-qr-canvas" width="160" height="160"></canvas>
+        </div>
 
-        <div class="ticket-data-grid">
-          <div class="ticket-data-item">
+        <div class="ticket-folio-text" id="ticket-folio">LG10-VIP-4819</div>
+
+        <div class="ticket-details-quad">
+          <div>
             <small>Fecha</small>
             <strong>14 Nov 2026</strong>
           </div>
-          <div class="ticket-data-item">
-            <small>Hora</small>
+          <div>
+            <small>Horario</small>
             <strong>4:00 PM</strong>
           </div>
-          <div class="ticket-data-item">
+          <div>
             <small>Pases</small>
             <strong id="ticket-passes-label">2 Personas</strong>
           </div>
         </div>
 
-        <div class="ticket-actions-flex">
-          <a id="btn-whatsapp-share" href="#" target="_blank" class="btn-share-whatsapp">
+        <div class="ticket-button-stack">
+          <!-- WhatsApp con el número oficial 6676118835 -->
+          <a id="btn-whatsapp-confirmation" href="#" target="_blank" class="btn-whatsapp-action">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
-            <span>Notificar a los Papás por WhatsApp</span>
+            <span>Notificar a los Padres por WhatsApp (667 611 8835)</span>
           </a>
 
-          <button type="button" class="btn-download-pass" onclick="savePassSnapshot()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-            <span>Guardar Pase Digital en el Dispositivo</span>
+          <a id="btn-add-google-calendar-pass" href="#" target="_blank" class="btn-calendar-action">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            <span>Agregar Recordatorio a Google Calendar</span>
+          </a>
+
+          <button type="button" class="btn-secondary-outline" onclick="window.print()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+            <span>Guardar o Imprimir Pase de Acceso</span>
           </button>
         </div>
       </div>
     </section>
 
-    <!-- ================================================================ -->
-    <!-- DEMO / ORGANIZER MONITOR DRAWER TRIGGER                          -->
-    <!-- ================================================================ -->
-    <div class="admin-trigger-floating">
-      <button class="btn-admin-preview" onclick="openAdminModal()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-        <span>Ver Padrón de Confirmados en Vivo (Modo Anfitrión)</span>
-      </button>
-    </div>
-
-    <!-- ================================================================ -->
-    <!-- FOOTER                                                           -->
-    <!-- ================================================================ -->
-    <footer class="page-footer">
-      <p>Invitación interactiva y sistema de control de acceso diseñado con <strong>EvenPass</strong></p>
-      <p style="margin-top: 4px; opacity: 0.7;">¡Te esperamos para celebrar en grande los 10 años de Luis Gerardo!</p>
+    <!-- Footer -->
+    <footer class="minimal-page-footer">
+      <p>Control de acceso, invitaciones inteligentes y croquis de mesas impulsado por <b>EvenPass OS</b></p>
+      <p style="margin-top: 4px; opacity: 0.75;">Atención personalizada y soporte: <b>667 611 8835</b></p>
     </footer>
 
-  </div>
+  </main>
 
   <!-- ================================================================== -->
-  <!-- ADMIN MODAL: GUEST CONFIRMATION MONITOR                            -->
-  <!-- ================================================================ -->
-  <div id="admin-modal" class="admin-modal-overlay" onclick="closeAdminModal(event)">
-    <div class="admin-modal-card" onclick="event.stopPropagation()">
-      <div class="admin-modal-header">
-        <h3>Lista de Asistencia en Vivo · Luis Gerardo (10 Años)</h3>
-        <button class="btn-modal-close" onclick="closeAdminModal()">&times;</button>
+  <!-- VISTA 2: PORTAL DEL ANFITRIÓN (CONTROL DE INVITADOS & MESAS)       -->
+  <!-- ================================================================== -->
+  <main id="view-admin" class="admin-portal-container" style="display: none;">
+
+    <div class="portal-header-card">
+      <div class="portal-title-area">
+        <h2>Panel de Control del Anfitrión · Luis Gerardo (10 Años)</h2>
+        <p>Monitoreo exclusivo de invitados, asignación de mesas y control de aforo en vivo</p>
       </div>
 
-      <div class="admin-modal-body">
-        <div class="admin-stats-pills">
-          <div class="admin-stat-pill">
-            <strong id="stat-confirmed-passes">0</strong>
-            <small>Pases Confirmados</small>
-          </div>
-          <div class="admin-stat-pill">
-            <strong id="stat-families-count">0</strong>
-            <small>Familias / Grupos</small>
-          </div>
-          <div class="admin-stat-pill">
-            <strong id="stat-declined-count">0</strong>
-            <small>Declinados</small>
-          </div>
+      <div class="portal-sync-status">
+        <span class="sync-pulse"></span>
+        <span>Sincronizado con EvenPass OS &amp; Base de Datos</span>
+      </div>
+    </div>
+
+    <!-- Métricas KPI -->
+    <div class="metrics-row-quad">
+      <div class="metric-kpi-card highlight">
+        <small>Pases Confirmados</small>
+        <strong id="kpi-confirmed-passes">0</strong>
+      </div>
+      <div class="metric-kpi-card">
+        <small>Aforo Salón Ocupado</small>
+        <strong id="kpi-occupancy-percent">0%</strong>
+      </div>
+      <div class="metric-kpi-card">
+        <small>Familias Registradas</small>
+        <strong id="kpi-families-count">0</strong>
+      </div>
+      <div class="metric-kpi-card">
+        <small>Respuestas Declinadas</small>
+        <strong id="kpi-declined-count">0</strong>
+      </div>
+    </div>
+
+    <!-- Vista de Mesas del Salón Neón VIP -->
+    <section class="tables-overview-section">
+      <div class="card-title-row" style="margin-bottom: 8px;">
+        <div class="card-icon-frame">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path></svg>
+        </div>
+        <div class="card-title-texts">
+          <h2>Distribución y Ocupación de Mesas (Croquis Activo)</h2>
+          <p>Asignación automática e inteligente respetando el aforo de 10 personas por mesa</p>
+        </div>
+      </div>
+
+      <div id="tables-cards-container" class="tables-cards-grid">
+        <!-- Renderizado dinámicamente con las mesas -->
+      </div>
+    </section>
+
+    <!-- Lista de Invitados con Buscador y Filtro -->
+    <section class="guests-management-section">
+      <div class="table-toolbar-row">
+        <div class="search-input-box">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input 
+            type="text" 
+            id="admin-search-input" 
+            placeholder="Buscar por nombre, teléfono o mesa..." 
+            oninput="filterAdminGuests()"
+          >
         </div>
 
-        <table class="admin-list-table">
+        <div class="toolbar-actions-flex">
+          <button class="btn-toolbar primary" onclick="openAddGuestModal()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span>+ Registrar Invitado</span>
+          </button>
+          <button class="btn-toolbar" onclick="exportGuestsCsv()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            <span>Descargar Lista (CSV)</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="data-table-container">
+        <table class="admin-data-table">
           <thead>
             <tr>
-              <th>Invitado</th>
+              <th>Invitado / Familia</th>
+              <th>Contacto</th>
               <th>Pases</th>
+              <th>Mesa Asignada</th>
+              <th>Folio Pase</th>
               <th>Estado</th>
-              <th>Folio QR</th>
+              <th>Acción</th>
             </tr>
           </thead>
-          <tbody id="admin-table-body">
-            <!-- Dynamically populated -->
+          <tbody id="admin-table-rows">
+            <!-- Filas pobladas dinámicamente -->
           </tbody>
         </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ================================================================== -->
+  <!-- MODAL: REGISTRAR INVITADO MANUALMENTE                              -->
+  <!-- ================================================================== -->
+  <div id="modal-add-guest" class="modal-overlay" onclick="closeAddGuestModal(event)">
+    <div class="modal-card-box" onclick="event.stopPropagation()">
+      <div class="modal-head">
+        <h3>Registrar Nuevo Invitado</h3>
+        <button class="btn-close-modal" onclick="closeAddGuestModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-manual-guest" onsubmit="handleManualGuestSubmit(event)">
+          <div class="form-field-group">
+            <label class="field-label">Nombre del Invitado o Familia *</label>
+            <input type="text" id="manual-name" class="input-text-clean" placeholder="Ej. Familia Garza López" required>
+          </div>
+          <div class="form-field-group">
+            <label class="field-label">Teléfono WhatsApp</label>
+            <input type="tel" id="manual-phone" class="input-text-clean" placeholder="Ej. 667 999 8877">
+          </div>
+          <div class="form-field-group">
+            <label class="field-label">Pases Solicitados</label>
+            <input type="number" id="manual-passes" class="input-text-clean" min="1" max="10" value="2" required>
+          </div>
+          <div class="form-field-group">
+            <label class="field-label">Mesa Preferida</label>
+            <select id="manual-table-select" class="input-text-clean">
+              <option value="AUTO">Asignación Automática Inteligente</option>
+              <option value="Mesa 01 - Familia Cercana">Mesa 01 - Familia Cercana</option>
+              <option value="Mesa 02 - Amigos de Colegio">Mesa 02 - Amigos de Colegio</option>
+              <option value="Mesa 03 - Padrinos & Tíos">Mesa 03 - Padrinos & Tíos</option>
+              <option value="Mesa 04 - Amigos Deportes">Mesa 04 - Amigos Deportes</option>
+              <option value="Mesa 05 - Invitados Especiales">Mesa 05 - Invitados Especiales</option>
+            </select>
+          </div>
+          <button type="submit" class="btn-primary-blue" style="width: 100%; margin-top: 10px;">
+            Guardar y Asignar Lugar
+          </button>
+        </form>
       </div>
     </div>
   </div>

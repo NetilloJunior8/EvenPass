@@ -794,6 +794,68 @@ export class EventService {
           };
           this.supportTickets.update(tickets => [newTicket, ...tickets.filter(t => t.id !== newTicket.id)]);
         }
+
+        if (e.key === 'evenpass_latest_rsvp_guest' && e.newValue) {
+          try {
+            const rsvp = JSON.parse(e.newValue);
+            const activeEv = this.selectedEvent();
+            if (activeEv && !this.isEventLocked(activeEv)) {
+              let tableId: number | undefined = undefined;
+              let tableName = 'Sin mesa asignada';
+              const curSalon = this.currentSalon();
+              const passesNeeded = rsvp.passes || 1;
+
+              if (activeEv.hasCroquis && curSalon && curSalon.tables.length > 0) {
+                const activeEventGuests = this.allGuests().filter(
+                  g => g.eventId === activeEv.id && (g.status === 'CONFIRMED' || g.status === 'ATTENDED')
+                );
+                const tableUsage = new Map<number, number>();
+                curSalon.tables.forEach(t => tableUsage.set(t.id, 0));
+                activeEventGuests.forEach(g => {
+                  if (g.assignedTableId) {
+                    const c = tableUsage.get(g.assignedTableId) || 0;
+                    tableUsage.set(g.assignedTableId, c + g.totalPasses);
+                  }
+                });
+
+                const availableTable = curSalon.tables.find(t => {
+                  const occ = tableUsage.get(t.id) || 0;
+                  return (t.capacity - occ) >= passesNeeded;
+                });
+
+                if (availableTable) {
+                  tableId = availableTable.id;
+                  tableName = availableTable.tableName;
+                }
+              }
+
+              const newGuest: Guest = {
+                id: Date.now(),
+                eventId: activeEv.id,
+                fullName: rsvp.fullName || 'Invitado Digital',
+                phone: rsvp.phone || 'N/A',
+                email: `${(rsvp.fullName || 'invitado').toLowerCase().replace(/[^a-z]/g, '')}@gmail.com`,
+                numCompanions: Math.max(0, passesNeeded - 1),
+                totalPasses: passesNeeded,
+                status: 'CONFIRMED',
+                qrCodeToken: rsvp.token || `EP-${Math.floor(1000 + Math.random() * 9000)}`,
+                assignedTableId: tableId,
+                assignedTableName: tableName,
+                source: 'DIGITAL_INVITATION',
+                confirmedAt: new Date().toLocaleDateString('es-MX'),
+                dietNotes: 'Confirmación en vivo vía Invitación Web'
+              };
+
+              this.allGuests.update(list => [newGuest, ...list]);
+              this.refreshAllTableOccupancies();
+              this.notificationService.show(
+                'success',
+                'Confirmación RSVP en Vivo',
+                `${newGuest.fullName} (${newGuest.totalPasses} pases) confirmado en el sistema. Asignado a: ${tableName}.`
+              );
+            }
+          } catch (err) {}
+        }
       });
     } catch {}
   }

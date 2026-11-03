@@ -93,7 +93,7 @@ export interface Guest {
   dietNotes?: string;
   confirmedAt?: string;
   checkedInAt?: string;
-  source?: 'SUPABASE' | 'GOOGLE_SHEETS' | 'CANVA_QR' | 'WEBHOOK_API' | 'EMBED_WIDGET' | 'CSV_IMPORT' | 'MANUAL';
+  source?: 'SUPABASE' | 'GOOGLE_SHEETS' | 'CANVA_QR' | 'WEBHOOK_API' | 'EMBED_WIDGET' | 'CSV_IMPORT' | 'MANUAL' | 'DIGITAL_INVITATION';
   externalSyncId?: string;
 }
 
@@ -101,7 +101,7 @@ export interface ExternalAuditEntry {
   id: string;
   eventId: number;
   timestamp: string;
-  source: 'SUPABASE' | 'GOOGLE_SHEETS' | 'CANVA_QR' | 'WEBHOOK_API' | 'EMBED_WIDGET' | 'CSV_IMPORT' | 'MANUAL';
+  source: 'SUPABASE' | 'GOOGLE_SHEETS' | 'CANVA_QR' | 'WEBHOOK_API' | 'EMBED_WIDGET' | 'CSV_IMPORT' | 'MANUAL' | 'DIGITAL_INVITATION';
   guestName: string;
   passesCount: number;
   assignedTable: string;
