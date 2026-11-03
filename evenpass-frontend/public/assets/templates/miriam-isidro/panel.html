@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Control - Miriam & Isidro</title>
+    <link rel="manifest" href="./manifest_panel.json">
+    <link rel="icon" href="./mi_logo.svg">
+    <meta name="theme-color" content="#d4af37">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Montserrat:wght@200;300;400;500&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: #050505;
+            background-image: linear-gradient(to bottom, rgba(0,0,0,0.6), rgba(0,0,0,0.9)), url('/1.jpg');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            font-family: 'Montserrat', sans-serif;
+            color: #fff;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .header h1 {
+            color: #D4AF37;
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 28px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+        }
+
+        .card {
+            background: rgba(10, 10, 10, 0.85);
+            backdrop-filter: blur(15px);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
+            margin-bottom: 20px;
+            border: 1px solid rgba(212, 175, 55, 0.3);
+        }
+
+        /* Stats */
+        .stats {
+            text-align: center;
+        }
+
+        .stats-number {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 50px;
+            font-weight: 400;
+            color: #D4AF37;
+            margin-bottom: 5px;
+        }
+
+        .stats-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            color: #888;
+            letter-spacing: 2px;
+        }
+
+        /* Form */
+        h2 {
+            font-size: 14px;
+            color: #D4AF37;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 400;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #aaa;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid rgba(212, 175, 55, 0.4);
+            border-radius: 4px;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 14px;
+            background-color: rgba(255, 255, 255, 0.02);
+            color: #fff;
+            outline: none;
+        }
+        
+        option {
+            background-color: #050505;
+            color: #fff;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 15px;
+            border: 1px solid #D4AF37;
+            background-color: transparent;
+            color: #D4AF37;
+            border-radius: 4px;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 400;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .btn-whatsapp {
+            background-color: #25D366;
+            color: white;
+            box-shadow: 0 4px 10px rgba(37, 211, 102, 0.3);
+        }
+
+        .btn-whatsapp:hover {
+            background-color: #128C7E;
+        }
+
+        .btn-whatsapp:active {
+            transform: scale(0.98);
+        }
+
+        /* List */
+        .list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .btn-refresh {
+            background: none;
+            border: 1px solid #D4AF37;
+            color: #D4AF37;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 9px;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 400;
+        }
+
+        .btn-refresh:hover {
+            background-color: #D4AF37;
+            color: #050505;
+        }
+
+        .guest-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+            border-bottom: 1px solid rgba(212, 175, 55, 0.2);
+        }
+
+        .guest-item:last-child {
+            border-bottom: none;
+        }
+
+        .guest-info {
+            flex-grow: 1;
+        }
+
+        .guest-name {
+            font-weight: 600;
+            font-size: 14px;
+            color: #fff;
+        }
+
+        .guest-status {
+            font-size: 11px;
+            margin-top: 3px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-yes {
+            color: #4CAF50;
+        }
+
+        .status-no {
+            color: #f44336;
+        }
+
+        .status-pending {
+            color: #FF9800;
+        }
+
+        .guest-passes {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 22px;
+            color: #D4AF37;
+            border-left: 1px solid rgba(212, 175, 55, 0.2);
+            padding-left: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-delete {
+            background: none;
+            border: none;
+            color: #f44336;
+            font-size: 16px;
+            cursor: pointer;
+            margin-left: 15px;
+            opacity: 0.7;
+            transition: 0.3s;
+        }
+
+        .btn-delete:hover {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="./mi_logo.svg?v=2" alt="M | I Logo" style="width: 120px; height: 120px; object-fit: contain; margin-bottom: 15px;" />
+            <h1 id="ui-panel-title">Panel de Control</h1>
+            <p style="font-size: 12px; color: #888; margin-top: 5px; text-transform: uppercase; letter-spacing: 1px;">
+                Gestión de Invitados</p>
+        </div>
+
+        <!-- GENERADOR DE LINKS -->
+        <div class="card">
+            <h2> Enviar Invitación</h2>
+            <div class="form-group">
+                <label>Nombre de la Familia/Invitado</label>
+                <input type="text" id="inv_name" placeholder="Ej: Familia López" autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label>Pases a Otorgar</label>
+                <select id="inv_passes">
+                    <option value="1">1 Pase</option>
+                    <option value="2" selected>2 Pases</option>
+                    <option value="3">3 Pases</option>
+                    <option value="4">4 Pases</option>
+                    <option value="5">5 Pases</option>
+                    <option value="6">6 Pases</option>
+                    <option value="7">7 Pases</option>
+                    <option value="8">8 Pases</option>
+                </select>
+            </div>
+            <button class="btn btn-whatsapp" onclick="sendWhatsApp()"> Enviar por WhatsApp</button>
+        </div>
+
+        <!-- ESTADÍSTICAS -->
+        <div class="card stats">
+            <div class="stats-number" id="lbl-total">-</div>
+            <div class="stats-label">Pases Confirmados Totales</div>
+        </div>
+
+        <!-- LISTA EN VIVO -->
+        <div class="card">
+            <div class="list-header">
+                <h2> Actividad Reciente</h2>
+                <button class="btn-refresh" onclick="loadList()">↻ Actualizar</button>
+            </div>
+            <div id="lista-invitados">
+                <p style="text-align: center; font-size: 12px; color: #999;">Cargando lista...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========================================================
+        // LA MISMA URL DE TU GOOGLE SCRIPT
+        // ========================================================
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwnluEUWQzUZt8Uy03dqHPH1Q4qGJZxpUYb8P6VeIs2lCmdYie_my5BDtKx6ziIem3FFA/exec';
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const eventoId = urlParams.get('evento') || 'miriam-isidro';
+        document.getElementById('ui-panel-title').innerText = 'M | I - Panel';
+
+        //  TU LINK REAL DE LA INVITACIÓN
+        // Obtenemos la URL limpia sin parámetros ni hashes
+        let currentUrl = window.location.href.split('?')[0].split('#')[0];
+        
+        // Reemplazamos /panel.html por /index.html, o quitamos /panel del final para apuntar a la invitación (raíz)
+        let BASE_INVITATION_URL = currentUrl
+            .replace(/\/panel\.html$/i, '/index.html')
+            .replace(/\/panel\/?$/i, '/');
+
+        function sendWhatsApp() {
+            const name = document.getElementById('inv_name').value.trim();
+            const passes = document.getElementById('inv_passes').value;
+
+            if (!name) { alert('Escribe el nombre del invitado.'); return; }
+
+            // Generar el link único
+            const link = BASE_INVITATION_URL + "?evento=" + eventoId + "&nombre=" + encodeURIComponent(name) + "&pases=" + passes;
+
+            const pasesText = passes == 1 ? "1 pase" : `${passes} pases`;
+            const text = `¡Hola, *${name}*!\n\nNos llena de alegría invitarte a celebrar nuestra boda.\n\nHemos reservado ${pasesText} a tu nombre. Por favor, descubre todos los detalles y ayúdanos a confirmar tu asistencia en tu invitación digital:\n\n${link}\n\nCon cariño,\nMiriam e Isidro`;
+
+            // Abrir WhatsApp Web o la App en celular
+            window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+
+            // Limpiar input para la siguiente invitación
+            document.getElementById('inv_name').value = '';
+        }
+
+        function renderList(data) {
+            const listContainer = document.getElementById('lista-invitados');
+            document.getElementById('lbl-total').innerText = data.total;
+
+            if (data.lista.length === 0) {
+                listContainer.innerHTML = '<p style="text-align: center; font-size: 12px; color: #999;">Aún no hay respuestas registradas.</p>';
+                return;
+            }
+
+            let html = '';
+            data.lista.forEach(inv => {
+                if (!inv.nombre) return;
+
+                let statusHtml = '';
+                if (inv.asistencia === 'Sí') statusHtml = '<span class="status-yes">✅ Asistirá</span>';
+                else if (inv.asistencia === 'No') statusHtml = '<span class="status-no">❌ No Asistirá</span>';
+                else statusHtml = '<span class="status-pending">⏳ Sin respuesta</span>';
+
+                html += `
+            <div class="guest-item">
+                <div class="guest-info">
+                    <div class="guest-name">${inv.nombre}</div>
+                    <div class="guest-status">${statusHtml}</div>
+                </div>
+                <div style="display:flex; align-items:center;">
+                    <div class="guest-passes">${inv.pases}</div>
+                    <button class="btn-delete" onclick="deleteGuest('${inv.nombre}')" title="Eliminar invitado">🗑️</button>
+                </div>
+            </div>
+            `;
+            });
+
+            if (html === '') html = '<p style="text-align: center; font-size: 12px; color: #999;">Aún no hay respuestas válidas.</p>';
+            listContainer.innerHTML = html;
+        }
+
+        function loadList() {
+            const listContainer = document.getElementById('lista-invitados');
+            
+            // 1. Mostrar datos en caché instantáneamente (Stale-while-revalidate)
+            const cachedData = localStorage.getItem('cachedPanelData_' + eventoId);
+            if (cachedData) {
+                try {
+                    renderList(JSON.parse(cachedData));
+                    // Indicador sutil de que está actualizando el caché
+                    document.getElementById('ui-panel-title').innerText = 'M | I - Panel ↻';
+                } catch(e) {}
+            } else {
+                listContainer.innerHTML = '<p style="text-align: center; font-size: 12px; color: #999;">Cargando lista...</p>';
+            }
+
+            // 2. Traer datos reales en segundo plano
+            fetch(SCRIPT_URL + '?action=get_list&evento_id=' + eventoId)
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('ui-panel-title').innerText = 'Panel de Control'; // Quitar indicador
+                    if (data.status === 'success') {
+                        // Guardar en caché para la próxima vez
+                        localStorage.setItem('cachedPanelData_' + eventoId, JSON.stringify(data));
+                        renderList(data);
+                    } else if (!cachedData) {
+                        listContainer.innerHTML = '<p style="text-align: center; font-size: 12px; color: red;">Error al cargar datos.</p>';
+                    }
+                })
+                .catch(err => {
+                    console.error("Panel Fetch Error:", err);
+                    document.getElementById('ui-panel-title').innerText = 'Panel de Control';
+                    if (!cachedData) {
+                        listContainer.innerHTML = '<p style="text-align: center; font-size: 12px; color: red;">Error de conexión. Revisa el script.</p>';
+                    }
+                });
+        }
+
+        function deleteGuest(nombre) {
+            if (!confirm(`¿Estás seguro de que deseas eliminar la respuesta de: ${nombre}?`)) return;
+            
+            const listContainer = document.getElementById('lista-invitados');
+            listContainer.innerHTML = '<p style="text-align: center; font-size: 12px; color: #999;">Eliminando...</p>';
+
+            fetch(`${SCRIPT_URL}?action=delete&evento_id=${eventoId}&nombre=${encodeURIComponent(nombre)}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        loadList();
+                    } else {
+                        alert("Error al eliminar: " + (data.message || ""));
+                        loadList();
+                    }
+                })
+                .catch(err => {
+                    alert("Error de red al intentar eliminar.");
+                    loadList();
+                });
+        }
+
+        // Cargar lista al iniciar
+        window.onload = loadList;
+
+        // Registrar Service Worker exclusivo del Panel
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw_panel.js').then(reg => {
+                    console.log('SW Panel registrado', reg);
+                }).catch(err => {
+                    console.log('Fallo el SW Panel', err);
+                });
+            });
+        }
+    </script>
+</body>
+
+</html>

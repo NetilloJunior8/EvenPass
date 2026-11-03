@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>EvenPass | Plataforma SaaS de Gestión de Eventos, Croquis de Salones y Pases QR</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Cormorant+Garamond:wght@400;600;700&display=swap" rel="stylesheet">
+  
+  <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Navigation Header -->
+  <header class="header-nav">
+    <div class="container nav-wrap">
+      <a href="#" class="brand-link">
+        <img src="assets/logo.svg" alt="EvenPass Logo" class="brand-logo-img">
+      </a>
+
+      <nav class="main-nav" aria-label="Navegación principal">
+        <a href="#cotizador">Cotizador</a>
+        <a href="#croquis">Croquis de Salón</a>
+        <a href="#experiencia">Cómo Funciona</a>
+        <a href="#plantillas">Plantillas</a>
+        <a href="#sistema">El Sistema</a>
+        <a href="#garantias">Garantías</a>
+        <a href="#planes">Planes</a>
+        <a href="#soporte-cliente">Soporte</a>
+        <a href="#guia">Guía de Uso</a>
+      </nav>
+
+      <div class="nav-actions">
+        <!-- Theme Switcher -->
+        <button class="theme-toggle" id="theme-toggle-btn" title="Cambiar modo oscuro/claro" aria-label="Cambiar modo">
+          <svg class="theme-icon-svg" id="theme-svg-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
+
+        <!-- Direct WhatsApp Concierge CTA -->
+        <a href="https://wa.me/526671234567?text=Hola%20EvenPass,%20deseo%20cotizar%20un%20evento%20y%20conocer%20sus%20servicios" target="_blank" class="btn btn-whatsapp btn-sm" id="btn-whatsapp-header">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          <span>Cotizar por WhatsApp</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="container hero-grid">
+      <div>
+        <div class="hero-badge">
+          <span class="pulse"></span>
+          <span>Plataforma SaaS Integral para Eventos</span>
+        </div>
+        <h1 class="display-title">
+          Tus eventos con <span class="text-gradient">croquis inteligente</span>, invitaciones de lujo y acceso QR.
+        </h1>
+        <p class="lead">
+          EvenPass unifica la creación de invitaciones web interactivas, la confirmación RSVP en vivo, la asignación automática de mesas por salón y el control de acceso en puerta con escaneo en milisegundos.
+        </p>
+
+        <div class="hero-cta">
+          <a href="https://wa.me/526671234567?text=Hola%20EvenPass,%20quiero%20cotizar%20mi%20evento%20con%20croquis%20inteligente%20y%20pases%20QR" target="_blank" class="btn btn-whatsapp">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+            <span>Cotizar Mi Evento por WhatsApp</span>
+          </a>
+          <a href="#cotizador" class="btn btn-secondary">
+            <span>Calcular Presupuesto Online</span>
+          </a>
+        </div>
+
+        <div class="trust-row">
+          <div class="trust-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Asignación automática de mesas</span>
+          </div>
+          <div class="trust-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>QR anti-duplicados</span>
+          </div>
+          <div class="trust-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Garantía Cero Filas &amp; Sin Internet</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hero Phone / Device Mockup Interactive -->
+      <div class="hero-device-wrapper">
+        <div class="floating-chip chip-top">
+          <div class="chip-icon green">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </div>
+          <div class="chip-text">
+            <strong>Margarita & Acompañante</strong>
+            <small>Confirmaron · Asignados a Mesa 03</small>
+          </div>
+        </div>
+
+        <div class="device-card">
+          <div class="device-screen">
+            <div class="screen-header">
+              <span>Boda Miriam & Isidro</span>
+              <span>Puerta Principal</span>
+            </div>
+
+            <div class="camera-viewfinder">
+              <div class="scan-laser"></div>
+              <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1.5">
+                <rect x="3" y="3" width="7" height="7"></rect>
+                <rect x="14" y="3" width="7" height="7"></rect>
+                <rect x="14" y="14" width="7" height="7"></rect>
+                <rect x="3" y="14" width="7" height="7"></rect>
+              </svg>
+            </div>
+
+            <div class="screen-stats">
+              <div class="num" id="hero-scan-count">95</div>
+              <div class="label">invitados ingresados de 184 confirmados</div>
+            </div>
+
+            <button class="btn btn-teal" id="hero-scan-btn" style="width: 100%;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              <span>Escanear Pase QR</span>
+            </button>
+
+            <div id="hero-scan-status"></div>
+          </div>
+        </div>
+
+        <div class="floating-chip chip-bottom">
+          <div class="chip-icon blue">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M3 10h18M5 10v11M19 10v11M9 10v11M15 10v11M12 3l9 7H3l9-7z"/></svg>
+          </div>
+          <div class="chip-text">
+            <strong>Hacienda Los Olivos</strong>
+            <small>Salón al 88% de capacidad</small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Client Event Experience & Quotation Simulator Section -->
+  <section id="cotizador" class="smart-ingest-section">
+    <div class="container">
+      <div class="section-badge-center">
+        <span class="badge-dot"></span>
+        <span>Simulador Interactivo de Evento</span>
+      </div>
+      <h2 class="section-title">Diseña la Experiencia de tu Próximo Evento y Cotiza al Instante</h2>
+      <p class="section-subtitle">
+        Elige el tipo de celebración, número de invitados y estilo de recinto. Descubre en tiempo real cómo EvenPass transforma tu recepción en una experiencia exclusiva sin filas y con asientos perfectamente asignados.
+      </p>
+
+      <div class="sim-grid">
+        <!-- Col 1: Interactive Client Configurator -->
+        <div class="sim-config-box">
+          <!-- Step 1: Event Type -->
+          <div class="sim-section-block">
+            <div class="sim-step-title">
+              <span>1. Tipo de Celebración</span>
+              <span class="sim-step-badge">Paso 1 de 3</span>
+            </div>
+            <div class="sim-chips-row" id="sim-event-types">
+              <button type="button" class="sim-chip-btn active" data-type="Boda">Boda</button>
+              <button type="button" class="sim-chip-btn" data-type="XV Años">XV Años</button>
+              <button type="button" class="sim-chip-btn" data-type="Graduación">Graduación</button>
+              <button type="button" class="sim-chip-btn" data-type="Bautizo">Bautizo</button>
+              <button type="button" class="sim-chip-btn" data-type="Cumpleaños VIP">Cumpleaños VIP</button>
+              <button type="button" class="sim-chip-btn" data-type="Corporativo &amp; Gala">Corporativo &amp; Gala</button>
+            </div>
+          </div>
+
+          <!-- Step 2: Guest Count Slider -->
+          <div class="sim-section-block">
+            <div class="sim-step-title">
+              <span>2. Aforo Estimado de Invitados</span>
+              <span class="sim-step-badge">Paso 2 de 3</span>
+            </div>
+            <div class="sim-slider-container">
+              <div class="sim-slider-val-row">
+                <div>
+                  <span class="sim-slider-number" id="sim-capacity-val">200</span>
+                  <span style="font-weight:600; font-size:0.9rem; color:var(--text-secondary);"> invitados</span>
+                </div>
+                <span class="sim-slider-tables" id="sim-tables-val">~20 mesas estimadas (10 pax/mesa)</span>
+              </div>
+              <input type="range" id="sim-capacity-slider" class="sim-range-input" min="30" max="600" step="10" value="200">
+            </div>
+            <div class="sim-chips-row" style="margin-top:4px;">
+              <button type="button" class="sim-chip-btn" onclick="document.getElementById('sim-capacity-slider').value=80; document.getElementById('sim-capacity-slider').dispatchEvent(new Event('input'));">80 pax</button>
+              <button type="button" class="sim-chip-btn" onclick="document.getElementById('sim-capacity-slider').value=150; document.getElementById('sim-capacity-slider').dispatchEvent(new Event('input'));">150 pax</button>
+              <button type="button" class="sim-chip-btn" onclick="document.getElementById('sim-capacity-slider').value=250; document.getElementById('sim-capacity-slider').dispatchEvent(new Event('input'));">250 pax</button>
+              <button type="button" class="sim-chip-btn" onclick="document.getElementById('sim-capacity-slider').value=400; document.getElementById('sim-capacity-slider').dispatchEvent(new Event('input'));">400 pax</button>
+            </div>
+          </div>
+
+          <!-- Step 3: Venue Type -->
+          <div class="sim-section-block">
+            <div class="sim-step-title">
+              <span>3. Estilo de Recinto o Sede</span>
+              <span class="sim-step-badge">Paso 3 de 3</span>
+            </div>
+            <div class="sim-chips-row" id="sim-venue-types">
+              <button type="button" class="sim-chip-btn active" data-venue="Salón Cerrado Climatizado">Salón Cerrado</button>
+              <button type="button" class="sim-chip-btn" data-venue="Hacienda Colonial &amp; Patios">Hacienda</button>
+              <button type="button" class="sim-chip-btn" data-venue="Jardín al Aire Libre">Jardín</button>
+              <button type="button" class="sim-chip-btn" data-venue="Terraza &amp; Playa">Terraza / Playa</button>
+              <button type="button" class="sim-chip-btn" data-venue="Quinta o Finca Privada">Quinta Privada</button>
+              <button type="button" class="sim-chip-btn" data-venue="Centro de Convenciones">Centro de Convenciones</button>
+            </div>
+          </div>
+
+          <!-- Modules included -->
+          <div class="sim-section-block">
+            <div class="sim-step-title">
+              <span>Módulos de Experiencia EvenPass Incluidos</span>
+            </div>
+            <div class="sim-features-list">
+              <div class="sim-feature-item">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                <span><b>Invitación Digital de Gala</b>: Música ambiental, ubicación con GPS, RSVP directo y pase personal.</span>
+              </div>
+              <div class="sim-feature-item">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                <span><b>Croquis Arquitectónico Interactivo</b>: Tus invitados descubren su mesa asignada desde su teléfono.</span>
+              </div>
+              <div class="sim-feature-item">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                <span><b>Acceso QR de Alta Velocidad</b>: Validación en 2 segundos en puerta. Cero filas ni listas arrugadas.</span>
+              </div>
+              <div class="sim-feature-item">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                <span><b>Panel del Anfitrión en Vivo</b>: Visualiza confirmaciones en tiempo real para optimizar tu banquete.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Col 2: Live Proposal & Quotation Summary -->
+        <div class="sim-summary-box">
+          <div class="sim-proposal-card">
+            <div class="sim-proposal-badge">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              <span>Propuesta Personalizada para tu Evento</span>
+            </div>
+
+            <h3 class="sim-plan-name" id="sim-plan-title">Plan Premium CAD &amp; Croquis</h3>
+            <p class="sim-plan-description" id="sim-plan-desc">
+              Solución integral para bodas y galas con croquis de salón interactivo, asignación personalizada de mesas y control de accesos por escáner de alta velocidad.
+            </p>
+
+            <div class="sim-price-row">
+              <div class="sim-price-val" id="sim-price-val">$2,490</div>
+              <div class="sim-price-curr">MXN</div>
+              <div class="sim-price-sub">Inversión única por evento</div>
+            </div>
+
+            <ul class="sim-highlights">
+              <li>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                <span><b>Recepción ágil</b>: Tus invitados llegan y entran sin esperar turnos molestos.</span>
+              </li>
+              <li>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                <span><b>Cero mesas invadidas</b>: Cada invitado sabe exactamente su lugar asignado.</span>
+              </li>
+              <li>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                <span><b>Acompañamiento VIP</b>: Soporte y asesoría técnica de nuestro equipo para tu evento.</span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="sim-actions-col">
+            <a href="#" target="_blank" class="btn btn-whatsapp btn-block btn-lg" id="btn-whatsapp-quote-client">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+              <span>Cotizar y Apartar Fecha por WhatsApp</span>
+            </a>
+            <small style="text-align:center; color:var(--text-muted); font-size:0.78rem;">
+              Respuesta en menos de 15 minutos por un coordinador de EvenPass.
+            </small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Interactive Croquis de Salón Section -->
+  <section id="croquis" class="croquis-section">
+    <div class="container">
+      <h2 class="section-title">Croquis de Salón &amp; Asignación Inteligente de Mesas</h2>
+      <p class="section-subtitle">
+        Olvídate del dolor de cabeza de acomodar mesas manualmente en una libreta o en Excel. EvenPass calcula la capacidad óptima y ubica familias completas en un solo clic.
+      </p>
+
+      <div class="croquis-card-box">
+        <div class="croquis-header">
+          <div>
+            <h3>Salón Real Imperial · Hacienda Los Olivos</h3>
+            <p style="color:var(--text-muted); font-size:0.9rem;">Distribución: Escenario, Pista de Baile y 6 Mesas Principales</p>
+          </div>
+          <div class="croquis-legend">
+            <div class="legend-item"><span class="legend-dot full"></span><span>Mesa Completa</span></div>
+            <div class="legend-item"><span class="legend-dot available"></span><span>Asignando Cupos</span></div>
+            <div class="legend-item"><span class="legend-dot reserved"></span><span>Presídium / VIP</span></div>
+          </div>
+        </div>
+
+        <!-- Venue Layout Canvas -->
+        <div class="venue-canvas">
+          <!-- Stage -->
+          <div class="venue-stage-zone">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+            <span>ESCENARIO PRINCIPAL / BANDA EN VIVO &amp; CABINA DE AUDIO</span>
+          </div>
+
+          <!-- Tables Grid with Central Dance Floor -->
+          <div class="venue-center-grid">
+            <!-- Left Wing Tables -->
+            <div class="tables-cluster">
+              <div class="table-node" data-max="10">
+                <span class="t-name">Mesa 01</span>
+                <span class="t-cap">4 / 10 ocupados</span>
+                <div class="seats-dots">
+                  <span class="seat-dot"></span><span class="seat-dot"></span>
+                </div>
+              </div>
+              <div class="table-node" data-max="10">
+                <span class="t-name">Mesa 02</span>
+                <span class="t-cap">2 / 10 ocupados</span>
+                <div class="seats-dots">
+                  <span class="seat-dot"></span>
+                </div>
+              </div>
+              <div class="table-node" data-max="8">
+                <span class="t-name">Mesa 03</span>
+                <span class="t-cap">4 / 8 ocupados</span>
+                <div class="seats-dots">
+                  <span class="seat-dot"></span><span class="seat-dot"></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Dance Floor -->
+            <div class="venue-dance-floor">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="margin-bottom:6px;"><circle cx="12" cy="5" r="3"/><path d="M9 22V12h6v10M6 12l6-4 6 4"/></svg>
+              <span>PISTA DE BAILE</span>
+              <small style="opacity:0.8; font-size:0.75rem;">Zona de Vals & Fiesta</small>
+            </div>
+
+            <!-- Right Wing Tables -->
+            <div class="tables-cluster">
+              <div class="table-node" data-max="10">
+                <span class="t-name">Mesa 04</span>
+                <span class="t-cap">4 / 10 ocupados</span>
+                <div class="seats-dots">
+                  <span class="seat-dot"></span><span class="seat-dot"></span>
+                </div>
+              </div>
+              <div class="table-node" data-max="10">
+                <span class="t-name">Mesa 05</span>
+                <span class="t-cap">2 / 10 ocupados</span>
+                <div class="seats-dots">
+                  <span class="seat-dot"></span>
+                </div>
+              </div>
+              <div class="table-node" data-max="8">
+                <span class="t-name">Mesa 06</span>
+                <span class="t-cap">2 / 8 ocupados</span>
+                <div class="seats-dots">
+                  <span class="seat-dot"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dynamic Selected Table Inspector Card -->
+        <div class="table-inspector-card" id="croquis-table-inspector">
+          <div class="inspector-header">
+            <div class="inspector-badge">
+              <span class="live-pulse-dot"></span>
+              <span>Mesa Seleccionada</span>
+            </div>
+            <h4 id="inspector-table-name">Mesa 01 · Zona Frontal Escenario</h4>
+            <span class="inspector-capacity" id="inspector-table-cap">4 / 10 Ocupados · 6 Lugares Disponibles</span>
+          </div>
+          <div class="inspector-body">
+            <div class="inspector-guests-list" id="inspector-guests-list">
+              <span class="guest-chip chip-seated">👨‍👩‍👧 Familia Garza (3 pases)</span>
+              <span class="guest-chip chip-seated">💼 Lic. Roberto Gómez (1 pase)</span>
+              <span class="guest-chip chip-free">🪑 6 sillas disponibles para asignar</span>
+            </div>
+            <div class="inspector-info-row">
+              <span class="info-pill">📍 Zona VIP / Familia Directa</span>
+              <span class="info-pill">📱 Pase QR con Mapa Asignado</span>
+              <span class="info-pill">⚡ Validación en 0.2s</span>
+            </div>
+            <div class="inspector-actions">
+              <a href="https://wa.me/526671234567?text=Hola%20EvenPass,%20quiero%20un%20croquis%20inteligente%20con%20asignación%20de%20mesas%20para%20mi%20evento" target="_blank" class="btn btn-sm btn-whatsapp" id="btn-request-table-setup">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                <span>Solicitar Este Acomodo por WhatsApp</span>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <div class="croquis-controls">
+          <p id="croquis-status-text" style="color:var(--text-secondary); font-size:0.92rem;">
+            Toca cualquiera de las mesas para inspeccionar su aforo y distribución o activa la asignación automática inteligente.
+          </p>
+          <button class="btn btn-teal" id="btn-auto-assign-demo">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            <span>Asignar Mesas Automáticamente</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sección: La Experiencia de tus Invitados (Paso a Paso) -->
+  <section id="experiencia" class="vinculacion-section" style="background:var(--bg-alt); padding:80px 0; border-top:1px solid var(--border-ui); border-bottom:1px solid var(--border-ui);">
+    <div class="container">
+      <div class="section-badge-center">
+        <span class="badge-dot"></span>
+        <span>Experiencia de Invitados</span>
+      </div>
+      <h2 class="section-title">La Experiencia de tus Invitados:<br>Paso a Paso hacia una Noche Perfecta</h2>
+      <p class="section-subtitle">
+        Desde el momento en que reciben su invitación hasta que toman su lugar en la mesa, EvenPass garantiza una recepción elegante, moderna y completamente fluida para tus seres queridos.
+      </p>
+
+      <div class="bento-grid vinculacion-grid">
+        <!-- Paso 1: Invitación Digital & RSVP -->
+        <div class="bento-card">
+          <div class="bento-icon teal">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+          </div>
+          <span class="vinc-badge">Paso 1 · Enlace Móvil</span>
+          <h3>1. Invitación Digital &amp; RSVP en 1 Clic</h3>
+          <p>
+            Tus invitados reciben un diseño exclusivo por WhatsApp. Pueden escuchar música ambiental, ver la cuenta regresiva, confirmar su asistencia y registrar restricciones de menú al instante sin descargar aplicaciones.
+          </p>
+          <div class="vinc-sample-box">
+            <small>Experiencia del Invitado:</small>
+            <code>Confirmación instantánea vía WhatsApp con pase digital</code>
+          </div>
+        </div>
+
+        <!-- Paso 2: Consulta de Mesa en Celular -->
+        <div class="bento-card">
+          <div class="bento-icon blue">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
+              <line x1="8" y1="2" x2="8" y2="18"></line>
+              <line x1="16" y1="6" x2="16" y2="22"></line>
+            </svg>
+          </div>
+          <span class="vinc-badge">Paso 2 · Croquis del Salón</span>
+          <h3>2. Mesa Asignada en su Pantalla</h3>
+          <p>
+            Al confirmar asistencia, cada invitado puede consultar el plano interactivo del evento con su mesa exacta resaltada. Saben con anticipación con quién se sentarán y cómo llegar sin desorientarse.
+          </p>
+          <div class="vinc-sample-box">
+            <small>Sin Meseros Confundidos:</small>
+            <code>Mesa y número de asientos visibles en su pase</code>
+          </div>
+        </div>
+
+        <!-- Paso 3: Acceso VIP en Puerta -->
+        <div class="bento-card">
+          <div class="bento-icon navy">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+          </div>
+          <span class="vinc-badge">Paso 3 · Cero Filas</span>
+          <h3>3. Acceso VIP en Puerta en 2 Segundos</h3>
+          <p>
+            Al llegar a la recepción, presentan su código QR en su celular. Nuestro personal escanea con tecnología anti-fraude en 0.2 segundos, evitando listas de papel desorganizadas o filtraciones de personas no invitadas.
+          </p>
+          <div class="vinc-sample-box">
+            <small>Recepción Impecable:</small>
+            <code>Lectura ultra-rápida y validación offline asegurada</code>
+          </div>
+        </div>
+
+        <!-- Paso 4: Monitoreo en Vivo para Anfitriones -->
+        <div class="bento-card span-3" style="grid-column: 1 / -1; background:linear-gradient(135deg, rgba(37,99,235,0.05) 0%, rgba(16,185,129,0.05) 100%);">
+          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:20px;">
+            <div style="max-width:720px;">
+              <span class="vinc-badge" style="background:#10b981; color:#fff;">Paso 4 · Control Absoluto</span>
+              <h3 style="font-size:1.4rem; margin-top:8px;">Control de Aforo y Asistencia en Tiempo Real para los Anfitriones</h3>
+              <p style="color:var(--text-secondary); font-size:0.95rem; margin-top:6px;">
+                Disfruta tu fiesta con total tranquilidad. Desde tu propio teléfono o tablet podrás ver qué invitados ya llegaron, cuántos lugares faltan por ocupar en cada mesa y coordinar el banquete o protocolo en el momento perfecto.
+              </p>
+            </div>
+            <div>
+              <a href="https://wa.me/526671234567?text=Hola%20EvenPass,%20quiero%20conocer%20c%C3%B3mo%20funciona%20el%20servicio%20para%20mi%20evento" target="_blank" class="btn btn-whatsapp">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                <span>Platicar con un Asesor por WhatsApp</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Showcase de Plantillas de Diseño -->
+  <section id="plantillas">
+    <div class="container">
+      <h2 class="section-title">Plantillas de Invitaciones Digitales</h2>
+      <p class="section-subtitle">
+        Diseños únicos adaptados a la personalidad de cada anfitrión: bodas de ultra-lujo, fiestas neón con efectos visuales y galas corporativas minimalistas.
+      </p>
+
+      <div class="templates-grid">
+        <!-- Template 1: Miriam & Isidro (Gold Wedding) -->
+        <div class="template-card">
+          <div class="template-preview-frame">
+            <span class="template-badge badge-gold">Boda Luxury</span>
+            <!-- Embedded preview snapshot -->
+            <img src="assets/templates/miriam-isidro/1.jpg" alt="Boda Miriam e Isidro" onerror="this.src='https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=700&q=80'">
+          </div>
+          <div class="template-info">
+            <h3>Miriam &amp; Isidro · Gold Elegance</h3>
+            <p>
+              Inspirado en la alta costura nupcial. Detalles dorados, tipografía serifa clásica, música de fondo, croquis de iglesia y pase con mesa asignada.
+            </p>
+            <div class="template-features">
+              <span class="feature-pill">Música de fondo</span>
+              <span class="feature-pill">Cuenta Regresiva</span>
+              <span class="feature-pill">Reglas No Niños</span>
+              <span class="feature-pill">RSVP + Mesa</span>
+            </div>
+            <button class="btn btn-secondary btn-sm" data-preview-template="gold-wedding">
+              <span>Previsualizar Invitación</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Template 2: Mis 18 & Fiesta Neón (Boda Ernesto & Nataly) -->
+        <div class="template-card">
+          <div class="template-preview-frame" style="background:#050505;">
+            <span class="template-badge badge-neon">Fiesta &amp; XV Neón</span>
+            <div style="text-align:center; padding:30px;">
+              <div style="font-size:4rem; font-weight:800; color:#fff; text-shadow:0 0 20px #ff2a85;">MIS 18</div>
+              <div style="color:#ff80bf; font-family:cursive; font-size:1.8rem;">Ivonne · VIP Night</div>
+            </div>
+          </div>
+          <div class="template-info">
+            <h3>Neón Glow &amp; VIP Experience</h3>
+            <p>
+              Diseño nocturno con acentos fluorescentes, overlay de bienvenida animado, integración directa con Google Maps, dress code interactivo y audio DJ.
+            </p>
+            <div class="template-features">
+              <span class="feature-pill">Efectos Neón</span>
+              <span class="feature-pill">VIP Overlay</span>
+              <span class="feature-pill">Botón Google Maps</span>
+              <span class="feature-pill">Pase QR con Foto</span>
+            </div>
+            <button class="btn btn-secondary btn-sm" data-preview-template="neon-party">
+              <span>Previsualizar Invitación</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Template 3: Editorial Minimalist -->
+        <div class="template-card">
+          <div class="template-preview-frame" style="background:#f1f5f9;">
+            <span class="template-badge badge-minimal">Gala &amp; Corporativo</span>
+            <div style="text-align:center; padding:30px;">
+              <div style="font-size:1.6rem; font-weight:800; color:#0f172a; letter-spacing:3px;">LEADERSHIP SUMMIT</div>
+              <div style="color:#2563eb; font-weight:600; margin-top:8px;">Gala &amp; Networking 2026</div>
+            </div>
+          </div>
+          <div class="template-info">
+            <h3>Editorial Minimalista Clásico</h3>
+            <p>
+              Estilo suizo con tipografía limpia, sincronización con calendarios de Google / Outlook, acreditaciones digitales y confirmación en tiempo real.
+            </p>
+            <div class="template-features">
+              <span class="feature-pill">Sincronización Calendar</span>
+              <span class="feature-pill">Acreditación QR</span>
+              <span class="feature-pill">Multi-sede</span>
+              <span class="feature-pill">PDF Descargable</span>
+            </div>
+            <button class="btn btn-secondary btn-sm" data-preview-template="editorial">
+              <span>Previsualizar Invitación</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sistema Bento Grid -->
+  <section id="sistema" style="background:var(--bg-alt);">
+    <div class="container">
+      <h2 class="section-title">Arquitectura SaaS Diseñada para Crecer</h2>
+      <p class="section-subtitle">
+        Una plataforma construida con estándares empresariales de Spring Boot y Angular para gestionar desde una fiesta privada hasta eventos masivos simultáneos.
+      </p>
+
+      <div class="bento-grid">
+        <div class="bento-card span-2">
+          <div class="bento-icon blue">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          </div>
+          <h3>Asignación de Mesas 100% Automatizada</h3>
+          <p>
+            Define las zonas de tu salón (mesas de 8, 10 o 12 personas, pista de baile, escenario y entrada). Nuestro algoritmo analiza acompañantes y vínculos para sentar a tus invitados de forma armónica sin dejar sillas huérfanas.
+          </p>
+        </div>
+
+        <div class="bento-card">
+          <div class="bento-icon teal">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h3>Cero Fraudes con Pases QR</h3>
+          <p>
+            Cada pase incluye un token criptográfico único con firma temporal. Una vez escaneado en puerta, el pase se invalida para evitar duplicados por capturas de pantalla.
+          </p>
+        </div>
+
+        <div class="bento-card">
+          <div class="bento-icon navy">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          </div>
+          <h3>Analítica &amp; Asistencia en Vivo</h3>
+          <p>
+            Conoce en cada minuto cuántos invitados han entrado al salón, qué mesas faltan por ocuparse y el porcentaje global de asistencia.
+          </p>
+        </div>
+
+        <div class="bento-card span-2">
+          <div class="bento-icon blue">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+          </div>
+          <h3>Escáner Móvil sin Descargas</h3>
+          <p>
+            El personal de recepción solo necesita abrir la cámara de cualquier teléfono o tablet. Validación instantánea con respuesta visual y sonora: verde para autorizado, rojo para pase ya utilizado.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Garantías y Confianza para tus Eventos -->
+  <section id="garantias" style="background:var(--bg-card); border-top:1px solid var(--border-ui); border-bottom:1px solid var(--border-ui); padding: 80px 0;">
+    <div class="container">
+      <h2 class="section-title">Garantías y Confianza EvenPass</h2>
+      <p class="section-subtitle">
+        Diseñado para brindarte tranquilidad absoluta en el día más importante de tu vida o la de tus clientes.
+      </p>
+
+      <div class="bento-grid">
+        <div class="bento-card">
+          <div class="bento-icon teal">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h3>Validación Inmediata Cero Filas</h3>
+          <p>Pases QR blindados con verificación en menos de 0.2 segundos. Respuestas visuales y sonoras para que la recepción de tus invitados fluya sin atascos ni esperas.</p>
+        </div>
+
+        <div class="bento-card">
+          <div class="bento-icon blue">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </div>
+          <h3>Privacidad Total de tus Invitados</h3>
+          <p>Tus listas de invitados, teléfonos y datos de confirmación pertenecen únicamente a tu evento. Cero publicidad externa, cero spam y confidencialidad protegida.</p>
+        </div>
+
+        <div class="bento-card">
+          <div class="bento-icon navy">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
+          </div>
+          <h3>Operación Con o Sin Internet</h3>
+          <p>¿Tu boda o fiesta es en una hacienda alejada o salón con poca señal? El escáner EvenPass almacena la lista localmente y valida pases sin conexión de red.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Planes Section -->
+  <section id="planes" style="background:var(--bg-alt);">
+    <div class="container">
+      <h2 class="section-title">Planes Flexibles para Cada Necesidad</h2>
+      <p class="section-subtitle">
+        Elige pago por evento individual o suscripción mensual para organizadores y agencias de eventos.
+      </p>
+
+      <div class="pricing-grid">
+        <!-- Esencial -->
+        <div class="price-card">
+          <h3>Esencial</h3>
+          <p style="color:var(--text-muted); font-size:0.9rem;">Ideal para fiestas privadas y cumpleaños</p>
+          <div class="price-value">$990 <span>MXN / evento</span></div>
+          <ul class="price-features">
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>Hasta 120 invitados</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>Invitación digital con RSVP</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>Pase digital con código QR</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>Croquis básico de mesas</li>
+          </ul>
+          <a href="https://wa.me/526671234567?text=Hola%20EvenPass,%20deseo%20contratar%20el%20Plan%20Esencial%20($990%20MXN)%20para%20mi%20evento" target="_blank" class="btn btn-secondary btn-plan-wa">Solicitar Plan Esencial</a>
+        </div>
+
+        <!-- Evento Pro -->
+        <div class="price-card featured">
+          <div class="featured-ribbon">Más Elegido</div>
+          <h3>Evento Pro</h3>
+          <p style="color:var(--text-muted); font-size:0.9rem;">Para bodas, graduaciones y XV años</p>
+          <div class="price-value">$2,490 <span>MXN / evento</span></div>
+          <ul class="price-features">
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>Hasta 600 invitados</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>Croquis interactivo con Asignación Automática</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>Escáner QR para múltiples puertas en vivo</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>Importación masiva por Excel / CSV</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>Reportes descargables en tiempo real</li>
+          </ul>
+          <a href="https://wa.me/526671234567?text=Hola%20EvenPass,%20deseo%20contratar%20el%20Plan%20Evento%20Pro%20($2,490%20MXN)%20con%20croquis%20inteligente%20y%20escáner" target="_blank" class="btn btn-whatsapp btn-plan-wa">Solicitar Evento Pro</a>
+        </div>
+
+        <!-- Agencia SaaS -->
+        <div class="price-card">
+          <h3>Agencia SaaS</h3>
+          <p style="color:var(--text-muted); font-size:0.9rem;">Para wedding planners y salones de fiestas</p>
+          <div class="price-value">$4,990 <span>MXN / mes</span></div>
+          <ul class="price-features">
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>Eventos ilimitados</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>Multi-organizador con roles de usuario</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>Marca blanca y plantillas personalizadas</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>Soporte prioritario 24/7</li>
+          </ul>
+          <a href="https://wa.me/526671234567?text=Hola%20EvenPass,%20deseo%20contratar%20el%20Plan%20Agencia%20SaaS%20($4,990%20MXN/mes)%20para%20mi%20empresa/salón" target="_blank" class="btn btn-secondary btn-plan-wa">Solicitar Plan Agencia</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Centro de Soporte al Cliente & Resolución de Incidencias -->
+  <section id="soporte-cliente" style="background:var(--bg-alt); padding:80px 0; border-top:1px solid var(--border-ui);">
+    <div class="container">
+      <div style="text-align:center; max-width:680px; margin:0 auto 40px;">
+        <div class="hero-badge" style="margin-bottom:12px;">
+          <span class="pulse"></span>
+          <span>Atención Inmediata a Anfitriones e Invitados</span>
+        </div>
+        <h2 class="section-title">¿Tienes un problema o inconveniente con tu evento?</h2>
+        <p class="section-subtitle" style="margin-bottom:0;">
+          Si necesitas asistencia técnica urgente, reportar un cambio en tu croquis o un error en pases de invitados, repórtalo aquí. Nuestro equipo te responderá en minutos.
+        </p>
+      </div>
+
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:32px; max-width:1050px; margin:0 auto;">
+        
+        <!-- Support Ticket Form -->
+        <div class="croquis-card-box" style="padding:28px;">
+          <h3 style="font-size:1.15rem; margin-bottom:6px; display:flex; align-items:center; gap:8px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            <span>Formulario de Reporte Directo</span>
+          </h3>
+          <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:20px;">
+            Completa los detalles y se enviará directamente a nuestro panel de control de soporte EvenPass.
+          </p>
+
+          <form id="support-ticket-form">
+            <div style="display:flex; flex-direction:column; gap:14px;">
+              <div>
+                <label style="display:block; font-size:0.8rem; font-weight:700; margin-bottom:4px; color:var(--text-main);">Nombre Completo</label>
+                <input type="text" id="supp-name" required placeholder="Ej. Mariana López" style="width:100%; padding:10px 14px; border-radius:var(--radius-sm); border:1px solid var(--border-ui); background:var(--bg-input); color:var(--text-main);">
+              </div>
+
+              <div>
+                <label style="display:block; font-size:0.8rem; font-weight:700; margin-bottom:4px; color:var(--text-main);">Nombre del Evento o Folio</label>
+                <input type="text" id="supp-event" required placeholder="Ej. Boda Mariana & Carlos / Salón Zafiro" style="width:100%; padding:10px 14px; border-radius:var(--radius-sm); border:1px solid var(--border-ui); background:var(--bg-input); color:var(--text-main);">
+              </div>
+
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                <div>
+                  <label style="display:block; font-size:0.8rem; font-weight:700; margin-bottom:4px; color:var(--text-main);">Tipo de Asunto</label>
+                  <select id="supp-type" style="width:100%; padding:10px 14px; border-radius:var(--radius-sm); border:1px solid var(--border-ui); background:var(--bg-input); color:var(--text-main);">
+                    <option value="ERROR_TECNICO">Error técnico / Falla</option>
+                    <option value="PROBLEMA_ACCESO">Problema con Pase QR</option>
+                    <option value="CROQUIS_MESAS">Cambio en Croquis / Mesas</option>
+                    <option value="PAGO_PLAN">Facturación o Planes</option>
+                    <option value="OTRO">Otro inconveniente</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="display:block; font-size:0.8rem; font-weight:700; margin-bottom:4px; color:var(--text-main);">Celular WhatsApp</label>
+                  <input type="tel" id="supp-phone" required placeholder="667-123-4567" style="width:100%; padding:10px 14px; border-radius:var(--radius-sm); border:1px solid var(--border-ui); background:var(--bg-input); color:var(--text-main);">
+                </div>
+              </div>
+
+              <div>
+                <label style="display:block; font-size:0.8rem; font-weight:700; margin-bottom:4px; color:var(--text-main);">Describe el problema o inconveniente</label>
+                <textarea id="supp-desc" rows="3" required placeholder="Explica detalladamente qué sucedió (ej. un invitado no puede abrir su pase, se requiere mover la mesa 3, etc.)..." style="width:100%; padding:10px 14px; border-radius:var(--radius-sm); border:1px solid var(--border-ui); background:var(--bg-input); color:var(--text-main); font-family:inherit; resize:vertical;"></textarea>
+              </div>
+
+              <button type="submit" class="btn btn-primary btn-block" id="btn-submit-ticket" style="margin-top:6px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                <span>Enviar Reporte al Equipo de Soporte</span>
+              </button>
+
+              <div id="supp-feedback" style="display:none; padding:12px; border-radius:var(--radius-sm); font-size:0.85rem; font-weight:600; text-align:center;"></div>
+            </div>
+          </form>
+        </div>
+
+        <!-- WhatsApp Support Direct Card with Automatic Keyword Detection -->
+        <div style="display:flex; flex-direction:column; gap:20px;">
+          
+          <div class="croquis-card-box" style="padding:28px; background:linear-gradient(135deg, rgba(22, 101, 52, 0.08) 0%, rgba(16, 185, 129, 0.04) 100%); border-color: rgba(16, 185, 129, 0.3);">
+            <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+              <div style="width:40px; height:40px; border-radius:50%; background:#10b981; color:#fff; display:grid; place-items:center;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+              </div>
+              <div>
+                <h3 style="font-size:1.1rem; margin:0;">WhatsApp de Soporte Urgente</h3>
+                <span style="font-size:0.75rem; color:#10b981; font-weight:700;">● Equipo de Guardia Conectado</span>
+              </div>
+            </div>
+
+            <p style="color:var(--text-secondary); font-size:0.88rem; line-height:1.5; margin-bottom:18px;">
+              Si estás en pleno evento o requieres auxilio inmediato, envíanos un WhatsApp. Nuestro enlace detecta si tienes un <strong>"problema"</strong>, <strong>"error"</strong> o <strong>"inconveniente"</strong> para priorizar tu mensaje con máxima urgencia.
+            </p>
+
+            <div style="margin-bottom:16px;">
+              <input type="text" id="wa-quick-msg" placeholder="Escribe aquí tu duda, problema o error..." style="width:100%; padding:10px 14px; border-radius:var(--radius-sm); border:1px solid var(--border-ui); background:var(--bg-card); color:var(--text-main); font-size:0.85rem; margin-bottom:10px;">
+              <a href="https://wa.me/526671234567?text=Hola%20EvenPass,%20tengo%20un%20problema%20con%20mi%20evento." target="_blank" id="btn-wa-urgent-direct" class="btn btn-whatsapp btn-block" style="justify-content:center;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                <span>Chatear por WhatsApp con Soporte</span>
+              </a>
+            </div>
+          </div>
+
+          <!-- Quick FAQ / Protocol Card -->
+          <div class="croquis-card-box" style="padding:22px;">
+            <h4 style="font-size:0.95rem; margin-bottom:10px; display:flex; align-items:center; gap:8px;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
+              <span>Tiempos de Respuesta Garantizados</span>
+            </h4>
+            <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px; font-size:0.84rem; color:var(--text-secondary);">
+              <li style="display:flex; align-items:center; gap:8px;">
+                <span style="color:#10b981; font-weight:bold;">✔</span> <b>Eventos en Vivo (Día del evento):</b> Respuesta prioritaria en &lt; 5 minutos.
+              </li>
+              <li style="display:flex; align-items:center; gap:8px;">
+                <span style="color:#10b981; font-weight:bold;">✔</span> <b>Ajustes de Croquis y Mesas:</b> Asistencia guiada en vivo por videollamada o WhatsApp.
+              </li>
+              <li style="display:flex; align-items:center; gap:8px;">
+                <span style="color:#10b981; font-weight:bold;">✔</span> <b>Modo Sin Internet:</b> Validación local garantizada sin retrasos en puerta.
+              </li>
+            </ul>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Guía de Uso & Onboarding -->
+  <section id="guia">
+    <div class="container">
+      <h2 class="section-title">Guía de Uso: Tu Evento en 4 Pasos</h2>
+      <p class="section-subtitle">
+        Diseñado para que cualquier anfitrión o wedding planner configure su evento en minutos.
+      </p>
+
+      <div class="bento-grid">
+        <div class="bento-card">
+          <div class="bento-icon blue">1</div>
+          <h3>Crea tu Evento y Salón</h3>
+          <p>Ingresa la fecha, hora, ubicación y elige el diseño de tu salón: número de mesas, tipo (redondas o rectangulares) y cupo por mesa.</p>
+        </div>
+        <div class="bento-card">
+          <div class="bento-icon teal">2</div>
+          <h3>Carga tu Lista de Invitados</h3>
+          <p>Sube tu lista de invitados con nombres y acompañantes. Puedes importar directamente un archivo CSV o agregarlos uno a uno.</p>
+        </div>
+        <div class="bento-card">
+          <div class="bento-icon blue">3</div>
+          <h3>Asigna Mesas Automáticamente</h3>
+          <p>Con un solo clic en el botón de asignación automática, el sistema distribuye familias completas en las mesas optimizando el aforo.</p>
+        </div>
+        <div class="bento-card">
+          <div class="bento-icon teal">4</div>
+          <h3>Escanea en Puerta</h3>
+          <p>El día del evento, abre el escáner desde cualquier celular. Valida pases en 0.5 segundos y observa en vivo quién ya está en su mesa.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Modal for Live Template Previews -->
+  <div class="modal-overlay" id="preview-modal">
+    <div class="modal-content">
+      <button class="modal-close-btn" id="modal-close-btn" aria-label="Cerrar">&times;</button>
+      <div style="padding: 24px 24px 0;">
+        <h3 id="modal-title" style="font-size:1.3rem;">Previsualización de Plantilla</h3>
+      </div>
+      <div id="modal-frame-container" style="padding: 24px;"></div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="landing-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-col">
+          <img src="assets/logo.svg" alt="EvenPass Logo" style="height:36px; margin-bottom:16px;">
+          <p style="color:var(--text-muted); font-size:0.9rem; max-width:320px;">
+            Plataforma SaaS para la gestión profesional de eventos, croquis interactivo de salones y control de acceso seguro mediante códigos QR.
+          </p>
+        </div>
+        <div class="footer-col">
+          <h4>Producto</h4>
+          <ul>
+            <li><a href="#croquis">Croquis de Salones</a></li>
+            <li><a href="#plantillas">Plantillas de Invitaciones</a></li>
+            <li><a href="#sistema">Escáner de Acceso</a></li>
+            <li><a href="#planes">Planes y Precios</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Garantías</h4>
+          <ul>
+            <li><a href="#garantias">Validación Cero Filas</a></li>
+            <li><a href="#garantias">Pases QR Anti-captura</a></li>
+            <li><a href="#garantias">Operación Sin Internet</a></li>
+            <li><a href="#garantias">Privacidad Total</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Contacto &amp; Soporte</h4>
+          <ul>
+            <li><a href="https://wa.me/526671234567?text=Hola%20EvenPass,%20deseo%20información%20sobre%20sus%20servicios" target="_blank">Atención por WhatsApp</a></li>
+            <li><a href="#guia">Guía de Uso</a></li>
+            <li><a href="#soporte-cliente">Soporte Técnico</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <div>&copy; 2026 EvenPass Inc. Todos los derechos reservados.</div>
+        <div style="display:flex; gap:16px;">
+          <a href="#garantias" style="color:inherit; text-decoration:none;">Privacidad</a>
+          <a href="#garantias" style="color:inherit; text-decoration:none;">Términos de Servicio</a>
+          <a href="#soporte-cliente" style="color:inherit; text-decoration:none;">Soporte</a>
+        </div>
+      </div>
+    </div>
+  <!-- Sleek Luxury Toast Notification Container -->
+  <div id="landing-toast-container" class="landing-toast-container" aria-live="polite"></div>
+
+  <script src="js/landing.js"></script>
+</body>
+</html>

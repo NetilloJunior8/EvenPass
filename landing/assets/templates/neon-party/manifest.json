@@ -1,0 +1,15 @@
+{
+  "name": "Panel 18 Años Ivonne",
+  "short_name": "Panel Ivonne",
+  "start_url": "./panel.html",
+  "display": "standalone",
+  "background_color": "#050505",
+  "theme_color": "#050505",
+  "icons": [
+    {
+      "src": "logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

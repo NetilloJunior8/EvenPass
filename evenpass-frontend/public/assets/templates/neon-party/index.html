@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mis 18 - Ivonne</title>
+    <!-- Fuentes para el diseño Neón -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Sacramento&display=swap"
+        rel="stylesheet">
+
+    <style>
+        /* --- ESTILOS NEÓN Y OSCUROS --- */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: #050505;
+            background-image: radial-gradient(circle at center, #1a000d 0%, #050505 100%);
+            font-family: 'Montserrat', sans-serif;
+            color: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* OVERLAY VIP ANIMADO */
+        #vip-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000000;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 1.5s ease;
+        }
+
+        .vip-text {
+            font-family: 'Sacramento', cursive;
+            font-size: 55px;
+            color: #fff;
+            text-shadow: 0 0 5px #ff2a85, 0 0 15px #ff2a85, 0 0 30px #ff2a85;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: floatUp 2s forwards;
+            text-align: center;
+            padding: 0 20px;
+        }
+
+        @keyframes floatUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Contenedor Principal */
+        .invitation-container {
+            background: rgba(10, 10, 10, 0.8);
+            max-width: 450px;
+            width: 100%;
+            border-radius: 20px;
+            box-shadow: 0 0 30px rgba(255, 42, 133, 0.2);
+            border: 1px solid rgba(255, 42, 133, 0.3);
+            padding: 50px 30px 40px 30px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+
+        .neon-18 {
+            font-size: 120px;
+            font-weight: 700;
+            line-height: 0.8;
+            color: #fff;
+            text-shadow: 0 0 10px #ff2a85, 0 0 20px #ff2a85, 0 0 40px #ff2a85, 0 0 80px #ff2a85;
+            margin-bottom: -15px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .neon-name {
+            font-family: 'Sacramento', cursive;
+            font-size: 70px;
+            color: #fff;
+            text-shadow: 0 0 5px #ff2a85, 0 0 15px #ff2a85, 0 0 30px #ff2a85;
+            margin-bottom: 30px;
+            position: relative;
+            z-index: 3;
+        }
+
+        .intro-text {
+            font-size: 12px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            margin-bottom: 25px;
+            font-weight: 500;
+            color: #e0e0e0;
+        }
+
+        .details-section {
+            margin: 30px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .detail-item {
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 600;
+            color: #ff2a85;
+        }
+
+        .detail-subitem {
+            font-size: 12px;
+            color: #cccccc;
+            letter-spacing: 1px;
+            margin-top: -10px;
+        }
+
+        .gift-info {
+            background-color: rgba(255, 42, 133, 0.05);
+            border: 1px dashed rgba(255, 42, 133, 0.5);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 25px;
+            margin-bottom: 25px;
+        }
+
+        .gift-text {
+            font-size: 13px;
+            color: #dddddd;
+            line-height: 1.5;
+            letter-spacing: 1px;
+            font-weight: 300;
+        }
+
+        /* Botones Neón */
+        .action-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-top: 25px;
+        }
+
+        .btn {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 12px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            text-decoration: none;
+            padding: 16px 20px;
+            border-radius: 30px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            display: inline-block;
+            font-weight: 600;
+            border: none;
+            width: 100%;
+        }
+
+        .btn-primary {
+            background-color: #ff2a85;
+            color: #ffffff;
+            box-shadow: 0 0 15px rgba(255, 42, 133, 0.5);
+        }
+
+        .btn-primary:hover {
+            background-color: #e61973;
+            box-shadow: 0 0 25px rgba(255, 42, 133, 0.8);
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background-color: transparent;
+            color: #ff2a85;
+            border: 1px solid #ff2a85;
+        }
+
+        .btn-secondary:hover {
+            background-color: rgba(255, 42, 133, 0.1);
+            box-shadow: 0 0 15px rgba(255, 42, 133, 0.3) inset;
+            transform: translateY(-2px);
+        }
+
+        /* Contador */
+        .countdown-title {
+            font-size: 10px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: #ff2a85;
+            margin-top: 35px;
+            margin-bottom: 15px;
+        }
+
+        .countdown-container {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .countdown-box {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 42, 133, 0.2);
+            border-radius: 8px;
+            padding: 10px 5px;
+            min-width: 60px;
+            backdrop-filter: blur(5px);
+        }
+
+        .countdown-number {
+            font-size: 22px;
+            font-weight: 700;
+            color: #fff;
+            text-shadow: 0 0 10px rgba(255, 42, 133, 0.8);
+        }
+
+        .countdown-label {
+            font-size: 9px;
+            text-transform: uppercase;
+            color: #ff2a85;
+            letter-spacing: 1px;
+            display: block;
+            margin-top: 5px;
+        }
+
+        /* MODAL RSVP y QR */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .modal-content {
+            background-color: #111;
+            padding: 40px 30px 30px 30px;
+            border-radius: 20px;
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 0 40px rgba(255, 42, 133, 0.3);
+            border: 1px solid #ff2a85;
+            position: relative;
+            animation: fadeIn 0.3s ease-out;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-content::-webkit-scrollbar {
+            width: 0px;
+            background: transparent;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .close-modal {
+            position: absolute;
+            top: 20px;
+            right: 25px;
+            font-size: 32px;
+            color: #ff2a85;
+            cursor: pointer;
+            line-height: 1;
+            font-weight: 300;
+            transition: color 0.3s;
+            z-index: 10;
+        }
+
+        .close-modal:hover {
+            color: #fff;
+            text-shadow: 0 0 10px #ff2a85;
+        }
+
+        .modal-title {
+            font-family: 'Sacramento', cursive;
+            font-size: 45px;
+            color: #fff;
+            text-shadow: 0 0 15px #ff2a85;
+            margin-bottom: 5px;
+            margin-top: 10px;
+        }
+
+        .modal-text {
+            font-size: 11px;
+            letter-spacing: 2px;
+            color: #ff2a85;
+            text-transform: uppercase;
+            margin-bottom: 25px;
+            font-weight: 600;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 11px;
+            font-weight: 600;
+            color: #ff2a85;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .form-input,
+        .form-select {
+            width: 100%;
+            padding: 14px;
+            border: 1px solid rgba(255, 42, 133, 0.4);
+            border-radius: 8px;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 14px;
+            background-color: rgba(255, 255, 255, 0.05);
+            color: #fff;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .form-input:focus {
+            border-color: #ff2a85;
+            box-shadow: 0 0 10px rgba(255, 42, 133, 0.2);
+        }
+
+        .form-input[readonly] {
+            background-color: rgba(0, 0, 0, 0.5);
+            cursor: not-allowed;
+            color: #888;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 5px;
+        }
+
+        .radio-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            color: #ddd;
+        }
+
+        .radio-label input[type="radio"] {
+            accent-color: #ff2a85;
+            width: 16px;
+            height: 16px;
+        }
+
+        .status-msg {
+            display: none;
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            line-height: 1.4;
+        }
+
+        .status-loading {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: 1px solid #aaa;
+        }
+
+        .status-success {
+            background: rgba(255, 42, 133, 0.1);
+            color: #ff2a85;
+            border: 1px solid #ff2a85;
+        }
+
+        .status-error {
+            background: rgba(255, 0, 0, 0.1);
+            color: #ff6b6b;
+            border: 1px solid #ff6b6b;
+        }
+
+        #qr-container {
+            display: none;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px dashed rgba(255, 42, 133, 0.3);
+        }
+
+        #qr-container img {
+            margin: 15px auto;
+            border: 5px solid #fff;
+            border-radius: 10px;
+            display: block;
+        }
+
+        #bloqueado-overlay {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 100;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 30px;
+            border-radius: 20px;
+        }
+
+        .icon-lock {
+            font-size: 50px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- SALUDO VIP -->
+    <div id="vip-overlay">
+        <p class="intro-text" style="color: #ff2a85; margin-bottom: 10px;">Acceso Especial</p>
+        <h1 class="vip-text" id="vip-name">Invitado VIP</h1>
+    </div>
+
+    <div class="invitation-container">
+
+        <div id="bloqueado-overlay">
+            <div class="icon-lock">🔒</div>
+            <h3 style="color: #ff2a85; margin-bottom: 10px; font-size: 20px;">Enlace Caducado</h3>
+            <p style="font-size: 13px; color: #ccc; line-height: 1.5;">Este enlace ya fue utilizado para generar un
+                pase. Por seguridad, la invitación ha sido bloqueada y no puede ser compartida o re-abierta.</p>
+        </div>
+
+        <div class="neon-18">18</div>
+        <div class="neon-name">Ivonne</div>
+
+        <p class="intro-text">¡Estás invitado a mi fiesta de cumpleaños!</p>
+
+        <div class="details-section">
+            <div>
+                <div class="detail-item">23 de Julio a las 6PM</div>
+            </div>
+            <div>
+                <div class="detail-item">Salón Tercia de Reinas</div>
+            </div>
+        </div>
+
+        <div class="gift-info">
+            <p class="detail-item" style="font-size: 14px; margin-bottom: 10px;">$300 por persona</p>
+            <p class="gift-text">El alcohol va por cuenta de cada quien.</p>
+
+        </div>
+
+        <!-- BOTONES INTELIGENTES -->
+        <div class="action-buttons">
+            <button id="btn-confirmar" onclick="openRSVPModal()" class="btn btn-primary">
+                ✓ Confirmar y Obtener QR
+            </button>
+            <a href="https://maps.app.goo.gl/Ku4uvtQ1gTwTzMKe9" target="_blank" class="btn btn-secondary">
+                📍 Ver Ubicación del Salón
+            </a>
+            <a href="https://www.google.com/calendar/render?action=TEMPLATE&text=Cumpleaños+18+Ivonne&dates=20260723T010000Z/20260724T060000Z&details=¡Te+espero+en+mi+fiesta!&location=Salón+Tercia+de+Reinas"
+                target="_blank" class="btn btn-secondary">
+                📅 Agendar en mi Calendario
+            </a>
+        </div>
+
+        <p class="countdown-title">La fiesta comienza en:</p>
+        <div class="countdown-container">
+            <div class="countdown-box">
+                <div class="countdown-number" id="lbl-days">00</div>
+                <div class="countdown-label">Días</div>
+            </div>
+            <div class="countdown-box">
+                <div class="countdown-number" id="lbl-hours">00</div>
+                <div class="countdown-label">Horas</div>
+            </div>
+            <div class="countdown-box">
+                <div class="countdown-number" id="lbl-minutes">00</div>
+                <div class="countdown-label">Min</div>
+            </div>
+            <div class="countdown-box">
+                <div class="countdown-number" id="lbl-seconds">00</div>
+                <div class="countdown-label">Seg</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL RSVP VIP -->
+    <div id="rsvpModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeRSVPModal()">&times;</span>
+
+            <p class="modal-title">Acceso VIP</p>
+            <p class="modal-text">Obtén tu Pase Digital</p>
+
+            <form id="rsvpForm">
+                <input type="hidden" id="qr_code" name="qr_code">
+
+                <div class="form-group">
+                    <label class="form-label" for="nombre">Tu Nombre</label>
+                    <input type="text" id="nombre" name="nombre" class="form-input" placeholder="Ej: Juan Pérez"
+                        required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">¿Asistirás a la fiesta?</label>
+                    <div class="radio-group">
+                        <label class="radio-label"><input type="radio" name="asistencia" value="Sí"
+                                onchange="togglePases(true)" required> ¡Ahí estaré!</label>
+                        <label class="radio-label"><input type="radio" name="asistencia" value="No"
+                                onchange="togglePases(false)"> No podré ir</label>
+                    </div>
+                </div>
+
+                <div class="form-group" id="pases-container" style="display: none;">
+                    <label class="form-label" for="pases">Pases asignados</label>
+                    <select id="pases" name="pases" class="form-select"></select>
+                </div>
+
+                <p
+                    style="font-size: 10px; color: #ff6b6b; margin-top: 15px; margin-bottom: 15px; text-transform: uppercase;">
+                    ⚠️ ATENCIÓN: Solo podrás generar tu pase UNA VEZ. Al hacerlo, toma captura de pantalla. No compartas
+                    este enlace.</p>
+
+                <button type="submit" class="btn btn-primary">
+                    Generar Pase
+                </button>
+            </form>
+
+            <div id="status-loading" class="status-msg status-loading">Generando tu pase único, espera un momento...
+            </div>
+            <div id="status-success" class="status-msg status-success">¡Pase generado con éxito!</div>
+            <div id="status-error" class="status-msg status-error">Hubo un error.</div>
+
+            <!-- CONTENEDOR DE CÓDIGO QR -->
+            <div id="qr-container" style="display: none; margin-top: 20px;">
+                <div
+                    style="background: #fff; border-radius: 15px; padding: 20px; position: relative; overflow: hidden; width: 100%; max-width: 300px; margin: 0 auto;">
+
+                    <h3
+                        style="font-family: 'Sacramento', cursive; font-size: 40px; color: #ff2a85; margin-bottom: 0; margin-top: 0; line-height: 1;">
+                        Ivonne</h3>
+                    <p style="font-size: 14px; font-weight: 800; color: #000; letter-spacing: 2px; margin-top: -5px;">
+                        MIS 18 AÑOS</p>
+                    <p
+                        style="font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #666; margin-bottom: 15px; border-bottom: 1px dashed #ccc; padding-bottom: 10px; margin-top: 5px;">
+                        23 de Julio • 6:00 PM</p>
+
+                    <p style="font-size: 16px; font-weight: 700; color: #333; margin-bottom: 2px;" id="ticket-name">
+                        Invitado</p>
+                    <p style="font-size: 12px; color: #888; margin-bottom: 15px;">Pases Autorizados: <strong
+                            style="color: #ff2a85; font-size: 15px;" id="ticket-passes">1</strong></p>
+
+                    <img id="qr-image" src="" alt="Código QR de Acceso"
+                        style="width: 180px; height: 180px; padding: 0;">
+                    <p id="qr-text"
+                        style="font-family: monospace; font-size: 11px; color: #666; letter-spacing: 1.5px; margin-top: 10px;">
+                    </p>
+                </div>
+
+                <p
+                    style="font-size: 13px; font-weight: 600; color: #fff; margin-top: 20px; background: #ff2a85; padding: 12px; border-radius: 8px;">
+                    📸 ¡TOMA CAPTURA DE PANTALLA AHORA! Este QR es tu único acceso a la fiesta y no podrás verlo de
+                    nuevo si cierras la página.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========================================================
+        // ⚠️ PEGA AQUÍ LA URL DE TU NUEVO SCRIPT DE GOOGLE
+        // ========================================================
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzsaOgqPMbx1NAglq5fenl8HIJ6l311N42ZDgDbgI5S-NW3u482jqKJWx3BDUxrr5d7Yg/exec';
+
+        // --- LECTURA DE URL PARAMS ---
+        const urlParams = new URLSearchParams(window.location.search);
+        const guestName = urlParams.get('nombre') || '';
+        const guestPasses = parseInt(urlParams.get('pases')) || 1;
+
+        // --- LÓGICA "QUEMAR DESPUÉS DE LEER" (VERIFICACIÓN EN LOCAL STORAGE) ---
+        // Si el usuario ya generó un QR en este dispositivo, bloqueamos la UI.
+        const localStorageKey = 'qr_generado_' + guestName.replace(/\s+/g, '_');
+
+        window.onload = function () {
+            // Verificar si ya fue bloqueado localmente
+            if (guestName && localStorage.getItem(localStorageKey)) {
+                document.getElementById('bloqueado-overlay').style.display = 'flex';
+                document.getElementById('vip-overlay').style.display = 'none';
+                return; // Detener ejecución
+            }
+
+            // Manejar saludo VIP
+            const overlay = document.getElementById('vip-overlay');
+            if (guestName) {
+                document.getElementById('vip-name').innerText = guestName;
+                setTimeout(() => {
+                    overlay.style.opacity = '0';
+                    setTimeout(() => { overlay.style.display = 'none'; }, 1500);
+                }, 2000);
+
+                // Prellenar formulario
+                const inputNombre = document.getElementById('nombre');
+                inputNombre.value = guestName;
+                inputNombre.setAttribute('readonly', true);
+
+                // VERIFICACIÓN CON EL SERVIDOR SI YA EXISTE UN QR
+                // Comprobamos la lista para ver si este nombre ya generó un pase antes
+                if (SCRIPT_URL && !SCRIPT_URL.includes('TU_NUEVO_SCRIPT_URL_AQUI')) {
+                    fetch(SCRIPT_URL + '?action=get_list')
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.status === 'success') {
+                                const invitado = data.lista.find(i => i.nombre === guestName);
+                                // Si existe y ya tiene QR, bloquear enlace
+                                if (invitado && invitado.qr && invitado.qr.trim() !== '') {
+                                    document.getElementById('bloqueado-overlay').style.display = 'flex';
+                                    // Guardamos en local para futuras recargas
+                                    localStorage.setItem(localStorageKey, 'true');
+                                }
+                            }
+                        }).catch(err => console.log('Error verificando estado:', err));
+                }
+
+            } else {
+                overlay.style.display = 'none';
+                // Si no hay nombre en la URL, no mostramos el botón de confirmar
+                const btnConfirmar = document.getElementById('btn-confirmar');
+                if (btnConfirmar) {
+                    btnConfirmar.style.display = 'none';
+                }
+            }
+
+            // Llenar select de pases
+            const selectPases = document.getElementById('pases');
+            selectPases.innerHTML = '';
+            for (let i = 1; i <= guestPasses; i++) {
+                let opt = document.createElement('option');
+                opt.value = i;
+                opt.innerHTML = i + (i === 1 ? " Pase" : " Pases");
+                selectPases.appendChild(opt);
+            }
+        };
+
+        // --- CONTADOR DE TIEMPO ---
+        // 23 de Julio de 2026 a las 18:00 (6:00 PM)
+        const fechaFiesta = new Date(2026, 6, 23, 18, 0, 0).getTime();
+        function actualizarContador() {
+            const ahora = new Date().getTime();
+            const diferencia = fechaFiesta - ahora;
+            if (diferencia <= 0) {
+                document.getElementById('lbl-days').innerText = "00";
+                document.getElementById('lbl-hours').innerText = "00";
+                document.getElementById('lbl-minutes').innerText = "00";
+                document.getElementById('lbl-seconds').innerText = "00";
+                return;
+            }
+            const dias = Math.floor(diferencia / (1000 * 60 * 60 * 24));
+            const horas = Math.floor((diferencia % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutos = Math.floor((diferencia % (1000 * 60 * 60)) / (1000 * 60));
+            const segundos = Math.floor((diferencia % (1000 * 60)) / 1000);
+
+            document.getElementById('lbl-days').innerText = dias < 10 ? '0' + dias : dias;
+            document.getElementById('lbl-hours').innerText = horas < 10 ? '0' + horas : horas;
+            document.getElementById('lbl-minutes').innerText = minutos < 10 ? '0' + minutos : minutos;
+            document.getElementById('lbl-seconds').innerText = segundos < 10 ? '0' + segundos : segundos;
+        }
+        setInterval(actualizarContador, 1000); actualizarContador();
+
+        // --- MODAL ---
+        function openRSVPModal() { document.getElementById('rsvpModal').style.display = 'flex'; }
+        function closeRSVPModal() { document.getElementById('rsvpModal').style.display = 'none'; }
+        window.onclick = function (event) { if (event.target == document.getElementById('rsvpModal')) closeRSVPModal(); }
+        function togglePases(mostrar) { document.getElementById('pases-container').style.display = mostrar ? 'block' : 'none'; }
+
+        // --- GENERADOR DE ID ÚNICO ---
+        function generateUniqueId() {
+            return 'IVO-' + Math.random().toString(36).substr(2, 6).toUpperCase();
+        }
+
+        // --- ENVÍO DE DATOS ---
+        document.getElementById('rsvpForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            if (SCRIPT_URL.includes('TU_NUEVO_SCRIPT_URL_AQUI')) {
+                alert('⚠️ Configura tu enlace de Google Sheets en el código.');
+                return;
+            }
+
+            const isAttending = document.querySelector('input[name="asistencia"]:checked').value === 'Sí';
+            const qrId = isAttending ? generateUniqueId() : 'NO_ASISTE';
+            document.getElementById('qr_code').value = qrId;
+
+            document.getElementById('rsvpForm').style.display = 'none';
+
+            const loadingMsg = document.getElementById('status-loading');
+            loadingMsg.innerText = isAttending ? 'Generando tu pase único, espera un momento...' : 'Guardando tu respuesta...';
+            loadingMsg.style.display = 'block';
+
+            document.getElementById('status-error').style.display = 'none';
+
+            const formData = new FormData(this);
+
+            fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: formData })
+                .then(() => {
+                    document.getElementById('status-loading').style.display = 'none';
+
+                    const successMsg = document.getElementById('status-success');
+                    successMsg.innerText = isAttending ? '¡Pase generado con éxito!' : '¡Entendido! Lástima que no puedas asistir.';
+                    successMsg.style.display = 'block';
+
+                    if (isAttending) {
+                        // Mostrar QR
+                        document.getElementById('qr-container').style.display = 'block';
+                        document.getElementById('ticket-name').innerText = document.getElementById('nombre').value;
+                        document.getElementById('ticket-passes').innerText = document.getElementById('pases').value;
+                        document.getElementById('qr-image').src = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=' + qrId;
+                        document.getElementById('qr-text').innerText = qrId;
+
+                        // Bloquear futuras recargas
+                        if (guestName) {
+                            localStorage.setItem(localStorageKey, 'true');
+                        }
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('status-loading').style.display = 'none';
+                    document.getElementById('status-error').innerText = 'Hubo un error de red. Intenta de nuevo.';
+                    document.getElementById('status-error').style.display = 'block';
+                    document.getElementById('rsvpForm').style.display = 'block';
+                });
+        });
+    </script>
+</body>
+
+</html>

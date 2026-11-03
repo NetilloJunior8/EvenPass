@@ -1,0 +1,17 @@
+{
+  "id": "/miriam-isidro-panel",
+  "name": "Panel M & I",
+  "short_name": "Panel M&I",
+  "start_url": "./panel.html",
+  "display": "standalone",
+  "background_color": "#050505",
+  "theme_color": "#D4AF37",
+  "icons": [
+    {
+      "src": "mi_logo.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

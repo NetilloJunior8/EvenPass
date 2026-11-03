@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#050505"/>
+  <circle cx="256" cy="256" r="220" fill="none" stroke="#D4AF37" stroke-width="6"/>
+  <circle cx="256" cy="256" r="200" fill="none" stroke="#D4AF37" stroke-width="2" stroke-dasharray="10 10"/>
+  <text x="256" y="280" font-family="serif" font-size="160" fill="#D4AF37" text-anchor="middle" dominant-baseline="middle">M <tspan font-size="90">|</tspan> I</text>
+  <text x="256" y="390" font-family="sans-serif" font-size="28" fill="#D4AF37" text-anchor="middle" letter-spacing="10">BODA</text>
+</svg>

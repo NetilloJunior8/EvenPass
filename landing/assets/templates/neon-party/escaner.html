@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escáner VIP Ivonne</title>
+    <link rel="manifest" href="./manifest_esc.json">
+    <link rel="icon" href="./logo.png">
+    <meta name="theme-color" content="#050505">
+    <!-- Librería de html5-qrcode -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700;900&family=Sacramento&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            background-color: #050505;
+            background-image: radial-gradient(circle at center, #1a000d 0%, #020202 100%);
+            color: #fff; 
+            font-family: 'Montserrat', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px 15px;
+            overflow-x: hidden;
+        }
+        
+        /* Contenedor Principal Premium */
+        .glass-panel {
+            background: linear-gradient(145deg, rgba(20, 5, 10, 0.9), rgba(5, 5, 5, 0.95));
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 42, 133, 0.2);
+            border-top: 1px solid rgba(255, 42, 133, 0.5);
+            border-radius: 30px;
+            padding: 25px 20px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.5), 0 0 20px rgba(255, 42, 133, 0.15) inset;
+            text-align: center;
+            position: relative;
+        }
+
+        h1 {
+            font-family: 'Sacramento', cursive;
+            color: #fff;
+            text-shadow: 0 0 15px #ff2a85, 0 0 30px #ff2a85;
+            font-size: 45px;
+            margin-bottom: 0px;
+            line-height: 1;
+        }
+        .subtitle { 
+            font-size: 10px; 
+            font-weight: 700;
+            text-transform: uppercase; 
+            color: #ff2a85; 
+            letter-spacing: 4px; 
+            margin-bottom: 25px; 
+            opacity: 0.8;
+        }
+        
+        /* Botones de Sincronización */
+        .controls { display: flex; gap: 12px; margin-bottom: 25px; }
+        .btn { 
+            flex: 1; padding: 12px 5px; border: none; border-radius: 15px; 
+            font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+            cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+            font-family: 'Montserrat', sans-serif;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            position: relative; overflow: hidden;
+        }
+        
+        .btn-download { 
+            background-color: rgba(255,255,255,0.03); 
+            color: #ff2a85; 
+            border: 1px solid rgba(255, 42, 133, 0.4); 
+        }
+        .btn-download:hover { background-color: rgba(255, 42, 133, 0.1); border-color: #ff2a85;}
+        .btn-download:active { transform: scale(0.95); }
+        
+        .btn-sync { 
+            background: linear-gradient(45deg, #ff2a85, #ff0055); 
+            color: white; 
+            box-shadow: 0 5px 15px rgba(255, 42, 133, 0.4); 
+            border: 1px solid #ff2a85;
+        }
+        .btn-sync:hover { box-shadow: 0 5px 25px rgba(255, 42, 133, 0.6); filter: brightness(1.1);}
+        .btn-sync:active { transform: scale(0.95); }
+        
+        .btn-icon { font-size: 18px; margin-bottom: 4px; display: block;}
+
+        /* Contenedor del Escáner (Estilo Cyberpunk) */
+        .scanner-frame {
+            position: relative;
+            padding: 3px;
+            background: linear-gradient(45deg, transparent 40%, rgba(255,42,133,0.5) 50%, transparent 60%);
+            background-size: 200% 200%;
+            animation: gradientMove 3s linear infinite;
+            border-radius: 20px;
+            margin-bottom: 25px;
+        }
+
+        @keyframes gradientMove {
+            0% { background-position: 100% 0; }
+            100% { background-position: -100% 0; }
+        }
+
+        #reader-wrapper {
+            position: relative;
+            width: 100%;
+            border-radius: 18px;
+            overflow: hidden;
+            background-color: #000;
+            min-height: 260px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+        }
+        
+        #reader { width: 100%; }
+        #reader video { object-fit: cover; }
+
+        /* Láser animado para el escáner */
+        .laser {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: #ff2a85;
+            box-shadow: 0 0 10px #ff2a85, 0 0 20px #ff2a85;
+            z-index: 2;
+            animation: scan 2s linear infinite;
+        }
+
+        @keyframes scan {
+            0% { top: 10%; opacity: 0;}
+            10% { opacity: 1;}
+            90% { opacity: 1;}
+            100% { top: 90%; opacity: 0;}
+        }
+
+        .btn-start-camera {
+            position: absolute;
+            z-index: 10;
+            padding: 16px 32px;
+            background: linear-gradient(45deg, #ff2a85, #ff0055);
+            color: white;
+            border: none;
+            border-radius: 30px;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 700;
+            font-size: 12px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            cursor: pointer;
+            box-shadow: 0 8px 20px rgba(255, 42, 133, 0.4);
+            transition: all 0.3s;
+        }
+        .btn-start-camera:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(255, 42, 133, 0.6);}
+        
+        /* Tarjeta de Resultados Premium */
+        #result-card {
+            background: rgba(0,0,0,0.4);
+            border-radius: 20px;
+            padding: 25px 15px;
+            text-align: center;
+            min-height: 150px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(255,255,255,0.05);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .status-idle { border-color: rgba(255,255,255,0.1); }
+        .status-success { 
+            background: rgba(255, 42, 133, 0.05) !important;
+            border-color: #ff2a85 !important; 
+            box-shadow: 0 0 30px rgba(255, 42, 133, 0.3) inset !important;
+        }
+        .status-error { 
+            background: rgba(255, 51, 51, 0.05) !important;
+            border-color: #ff3333 !important; 
+            box-shadow: 0 0 30px rgba(255, 51, 51, 0.3) inset !important;
+        }
+        
+        .icon { font-size: 45px; margin-bottom: 10px; filter: drop-shadow(0 0 10px rgba(255,255,255,0.2)); }
+        .guest-name { font-size: 24px; font-weight: 900; margin-bottom: 5px; color: #fff; letter-spacing: 1px;}
+        .guest-passes { font-size: 14px; color: #aaa; font-weight: 600;}
+        .guest-passes b { font-size: 18px; }
+        .message-text { font-size: 11px; font-weight: 700; color: #777; letter-spacing: 3px; text-transform: uppercase;}
+        
+        /* Stats Inferiores */
+        .stats-row {
+            display: flex; justify-content: space-between; 
+            font-size: 10px; font-weight: 600; color: #777; letter-spacing: 1px;
+            margin-top: 25px; padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .stat-badge {
+            background: rgba(255,255,255,0.03);
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .pulse-animation {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="glass-panel">
+        <h1>Ivonne</h1>
+        <p class="subtitle">Escáner VIP</p>
+        
+        <div class="controls">
+            <button class="btn btn-download" onclick="downloadMasterList()" id="btn-dl">
+                <span class="btn-icon">📥</span>
+                1. Bajar Lista
+            </button>
+            <button class="btn btn-sync" onclick="syncData()" id="btn-sync">
+                <span class="btn-icon">☁️</span>
+                2. Subir (0)
+            </button>
+        </div>
+        
+        <div class="scanner-frame">
+            <div id="reader-wrapper">
+                <button class="btn-start-camera pulse-animation" id="btn-camera" onclick="startCamera()">📷 Iniciar Escáner</button>
+                <div id="reader"></div>
+                <div class="laser" id="laser-line"></div>
+            </div>
+        </div>
+        
+        <div id="result-card" class="status-idle">
+            <div class="message-text">SISTEMA LISTO</div>
+            <p style="font-size:12px; color:#555; margin-top:8px; font-weight: 400;">Inicia la cámara para comenzar</p>
+        </div>
+        
+        <div class="stats-row">
+            <div class="stat-badge" id="stat-db">📋 Base: 0</div>
+            <div class="stat-badge" id="stat-scanned">✔️ Accesos: 0</div>
+        </div>
+    </div>
+
+    <script>
+        // ========================================================
+        // ⚠️ LA MISMA URL DE TU NUEVO GOOGLE SCRIPT
+        // ========================================================
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzsaOgqPMbx1NAglq5fenl8HIJ6l311N42ZDgDbgI5S-NW3u482jqKJWx3BDUxrr5d7Yg/exec';
+
+        const resultCard = document.getElementById('result-card');
+        const laser = document.getElementById('laser-line');
+        let isScanningAllowed = true;
+        
+        // --- LOGICA LOCAL (OFFLINE) ---
+        let masterList = JSON.parse(localStorage.getItem('master_list_ivo')) || [];
+        let scannedQRs = JSON.parse(localStorage.getItem('scanned_qrs_ivo')) || [];
+        let offlineQueue = JSON.parse(localStorage.getItem('offline_queue_ivo')) || [];
+        
+        function updateUI() {
+            document.getElementById('stat-db').innerText = `📋 Base: ${masterList.length}`;
+            document.getElementById('stat-scanned').innerText = `✔️ Accesos: ${scannedQRs.length}`;
+            
+            const btnSync = document.getElementById('btn-sync');
+            if(offlineQueue.length > 0) {
+                btnSync.innerHTML = `<span class="btn-icon">⚠️</span> 2. Subir (${offlineQueue.length})`;
+                btnSync.style.background = "linear-gradient(45deg, #ff7a00, #ff9900)";
+                btnSync.style.boxShadow = "0 5px 15px rgba(255, 122, 0, 0.4)";
+                btnSync.style.borderColor = "#ff7a00";
+                btnSync.classList.add('pulse-animation');
+            } else {
+                btnSync.innerHTML = `<span class="btn-icon">☁️</span> 2. Subir (0)`;
+                btnSync.style.background = "linear-gradient(45deg, #ff2a85, #ff0055)";
+                btnSync.style.boxShadow = "0 5px 15px rgba(255, 42, 133, 0.4)";
+                btnSync.style.borderColor = "#ff2a85";
+                btnSync.classList.remove('pulse-animation');
+            }
+        }
+        updateUI();
+
+        function downloadMasterList() {
+            const btnDl = document.getElementById('btn-dl');
+            btnDl.innerHTML = `<span class="btn-icon">⏳</span> Bajando...`;
+            
+            if (SCRIPT_URL.includes('TU_NUEVO_SCRIPT_URL_AQUI')) {
+                alert('⚠️ Configura tu enlace de Google Sheets primero.');
+                btnDl.innerHTML = `<span class="btn-icon">📥</span> 1. Bajar Lista`;
+                return;
+            }
+
+            fetch(SCRIPT_URL + '?action=get_list')
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    masterList = data.lista.filter(inv => inv.asistencia === 'Sí' && inv.qr);
+                    localStorage.setItem('master_list_ivo', JSON.stringify(masterList));
+                    
+                    btnDl.innerHTML = `<span class="btn-icon">📥</span> 1. Bajar Lista`;
+                    alert(`¡ÉXITO! Se han descargado ${masterList.length} pases. Ya puedes apagar el internet y escanear en la puerta.`);
+                    updateUI();
+                }
+            })
+            .catch(e => {
+                btnDl.innerHTML = `<span class="btn-icon">📥</span> 1. Bajar Lista`;
+                alert("Error de red. Asegúrate de tener internet para bajar la lista.");
+            });
+        }
+
+        function syncData() {
+            if(offlineQueue.length === 0) {
+                alert("Todo está al día. No hay nuevos accesos para subir al Excel.");
+                return;
+            }
+            if(!navigator.onLine) {
+                alert("Necesitas conexión a internet para subir los datos al Excel.");
+                return;
+            }
+            
+            const btnSync = document.getElementById('btn-sync');
+            btnSync.innerHTML = `<span class="btn-icon">⏳</span> Subiendo...`;
+            
+            const formData = new FormData();
+            formData.append('data', JSON.stringify(offlineQueue));
+            
+            fetch(SCRIPT_URL + '?action=sync', { method: 'POST', mode: 'no-cors', body: formData })
+            .then(() => {
+                offlineQueue = [];
+                localStorage.setItem('offline_queue_ivo', JSON.stringify([]));
+                updateUI();
+                alert("¡Sincronización Exitosa! Todos los accesos se guardaron en tu Google Sheets.");
+            }).catch(e => { 
+                updateUI();
+                alert("Error de conexión. Intenta de nuevo cuando tengas mejor señal."); 
+            });
+        }
+        
+        let html5QrCode;
+
+        function startCamera() {
+            document.getElementById('btn-camera').style.display = 'none';
+            laser.style.display = 'block'; // Mostrar láser
+            html5QrCode = new Html5Qrcode("reader");
+            
+            const config = { fps: 20, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
+            
+            html5QrCode.start(
+                { facingMode: "environment" }, 
+                config, 
+                onScanSuccess, 
+                (errorMessage) => { }
+            ).then(() => {
+                resetScanner();
+            }).catch(err => {
+                alert("No se pudo iniciar la cámara. Revisa los permisos de tu navegador.");
+                document.getElementById('btn-camera').style.display = 'block';
+                laser.style.display = 'none';
+            });
+        }
+
+        function onScanSuccess(decodedText, decodedResult) {
+            if (!isScanningAllowed) return; 
+            if (!decodedText.startsWith('IVO-')) return; 
+
+            isScanningAllowed = false;
+            laser.style.display = 'none';
+            
+            if(html5QrCode) html5QrCode.pause();
+            
+            const guest = masterList.find(g => g.qr === decodedText);
+            
+            if (!guest) {
+                showError("QR INVÁLIDO O CANCELADO");
+                return;
+            }
+            
+            if (scannedQRs.includes(decodedText)) {
+                showError(`QR DUPLICADO: ${guest.nombre}`);
+                return;
+            }
+            
+            // Aprobar acceso
+            scannedQRs.push(decodedText);
+            offlineQueue.push(decodedText);
+            localStorage.setItem('scanned_qrs_ivo', JSON.stringify(scannedQRs));
+            localStorage.setItem('offline_queue_ivo', JSON.stringify(offlineQueue));
+            updateUI();
+            
+            showSuccess(guest.nombre, guest.pases);
+        }
+
+        function showSuccess(nombre, pases) {
+            resultCard.className = 'status-success';
+            resultCard.innerHTML = `
+                <div class="icon">✨</div>
+                <div class="message-text" style="color: #ff2a85;">ACCESO VIP CONCEDIDO</div>
+                <div class="guest-name">${nombre}</div>
+                <div class="guest-passes">Admitir: <b style="color: #ff2a85;">${pases} Pases</b></div>
+            `;
+            try { navigator.vibrate([100, 50, 100]); } catch(e){} // Doble vibración feliz
+            
+            setTimeout(() => { resetScanner(); }, 2500);
+        }
+
+        function showError(msg) {
+            resultCard.className = 'status-error';
+            resultCard.innerHTML = `
+                <div class="icon">🚫</div>
+                <div class="message-text" style="color: #ff3333;">ACCESO DENEGADO</div>
+                <div class="guest-name" style="font-size: 16px; margin-top: 10px; color: #ff3333;">${msg}</div>
+            `;
+            try { navigator.vibrate([300, 100, 300]); } catch(e){} // Vibración larga de error
+            
+            setTimeout(() => { resetScanner(); }, 3500);
+        }
+
+        function resetScanner() {
+            resultCard.className = 'status-idle';
+            resultCard.innerHTML = `
+                <div class="icon" style="font-size: 30px; opacity: 0.5;">📷</div>
+                <div class="message-text">ESCANEO ACTIVO</div>
+                <p style="font-size:12px; color:#555; margin-top:5px; font-weight:400; text-transform:none;">Apunta a un Código QR para validar</p>
+            `;
+            isScanningAllowed = true;
+            if (document.getElementById('btn-camera').style.display === 'none') {
+                laser.style.display = 'block';
+            }
+            if(html5QrCode) html5QrCode.resume();
+        }
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js'); });
+        }
+    </script>
+</body>
+</html>

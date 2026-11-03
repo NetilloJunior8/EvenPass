@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>EventPass: invitaciones, RSVP y acceso en un solo lugar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ===== EventPass design tokens (idénticos en landing y consola) ===== */
+@layer reset,tokens,base,components,motion,theme;
+@layer reset{*,*::before,*::after{box-sizing:border-box}body,h1,h2,h3,p,dl,dd,ul,ol{margin:0}button,input,select,textarea{font:inherit;color:inherit}img,svg{display:block;max-inline-size:100%}}
+@layer tokens{:root{color-scheme:light dark;
+--navy-900:#0b1230;--navy-700:#14224f;--navy-600:#1d2f6b;--green-500:#10b981;--green-300:#6ee7b7;--blue-500:#2456d6;--red-500:#e5484d;--amber-500:#f59e0b;
+--bg:#fbfcfe;--surface:#fff;--ink:#14224f;--muted:#5b6785;--line:#dde3ee;--accent:var(--green-500);--on-accent:#04281d;--deep:var(--navy-700);--deep-2:var(--navy-600);--on-deep:#fff;--on-deep-muted:#b9c3e6;--band-bg:linear-gradient(180deg,#fff,#edf7f3);--tint-mint:#eaf8f2;--tint-blue:#edf2ff;
+--ok-bg:#e3f7ef;--ok-fg:#067a56;--warn-bg:#fff3d6;--warn-fg:#8a5a00;--bad-bg:#fdeceb;--bad-fg:#b3262b;--info-bg:#e6edff;--info-fg:#2456d6;
+--r-s:10px;--r-m:18px;--r-l:28px;--ease:cubic-bezier(.2,.8,.2,1);--sh-1:0 1px 2px rgb(20 34 79/.06),0 10px 30px rgb(20 34 79/.08);--sh-2:0 30px 70px rgb(20 34 79/.3);
+--font-display:"DM Serif Display",Georgia,serif;--font-ui:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b1230;--surface:#131d44;--ink:#eef2ff;--muted:#a3aed0;--line:#26346b;--deep:#101b47;--deep-2:#18276a;--ok-bg:#0d3a30;--ok-fg:#6ee7b7;--warn-bg:#3d3210;--warn-fg:#f5b842;--bad-bg:#3d1c24;--bad-fg:#ff8a8f;--info-bg:#1b2a63;--info-fg:#8fb0ff;--band-bg:var(--deep);--tint-mint:#0f3a31;--tint-blue:#17265c}}
+:root[data-theme="dark"]{--bg:#0b1230;--surface:#131d44;--ink:#eef2ff;--muted:#a3aed0;--line:#26346b;--deep:#101b47;--deep-2:#18276a;--ok-bg:#0d3a30;--ok-fg:#6ee7b7;--warn-bg:#3d3210;--warn-fg:#f5b842;--bad-bg:#3d1c24;--bad-fg:#ff8a8f;--info-bg:#1b2a63;--info-fg:#8fb0ff;--band-bg:var(--deep);--tint-mint:#0f3a31;--tint-blue:#17265c}}
+@layer base{html{scroll-behavior:smooth;scroll-padding-top:calc(env(safe-area-inset-top,0px) + 72px)}body{background:var(--bg);color:var(--ink);font:400 1rem/1.6 var(--font-ui);-webkit-font-smoothing:antialiased}h1,h2,h3{font-family:var(--font-display);font-weight:400;line-height:1.05;text-wrap:balance}p{text-wrap:pretty}a{color:inherit}:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:30}}
+@layer components{
+.wrap{inline-size:min(1160px,100% - 44px);margin-inline:auto}
+.progress{position:fixed;inset:0 0 auto;block-size:3px;z-index:40;background:linear-gradient(90deg,var(--green-500),var(--blue-500));transform-origin:0 50%;scale:0 1}
+.glow{position:fixed;inline-size:560px;block-size:560px;border-radius:50%;pointer-events:none;z-index:-1;translate:-50% -50%;left:var(--gx,60%);top:var(--gy,20%);background:radial-gradient(closest-side,color-mix(in oklab,var(--accent) 16%,transparent),transparent)}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:35;opacity:.05;mix-blend-mode:multiply;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;padding-block:12px}
+header .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;text-decoration:none}
+.logo i{inline-size:34px;block-size:34px;border-radius:11px;background:linear-gradient(135deg,var(--navy-700),var(--navy-600));color:#fff;display:grid;place-items:center;font:700 12px/1 var(--font-ui);font-style:normal;box-shadow:0 0 0 3px color-mix(in oklab,var(--accent) 35%,transparent)}
+nav{display:flex;gap:2px;padding:5px;border-radius:999px;background:color-mix(in oklab,var(--surface) 70%,transparent);backdrop-filter:saturate(1.5) blur(16px);border:1px solid var(--line);box-shadow:var(--sh-1);font-size:.9rem;font-weight:500}
+nav a{text-decoration:none;color:var(--muted);padding:8px 14px;border-radius:999px;transition:background .2s,color .2s}nav a:hover{color:var(--ink);background:color-mix(in oklab,var(--ink) 8%,transparent)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:999px;padding:15px 28px;font-weight:600;background:var(--accent);color:var(--on-accent);cursor:pointer;text-decoration:none;position:relative;overflow:hidden;box-shadow:0 10px 28px -10px var(--accent);transition:transform .3s var(--ease),box-shadow .3s}
+.btn::after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,rgb(255 255 255/.5),transparent 70%);translate:-120% 0;transition:translate .7s var(--ease)}
+.btn:hover{transform:translateY(-3px);box-shadow:0 18px 34px -10px var(--accent)}.btn:hover::after{translate:120% 0}.btn:active{transform:none}
+.btn.ghost{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}.btn.sm{padding:10px 20px;font-size:.9rem}
+.hero{position:relative;padding-block:clamp(40px,7vw,96px) clamp(56px,8vw,110px)}
+.hero .wrap{display:grid;grid-template-columns:1.15fr .85fr;gap:clamp(28px,4vw,56px);align-items:center}
+.pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:color-mix(in oklab,var(--surface) 75%,transparent);backdrop-filter:blur(8px);border-radius:999px;padding:7px 16px 7px 12px;font-size:.88rem;font-weight:600;margin-block-end:26px}
+.pill i{inline-size:8px;block-size:8px;border-radius:50%;background:var(--accent);animation:live 1.8s ease-out infinite;color:var(--accent)}
+h1{font-size:clamp(3rem,7.6vw,6.4rem);letter-spacing:-.025em;line-height:.98}
+.hero p.sub{color:var(--muted);max-inline-size:44ch;margin-block:26px 34px;font-size:clamp(1.05rem,1.6vw,1.25rem)}
+.cta{display:flex;gap:12px;flex-wrap:wrap}.trust{display:flex;gap:22px;flex-wrap:wrap;margin-block-start:34px;color:var(--muted);font-size:.9rem}.trust span::before{content:"✓";color:var(--accent);font-weight:700;margin-inline-end:7px}
+.stage{position:relative;padding:20px 0}
+.fchip{position:absolute;z-index:3;display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:18px;background:color-mix(in oklab,var(--surface) 82%,transparent);backdrop-filter:blur(14px);border:1px solid var(--line);box-shadow:var(--sh-1),0 20px 40px -20px rgb(20 34 79/.4);font-size:.85rem;animation:float 6s ease-in-out infinite}
+.fchip small{display:block;color:var(--muted);font-size:.75rem}.fchip b{display:block}
+.c1{top:6%;inset-inline-start:-6%}.c2{bottom:10%;inset-inline-end:-6%;animation-delay:-3s}
+.dot{inline-size:36px;block-size:36px;border-radius:50%;background:var(--ok-bg);color:var(--ok-fg);display:grid;place-items:center;font-weight:700}
+.mq{inline-size:44px;block-size:44px;padding:4px;border-radius:10px;background:#fff;color:var(--navy-900);flex:none}.mq svg{inline-size:100%;block-size:100%}.mq.sw{animation:pop .5s var(--ease)}
+.cd{block-size:3px;border-radius:3px;background:var(--line);margin-block-start:6px;overflow:hidden}.cd i{display:block;block-size:100%;background:var(--accent);transform-origin:0 50%;animation:count 8s linear infinite}
+.phone{inline-size:292px;margin-inline:auto;border-radius:46px;background:linear-gradient(160deg,#2b3a78,var(--navy-900));padding:11px;box-shadow:var(--sh-2),inset 0 0 0 1px rgb(255 255 255/.14);transition:transform .35s var(--ease);will-change:transform;position:relative;z-index:2}
+.screen{border-radius:36px;background:radial-gradient(120% 70% at 50% 0%,#1d2f6b,var(--navy-900));color:#fff;min-block-size:520px;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.scan-top{padding:22px 20px 0;font-size:.78rem;color:var(--on-deep-muted);display:flex;justify-content:space-between}
+.viewfinder{inline-size:190px;block-size:190px;margin:30px auto;position:relative;border-radius:16px;background:linear-gradient(var(--accent),var(--accent)) 0 0/30px 3px no-repeat,linear-gradient(var(--accent),var(--accent)) 0 0/3px 30px no-repeat,linear-gradient(var(--accent),var(--accent)) 100% 0/30px 3px no-repeat,linear-gradient(var(--accent),var(--accent)) 100% 0/3px 30px no-repeat,linear-gradient(var(--accent),var(--accent)) 0 100%/30px 3px no-repeat,linear-gradient(var(--accent),var(--accent)) 0 100%/3px 30px no-repeat,linear-gradient(var(--accent),var(--accent)) 100% 100%/30px 3px no-repeat,linear-gradient(var(--accent),var(--accent)) 100% 100%/3px 30px no-repeat,repeating-linear-gradient(45deg,rgb(255 255 255/.05) 0 8px,transparent 8px 16px)}
+.line{position:absolute;inset-inline:8%;block-size:2px;background:var(--accent);box-shadow:0 0 18px 3px var(--accent);top:14%;animation:sweep 2.2s ease-in-out infinite alternate}
+.count{text-align:center;margin-block-start:auto;padding:0 18px 14px}.count b{font:400 2.7rem/1 var(--font-display)}.count span{display:block;font-size:.8rem;color:var(--on-deep-muted)}
+.scanbtn{margin:0 18px 22px;inline-size:calc(100% - 36px)}
+.result{position:absolute;inset-inline:0;bottom:0;background:var(--surface);color:var(--ink);border-radius:26px 26px 0 0;padding:22px 18px 18px;translate:0 105%;transition:translate .4s var(--ease)}.result.on{translate:0 0}
+.result .ico{inline-size:50px;block-size:50px;border-radius:50%;display:grid;place-items:center;margin:0 auto 8px;font-size:1.5rem;font-weight:700;color:#fff}
+.result h3{text-align:center;font-size:1.6rem}.result.ok .ico{background:var(--accent);animation:pop .5s var(--ease)}.result.ok h3{color:var(--ok-fg)}.result.bad .ico{background:var(--red-500);animation:shake .4s}.result.bad h3{color:var(--bad-fg)}
+.guest{margin-block-start:12px;border:1px solid var(--line);border-radius:14px;padding:10px 14px;font-size:.88rem;color:var(--muted)}.guest strong{display:block;font-size:1rem;color:var(--ink)}
+.result button{margin-block-start:12px;inline-size:100%}.hint{text-align:center;color:var(--muted);font-size:.85rem;margin-block-start:16px;position:relative;z-index:2}
+.marq{overflow:hidden;border-block:1px solid var(--line);padding-block:18px;mask:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent)}
+.track{display:flex;gap:48px;inline-size:max-content;animation:marq 32s linear infinite}.marq:hover .track{animation-play-state:paused}
+.track span{font:400 1.7rem var(--font-display);color:var(--muted);white-space:nowrap}.track span::after{content:"";display:inline-block;inline-size:8px;block-size:8px;border-radius:50%;background:var(--accent);margin-inline-start:48px;vertical-align:middle}
+section{padding-block:clamp(64px,9vw,120px)}h2{font-size:clamp(2.2rem,5.2vw,4rem);max-inline-size:16ch;letter-spacing:-.02em}
+.lead{color:var(--muted);max-inline-size:54ch;margin-block-start:20px;font-size:1.1rem}
+.bento,.events,.plans,.road,.steps,.two{display:grid;gap:18px;margin-block-start:48px}
+.bento{grid-template-columns:repeat(6,1fr)}.b1{grid-column:span 4}.b2,.b3{grid-column:span 2}.b4{grid-column:span 3}.b5{grid-column:span 3}
+.plans,.road,.steps{grid-template-columns:repeat(3,1fr)}.events{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}.two{grid-template-columns:1fr 1fr}
+.bc,.plan,.card,.ev{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-l);padding:30px;box-shadow:var(--sh-1);transition:transform .4s var(--ease),border-color .3s;isolation:isolate;overflow:hidden}
+.bc::before,.plan::before,.card::before,.ev::before{content:"";position:absolute;inset:0;z-index:-1;opacity:0;transition:opacity .3s;background:radial-gradient(300px circle at var(--mx,50%) var(--my,0),color-mix(in oklab,var(--accent) 20%,transparent),transparent 70%)}
+.bc:hover,.plan:hover,.card:hover,.ev:hover{transform:translateY(-5px);border-color:color-mix(in oklab,var(--accent) 60%,var(--line))}.bc:hover::before,.plan:hover::before,.card:hover::before,.ev:hover::before{opacity:1}
+.bc h3,.card h3,.plan h3{font-size:1.75rem;margin-block-end:10px}.bc p{color:var(--muted);max-inline-size:44ch}
+.bc.dark{background:linear-gradient(150deg,var(--deep-2),var(--deep));color:var(--on-deep);border-color:transparent}.bc.dark p{color:var(--on-deep-muted)}
+.mini{margin-block-start:26px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.k{border:1px solid var(--line);border-radius:14px;padding:12px;background:var(--bg)}.k b{display:block;font:400 1.8rem/1 var(--font-display)}.k span{font-size:.72rem;color:var(--muted)}.k.live{background:var(--ok-bg);border-color:var(--accent)}.k.live b{color:var(--ok-fg)}
+.spark{display:flex;align-items:flex-end;gap:6px;block-size:70px;margin-block-start:14px}.spark i{flex:1;border-radius:6px 6px 2px 2px;background:linear-gradient(var(--green-300),var(--accent));block-size:var(--h);transform-origin:bottom;animation:grow 1.2s var(--ease) both;animation-delay:calc(var(--i)*60ms)}
+.rsvp{display:grid;gap:8px}.rsvp span{border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-size:.9rem;font-weight:500}.rsvp .on{background:var(--ok-bg);border-color:var(--accent);color:var(--ok-fg)}
+.okc{display:grid;place-items:center;text-align:center;gap:8px}.okc i{inline-size:64px;block-size:64px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font:700 2rem/1 var(--font-ui);font-style:normal;animation:pop 2.4s var(--ease) infinite}
+.priv{display:grid;gap:8px;font-size:.92rem}.priv div{display:flex;justify-content:space-between;gap:10px;border-radius:12px;padding:10px 14px;background:rgb(255 255 255/.08)}.priv .bl{filter:blur(5px);user-select:none}.priv em{font-style:normal;color:var(--green-300);font-weight:600}
+.chat{display:grid;gap:8px}.chat span{max-inline-size:85%;padding:10px 14px;border-radius:16px;font-size:.88rem;background:var(--bg)}.chat .me{justify-self:end;background:var(--ok-bg);color:var(--ok-fg)}
+.band{background:radial-gradient(80% 120% at 85% 0%,var(--deep-2),var(--deep));color:var(--on-deep)}.band .lead{color:var(--on-deep-muted)}
+.ev{background:color-mix(in oklab,#fff 7%,transparent);border-color:rgb(255 255 255/.14);box-shadow:none}.ev h3{font-size:1.6rem}.ev small{color:var(--on-deep-muted)}
+.nums{display:flex;gap:26px;margin-block:24px 18px}.nums b{display:block;font:400 2.4rem/1 var(--font-display);font-variant-numeric:tabular-nums}.nums span{font-size:.8rem;color:var(--on-deep-muted)}
+.bar{block-size:8px;border-radius:8px;background:rgb(0 0 0/.3);overflow:hidden}.bar i{display:block;block-size:100%;background:linear-gradient(90deg,var(--green-300),var(--accent));border-radius:8px}.ev p{font-size:.82rem;color:var(--on-deep-muted);margin-block-start:8px}
+.card ul{list-style:none;padding:0}.card li{padding:12px 0 12px 32px;position:relative;color:var(--muted);border-block-start:1px solid var(--line)}.card li:first-child{border:0}
+.card li::before{content:"✕";position:absolute;inset-inline-start:0;color:var(--red-500);font-weight:700}.card.yes{border:2px solid var(--accent)}.card.yes li::before{content:"✓";color:var(--accent)}
+.uses{display:flex;flex-wrap:wrap;gap:10px;margin-block-start:32px}.uses span{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:10px 20px;font-weight:500;transition:transform .25s var(--ease),background .2s}.uses span:hover{transform:translateY(-3px) rotate(-1.5deg);background:var(--ok-bg)}
+.steps{counter-reset:s;padding:0;list-style:none;position:relative}.steps li{counter-increment:s;padding-block-start:8px}
+.steps li::before{content:counter(s);display:block;font:400 6rem/1 var(--font-display);color:transparent;-webkit-text-stroke:1.5px var(--accent);margin-block-end:6px;transition:color .4s}.steps li:hover::before{color:var(--accent)}
+.steps h3{font-size:1.7rem;margin-block-end:8px}.steps p{color:var(--muted)}
+.plan{display:flex;flex-direction:column}.plan.top{border:2px solid transparent;background:linear-gradient(var(--surface),var(--surface)) padding-box,linear-gradient(135deg,var(--green-500),var(--blue-500)) border-box;transform:translateY(-8px)}
+.price{font:400 3rem/1.1 var(--font-display);margin-block:14px 2px}.price small{font:500 .88rem var(--font-ui);color:var(--muted)}
+.plan ul{list-style:none;padding:0;margin-block:20px 28px;flex:1}.plan li{padding:8px 0 8px 28px;position:relative;color:var(--muted)}.plan li::before{content:"✓";position:absolute;inset-inline-start:0;color:var(--accent);font-weight:700}
+.note{font-size:.88rem;color:var(--muted);margin-block-start:20px}
+.road>div{background:color-mix(in oklab,#fff 7%,transparent);border:1px solid rgb(255 255 255/.14);border-radius:var(--r-l);padding:28px}.road h3{font-size:1.6rem;margin-block-end:6px}.road small{color:var(--green-300);font-weight:700}.road ul{padding-inline-start:18px;margin-block-start:12px;color:var(--on-deep-muted)}
+.faq{margin-block-start:36px;max-inline-size:780px}.faq details{border-block-start:1px solid var(--line);padding-block:20px}.faq details:last-child{border-block-end:1px solid var(--line)}
+.faq summary{font-weight:600;font-size:1.05rem;cursor:pointer;list-style:none;display:flex;justify-content:space-between;gap:16px}.faq summary::-webkit-details-marker{display:none}.faq summary::after{content:"+";font-size:1.6rem;line-height:1;transition:rotate .3s var(--ease);color:var(--accent)}.faq details[open] summary::after{rotate:45deg}.faq p{margin-block-start:10px;color:var(--muted)}
+.final{position:relative;overflow:hidden;border-radius:var(--r-l);padding:clamp(40px,7vw,88px);text-align:center;color:#fff;background:linear-gradient(135deg,var(--navy-700),var(--blue-500))}
+.final::before{content:"";position:absolute;inset:-30% -10% auto;block-size:120%;background:radial-gradient(40% 40% at 25% 40%,color-mix(in oklab,var(--green-500) 55%,transparent),transparent 70%);filter:blur(50px);animation:drift 14s ease-in-out infinite alternate}
+.final>*{position:relative}.final h2{margin-inline:auto;max-inline-size:15ch}.final .lead{margin:20px auto 32px;color:#dbe4ff}
+footer{padding-block:34px;border-block-start:1px solid var(--line);color:var(--muted);font-size:.88rem}
+}
+@layer motion{
+@keyframes drift{to{transform:translate3d(4%,6%,0) scale(1.1)}}@keyframes sweep{to{top:84%}}@keyframes pop{from{scale:.4}60%{scale:1.15}}@keyframes shake{25%{translate:-6px}75%{translate:6px}}
+@keyframes live{0%{box-shadow:0 0 0 0 currentColor}100%{box-shadow:0 0 0 9px transparent}}@keyframes float{50%{translate:0 -10px}}@keyframes grow{from{scale:1 0}}@keyframes count{from{scale:1 1}to{scale:0 1}}
+@keyframes marq{to{translate:-50% 0}}@keyframes rise{from{opacity:0;translate:0 36px}}@keyframes in{from{opacity:0;translate:0 26px;filter:blur(8px)}}@keyframes bar{to{scale:1 1}}
+.pill,.hero h1,.hero p.sub,.cta,.trust{animation:in .9s var(--ease) both}.hero h1{animation-delay:.08s}.hero p.sub{animation-delay:.18s}.cta{animation-delay:.28s}.trust{animation-delay:.38s}
+@supports (animation-timeline:view()){.bc,.plan,.card,.ev,.steps li,.road>div{animation:rise linear both;animation-timeline:view();animation-range:entry 0% entry 35%}}
+@supports (animation-timeline:scroll()){.progress{animation:bar linear both;animation-timeline:scroll(root)}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.line{top:50%}.progress{scale:0 1}}
+}
+@media (max-width:900px){.hero .wrap,.plans,.road,.steps,.two{grid-template-columns:1fr}.bento{grid-template-columns:1fr}.b1,.b2,.b3,.b4,.b5{grid-column:auto}nav{display:none}.c1{inset-inline-start:0}.c2{inset-inline-end:0}.plan.top{transform:none}.kpis{grid-template-columns:repeat(2,1fr)}}
+/* ===== Tema "papel y boleto": blanco dominante, tinta azul, sellos y perforaciones ===== */
+@layer theme{
+.hero{background:radial-gradient(55% 55% at 78% 42%,color-mix(in oklab,var(--green-500) 13%,transparent),transparent 72%)}
+.rings{position:absolute;inset:0;pointer-events:none;z-index:1}
+.rings i{position:absolute;inset:50% auto auto 50%;inline-size:340px;block-size:340px;translate:-50% -50%;border-radius:50%;border:1.5px solid color-mix(in oklab,var(--accent) 55%,transparent);animation:ring 6s ease-out infinite;animation-delay:calc(var(--i)*2s)}
+@keyframes ring{from{scale:.6;opacity:.9}to{scale:2.3;opacity:0}}
+body::after{opacity:.025}
+.marq{border-block:2px dashed var(--line)}
+.band{background:var(--band-bg);color:var(--ink)}.band .lead{color:var(--muted)}
+.bc,.plan,.card{box-shadow:5px 5px 0 color-mix(in oklab,var(--navy-700) 9%,transparent)}
+.bc:hover,.plan:hover,.card:hover{box-shadow:9px 9px 0 color-mix(in oklab,var(--accent) 38%,transparent)}
+.b2{background:var(--tint-mint)}.b3{border:2px solid var(--accent)}.b5{background:var(--tint-blue)}
+.b2 .rsvp span,.b5 .chat span{background:var(--surface)}.b2 .rsvp .on{background:var(--ok-bg)}.b5 .chat .me{background:var(--ok-bg)}
+.events{filter:drop-shadow(0 16px 20px rgb(20 34 79/.1))}
+.ev{padding:0;display:flex;flex-direction:column;background:var(--surface);color:var(--ink);border:0;box-shadow:none;border-radius:var(--r-m);mask:radial-gradient(circle 14px at 0 calc(100% - 96px),#0000 97%,#000) 0 0/51% 100% no-repeat,radial-gradient(circle 14px at 100% calc(100% - 96px),#0000 97%,#000) 100% 0/51% 100% no-repeat}
+.ev:hover{transform:translateY(-6px) rotate(-.5deg)}
+.ev .main{padding:28px 28px 20px;flex:1}.ev small,.nums span{color:var(--muted)}
+.ev .stub{position:relative;block-size:96px;padding:0 28px;display:flex;align-items:center;gap:22px}
+.ev .stub::before{content:"";position:absolute;inset:0 20px auto;border-block-start:2px dashed var(--line)}
+.code span{display:block;font-size:.72rem;color:var(--muted)}.code b{font:400 1.45rem/1.1 var(--font-display);letter-spacing:.02em}
+.pc{flex:1}.pc p{margin-block-start:6px;font-size:.8rem;color:var(--muted)}.ev .bar{background:var(--line)}
+.road>div{background:var(--surface);border:1px solid var(--line);border-block-start:4px solid var(--accent);color:var(--ink);box-shadow:5px 5px 0 color-mix(in oklab,var(--navy-700) 9%,transparent)}
+.road small{display:inline-block;margin-block-end:12px;padding:3px 13px;border-radius:999px;background:var(--ok-bg);color:var(--ok-fg)}.road ul{color:var(--muted)}
+#faq .wrap{display:grid;grid-template-columns:1fr 1.5fr;gap:56px;align-items:start}#faq h2{position:sticky;top:110px}.faq{margin-block-start:0}
+@media (max-width:900px){#faq .wrap{grid-template-columns:1fr;gap:0}#faq h2{position:static}.rings i{inline-size:240px;block-size:240px}}
+}
+</style>
+</head>
+<body>
+<div class="progress" aria-hidden="true"></div><div class="glow" aria-hidden="true"></div>
+<header><div class="wrap">
+<a class="logo" href="#"><i>EP</i>EventPass</a>
+<nav aria-label="Principal"><a href="#sistema">El sistema</a><a href="#eventos">Eventos</a><a href="#proceso">Cómo funciona</a><a href="#planes">Planes</a><a href="#futuro">Futuro</a></nav>
+<a class="btn sm" href="#contacto">Solicitar demo</a>
+</div></header>
+<main>
+<div class="hero"><div class="wrap">
+<div>
+<div class="pill"><i></i>Invitaciones, RSVP y acceso con QR</div>
+<h1>Tus invitados confirman, llegan y entran sin filas.</h1>
+<p class="sub">EventPass reúne la invitación digital, el RSVP y el control de acceso en un solo lugar. Tú ves en tiempo real quién confirmó y quién ya está adentro.</p>
+<div class="cta"><a class="btn" href="#contacto">Solicitar demo</a></div>
+<div class="trust"><span>Sin instalar apps</span><span>Pase de un solo uso</span><span>Soporte por WhatsApp</span></div>
+</div>
+<div>
+<div class="stage"><div class="rings" aria-hidden="true"><i style="--i:0"></i><i style="--i:1"></i><i style="--i:2"></i></div>
+<div class="fchip c1"><span class="dot">✓</span><span><b>Ana Valentina confirmó</b><small>2 lugares · hace un momento</small></span></div>
+<div class="phone"><div class="screen" id="screen">
+<div class="scan-top"><span>Boda de Sofía &amp; Mateo</span><span>Puerta principal</span></div>
+<div class="viewfinder"><div class="line"></div></div>
+<div class="count"><b id="cnt">95</b><span>ingresados de 184 confirmados</span></div>
+<button class="btn scanbtn" id="scan">Escanear invitado</button>
+<div class="result" id="res" role="status" aria-live="polite">
+<div class="ico" id="ico">✓</div><h3 id="rt">¡Acceso permitido!</h3>
+<div class="guest"><strong id="gn"></strong><span id="gd"></span></div>
+<button class="btn" id="next">Escanear siguiente pase</button>
+</div></div></div>
+<div class="fchip c2"><div class="mq" id="mq"></div><span><b>QR nuevo en <em id="cd" style="font-style:normal">8</em> s</b><small>Próximo paso: QR que se renueva</small><div class="cd"><i></i></div></span></div>
+</div>
+<p class="hint">Demo: toca “Escanear invitado” y prueba los cuatro casos.</p>
+</div>
+</div></div>
+
+<div class="marq" aria-hidden="true"><div class="track" id="track"></div></div>
+
+<section id="problema"><div class="wrap">
+<h2>Organizar la lista no debería ser lo más difícil del evento.</h2>
+<p class="lead">Hoy muchos eventos se manejan con Excel, mensajes sueltos y una persona con una hoja impresa en la puerta.</p>
+<div class="two">
+<div class="card"><h3>Sin EventPass</h3><ul><li>Confirmaciones perdidas entre chats de WhatsApp</li><li>Listas en Excel que nadie actualiza a tiempo</li><li>Filas en la entrada por buscar nombres a mano</li><li>Pases compartidos o duplicados sin control</li></ul></div>
+<div class="card yes"><h3>Con EventPass</h3><ul><li>RSVP en un enlace personal, con acompañantes</li><li>Panel que se actualiza solo con cada respuesta</li><li>Validación por QR en menos de un segundo</li><li>Cada pase se usa una sola vez y queda registrado</li></ul></div>
+</div></div></section>
+
+<section id="sistema"><div class="wrap">
+<h2>Todo el evento en tres pantallas.</h2>
+<p class="lead">Cada parte resuelve un momento distinto: antes, durante y después de enviar las invitaciones.</p>
+<div class="bento">
+<div class="bc b1"><h3>Panel del organizador</h3><p>Invitados, confirmados, por confirmar e ingresados en una vista. Busca por nombre, filtra por estado y carga tu lista desde un CSV.</p>
+<div class="mini"><div class="kpis"><div class="k"><b>250</b><span>invitados</span></div><div class="k"><b>184</b><span>confirmados</span></div><div class="k"><b>42</b><span>por confirmar</span></div><div class="k live"><b>95</b><span>ingresados</span></div></div>
+<div class="spark" id="spark"></div></div></div>
+<div class="bc b2"><h3>Invitación móvil</h3><p>Cuenta regresiva, mapa y botón de asistencia. Al confirmar, el invitado recibe su pase.</p>
+<div class="mini rsvp"><span class="on">✓ ¡Sí, asistiré!</span><span>No podré ir</span><span>Acompañantes: 1</span></div></div>
+<div class="bc b3"><h3>Escáner en puerta</h3><p>Valida al instante, descuenta lugares y avisa si un pase ya se usó.</p>
+<div class="mini okc"><i>✓</i><b>¡Acceso permitido!</b></div></div>
+<div class="bc b4 dark"><h3>Privacidad por diseño</h3><p>Nuestro equipo no ve los datos de tus invitados. Si hay un problema, tú autorizas un acceso temporal.</p>
+<div class="mini priv"><div><span class="bl">Ana Valentina Ruiz</span><em>Oculto</em></div><div><span class="bl">667 123 4567</span><em>Oculto</em></div><div><span>Estado del evento</span><em>Visible</em></div></div></div>
+<div class="bc b5"><h3>Soporte en vivo</h3><p>Si algo falla durante el evento, escríbenos con tu código y lo revisamos al momento.</p>
+<div class="mini chat"><span>Código EVP-0001: el escáner tarda.</span><span class="me">Lo vemos ahora mismo.</span></div></div>
+</div>
+<div class="uses"><span>Bodas</span><span>XV años</span><span>Eventos corporativos</span><span>Graduaciones</span><span>Conferencias</span><span>Eventos escolares</span></div>
+</div></section>
+
+<section id="eventos" class="band"><div class="wrap">
+<h2>Eventos que ya gestionamos con EventPass.</h2>
+<p class="lead">Estos son los números de cada evento, tal como los vería el organizador en su panel.</p>
+<div class="events" id="events"></div>
+</div></section>
+
+<section id="proceso"><div class="wrap">
+<h2>De la lista de invitados a la puerta.</h2>
+<ol class="steps">
+<li><h3>Carga tu lista</h3><p>Sube un CSV con nombres, correos y número de acompañantes por invitado.</p></li>
+<li><h3>Envía las invitaciones</h3><p>Cada persona recibe su enlace, responde desde el celular y descarga su pase.</p></li>
+<li><h3>Valida en la puerta</h3><p>Escanea los pases y mira cómo sube el conteo de ingresados en tu panel.</p></li>
+</ol></div></section>
+
+<section id="planes" style="padding-block-start:0"><div class="wrap">
+<h2>Un plan para cada tamaño de evento.</h2>
+<p class="lead">Pagas por evento o por mes. Sin instalación y sin equipo especial: el escáner es el celular del personal.</p>
+<div class="plans">
+<div class="plan"><h3>Esencial</h3><div class="price">$990 <small>MXN por evento</small></div><ul><li>Hasta 100 invitados</li><li>Invitación móvil y RSVP</li><li>Pase con código QR</li><li>Panel de confirmaciones</li></ul><a class="btn ghost" href="#contacto">Elegir Esencial</a></div>
+<div class="plan top"><h3>Evento</h3><div class="price">$2,490 <small>MXN por evento</small></div><ul><li>Hasta 500 invitados</li><li>Todo lo de Esencial</li><li>Escáner en puerta con varios dispositivos</li><li>Carga de lista por CSV</li><li>Reporte final de asistencia</li></ul><a class="btn" href="#contacto">Elegir Evento</a></div>
+<div class="plan"><h3>Agencia</h3><div class="price">$4,990 <small>MXN por mes</small></div><ul><li>Eventos ilimitados</li><li>Varios organizadores en una cuenta</li><li>Invitaciones con tu marca</li><li>Soporte prioritario</li></ul><a class="btn ghost" href="#contacto">Hablar con ventas</a></div>
+</div>
+<p class="note">Precios de referencia para el piloto, sujetos a cambio.</p>
+</div></section>
+
+<section id="futuro" class="band"><div class="wrap">
+<h2>Un producto pensado para crecer.</h2>
+<p class="lead">La base separa organizadores, eventos e invitados, así que un mismo sistema atiende a muchos clientes a la vez.</p>
+<div class="road">
+<div><small>Hoy</small><h3>Prototipo funcional</h3><ul><li>Panel del organizador</li><li>Invitación móvil con RSVP</li><li>Escáner QR en puerta</li></ul></div>
+<div><small>Siguiente</small><h3>Piloto con clientes</h3><ul><li>Envío por WhatsApp y correo</li><li>Cobro en línea de los planes</li><li>Reporte de asistencia descargable</li></ul></div>
+<div><small>Después</small><h3>Plataforma</h3><ul><li>QR que se renueva solo</li><li>Cuentas para agencias</li><li>API para otros sistemas</li></ul></div>
+</div></div></section>
+
+<section id="faq"><div class="wrap">
+<h2>Preguntas frecuentes.</h2>
+<div class="faq">
+<details><summary>¿Mis invitados necesitan instalar una app?</summary><p>No. La invitación y el pase se abren desde el navegador del celular, con un enlace personal.</p></details>
+<details><summary>¿Qué pasa si no hay internet en el lugar?</summary><p>Es un punto a resolver en la siguiente etapa: la idea es que el escáner guarde las validaciones y las sincronice al recuperar la señal.</p></details>
+<details><summary>¿Se puede usar un mismo pase dos veces?</summary><p>No. Al validarlo, el pase queda marcado como utilizado y un segundo escaneo se rechaza. Si alguien comparte una captura de su pase, entra quien llegue primero; por eso el siguiente paso es un QR que cambia cada pocos segundos.</p></details>
+<details><summary>¿Ustedes pueden ver los datos de mis invitados?</summary><p>No por defecto. Nuestro equipo ve el estado del evento y datos técnicos agregados, pero no nombres ni teléfonos. Para revisar un problema puntual, tú autorizas un acceso temporal y queda registrado.</p></details>
+<details><summary>¿Qué hago si algo falla durante el evento?</summary><p>Escríbenos por WhatsApp con el código de tu evento. Con ese código encontramos tu evento, vemos qué falló y te respondemos en el momento, sobre todo en viernes y sábados.</p></details>
+<details><summary>¿Cuántas personas pueden escanear a la vez?</summary><p>Todas las que necesites. Cada una escanea desde su celular y el conteo se actualiza en el panel.</p></details>
+</div></div></section>
+
+<section id="contacto" style="padding-block-start:0"><div class="wrap"><div class="final">
+<h2>Cuéntanos de tu próximo evento.</h2>
+<p class="lead">Te mostramos el panel con tus propios datos y armamos la invitación de tu evento.</p>
+<a class="btn" href="mailto:contacto@ejemplo.com?subject=Demo%20EventPass">Solicitar demo</a>
+</div></div></section>
+</main>
+<footer><div class="wrap">EventPass · Prototipo de diseño · Instituto Tecnológico de Culiacán</div></footer>
+<script>
+var EVENTS=[ // Edita esta lista con tus eventos.
+{n:"Boda de Sofía & Mateo",f:"Hacienda Los Olivos · 28 de junio",t:250,c:184,i:95},
+{n:"XV años de Camila",f:"Salón Real · 12 de septiembre",t:180,c:152,i:139},
+{n:"Graduación Ing. Sistemas",f:"Instituto Tecnológico · 10 de octubre",t:120,c:104,i:97}];
+var $=function(i){return document.getElementById(i)};
+$("events").innerHTML=EVENTS.map(function(e,i){var p=Math.round(e.c/e.t*100);return '<article class="ev"><div class="main"><h3>'+e.n+'</h3><small>'+e.f+'</small><div class="nums"><div><b>'+e.t+'</b><span>invitados</span></div><div><b>'+e.c+'</b><span>confirmados</span></div><div><b>'+e.i+'</b><span>ingresados</span></div></div></div><div class="stub"><div class="code"><span>Código</span><b>EVP-000'+(i+1)+'</b></div><div class="pc"><div class="bar"><i style="width:'+p+'%"></i></div><p>'+p+'% de confirmación</p></div></div></article>'}).join("");
+$("track").innerHTML=(function(){var a=["Bodas","XV años","Graduaciones","Eventos corporativos","Conferencias","Eventos escolares","Aniversarios","Bautizos"];return a.concat(a).map(function(x){return "<span>"+x+"</span>"}).join("")})();
+$("spark").innerHTML=[30,45,38,60,52,74,66,88,80,100,92,96].map(function(h,i){return '<i style="--h:'+h+'%;--i:'+i+'"></i>'}).join("");
+/* QR decorativo que se renueva (demo de la idea de QR dinámico) */
+function qr(s){var n=21,o="";function r(){s=(s*1664525+1013904223)>>>0;return s/4294967296}
+for(var y=0;y<n;y++)for(var x=0;x<n;x++){var fx=x<7||x>13,fy=y<7||y>13,on;
+if(fx&&fy&&!(x>13&&y>13)){var lx=x<7?x:x-14,ly=y<7?y:y-14;on=lx==0||lx==6||ly==0||ly==6||(lx>1&&lx<5&&ly>1&&ly<5)}else on=r()>.52;
+if(on)o+='<rect x="'+x+'" y="'+y+'" width="1" height="1"/>'}
+return '<svg viewBox="0 0 21 21" fill="currentColor" shape-rendering="crispEdges">'+o+'</svg>'}
+var seed=7,left=8;function paint(){var m=$("mq");m.innerHTML=qr(seed);m.classList.remove("sw");void m.offsetWidth;m.classList.add("sw")}
+paint();setInterval(function(){left--;if(left<=0){left=8;seed+=13;paint()}$("cd").textContent=left},1000);
+/* Demo del escáner */
+var G=[{n:"Ana Valentina Ruiz",d:"Pase para 2 personas · 2 de 2 lugares",ok:1,add:2},{n:"Carlos Mendoza",d:"Pase para 1 persona · 1 de 1 lugar",ok:1,add:1},{n:"Jorge Fernández",d:"Respondió que no asistirá",ok:0,t:"Pase no válido"},{n:"Ana Valentina Ruiz",d:"Este pase ya se usó hace 2 minutos",ok:0,t:"Pase ya utilizado"}];
+var k=0,total=95,res=$("res");
+function show(){var g=G[k%G.length];k++;if(g.ok){total+=g.add;$("cnt").textContent=total}
+res.className="result on "+(g.ok?"ok":"bad");$("ico").textContent=g.ok?"✓":"✕";$("rt").textContent=g.ok?"¡Acceso permitido!":g.t;$("gn").textContent=g.n;$("gd").textContent=g.d;$("next").focus()}
+$("scan").onclick=show;$("next").onclick=function(){res.className="result";$("scan").focus()};
+/* Microinteracciones */
+(function(){var rm=matchMedia("(prefers-reduced-motion:reduce)").matches,g=document.querySelector(".glow"),raf=0;
+document.addEventListener("pointermove",function(e){var t=e.target.closest&&e.target.closest(".bc,.plan,.card,.ev");if(t){var r=t.getBoundingClientRect();t.style.setProperty("--mx",(e.clientX-r.left)+"px");t.style.setProperty("--my",(e.clientY-r.top)+"px")}
+if(!rm&&!raf)raf=requestAnimationFrame(function(){g.style.setProperty("--gx",e.clientX+"px");g.style.setProperty("--gy",e.clientY+"px");raf=0})});
+function cu(el){var to=+el.textContent,s=performance.now();if(rm||!to)return;(function f(n){var p=Math.min((n-s)/1200,1);el.textContent=Math.round(to*(1-Math.pow(1-p,3)));if(p<1)requestAnimationFrame(f)})(s)}
+var io=new IntersectionObserver(function(es){es.forEach(function(x){if(x.isIntersecting){x.target.querySelectorAll(".nums b").forEach(cu);io.unobserve(x.target)}})},{threshold:.4});
+document.querySelectorAll(".ev").forEach(function(e){io.observe(e)});
+var ph=document.querySelector(".phone");if(ph&&!rm){var w=ph.parentElement;w.addEventListener("pointermove",function(e){var r=ph.getBoundingClientRect(),x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;ph.style.transform="perspective(900px) rotateY("+x*12+"deg) rotateX("+-y*9+"deg)"});w.addEventListener("pointerleave",function(){ph.style.transform=""})}
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Control - Nataly</title>
+    <link rel="manifest" href="./manifest.json">
+    <link rel="icon" href="./logo.png">
+    <meta name="theme-color" content="#8c764d">
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: #f6f3ed;
+            font-family: 'Montserrat', sans-serif;
+            color: #333;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .header h1 {
+            color: #8c764d;
+            font-size: 22px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+            margin-bottom: 20px;
+            border: 1px solid #e5dac1;
+        }
+
+        /* Stats */
+        .stats {
+            text-align: center;
+        }
+
+        .stats-number {
+            font-size: 40px;
+            font-weight: 700;
+            color: #4CAF50;
+            margin-bottom: 5px;
+        }
+
+        .stats-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #888;
+            letter-spacing: 1px;
+        }
+
+        /* Form */
+        h2 {
+            font-size: 16px;
+            color: #8c764d;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #666;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #d1bf9d;
+            border-radius: 8px;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 14px;
+            background-color: #fdfbf7;
+            outline: none;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 30px;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 700;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .btn-whatsapp {
+            background-color: #25D366;
+            color: white;
+            box-shadow: 0 4px 10px rgba(37, 211, 102, 0.3);
+        }
+
+        .btn-whatsapp:hover {
+            background-color: #128C7E;
+        }
+
+        .btn-whatsapp:active {
+            transform: scale(0.98);
+        }
+
+        /* List */
+        .list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .btn-refresh {
+            background: none;
+            border: 1px solid #8c764d;
+            color: #8c764d;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 10px;
+            cursor: pointer;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .btn-refresh:hover {
+            background-color: #faf7f2;
+        }
+
+        .guest-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f0e6d2;
+        }
+
+        .guest-item:last-child {
+            border-bottom: none;
+        }
+
+        .guest-info {
+            flex-grow: 1;
+        }
+
+        .guest-name {
+            font-weight: 600;
+            font-size: 14px;
+            color: #4a4031;
+        }
+
+        .guest-status {
+            font-size: 11px;
+            margin-top: 3px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-yes {
+            color: #4CAF50;
+        }
+
+        .status-no {
+            color: #f44336;
+        }
+
+        .status-pending {
+            color: #FF9800;
+        }
+
+        .guest-passes {
+            font-size: 18px;
+            font-weight: 700;
+            color: #8c764d;
+            background: #faf7f2;
+            width: 35px;
+            height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            border: 1px solid #e5dac1;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Panel de Control Nataly</h1>
+            <p style="font-size: 12px; color: #888; margin-top: 5px; text-transform: uppercase; letter-spacing: 1px;">
+                Gestión de Invitados</p>
+        </div>
+
+        <!-- GENERADOR DE LINKS -->
+        <div class="card">
+            <h2> Enviar Invitación</h2>
+            <div class="form-group">
+                <label>Nombre de la Familia/Invitado</label>
+                <input type="text" id="inv_name" placeholder="Ej: Familia López" autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label>Pases a Otorgar</label>
+                <select id="inv_passes">
+                    <option value="1">1 Pase</option>
+                    <option value="2" selected>2 Pases</option>
+                    <option value="3">3 Pases</option>
+                    <option value="4">4 Pases</option>
+                    <option value="5">5 Pases</option>
+                    <option value="6">6 Pases</option>
+                    <option value="7">7 Pases</option>
+                    <option value="8">8 Pases</option>
+                </select>
+            </div>
+            <button class="btn btn-whatsapp" onclick="sendWhatsApp()"> Enviar por WhatsApp</button>
+        </div>
+
+        <!-- ESTADÍSTICAS -->
+        <div class="card stats">
+            <div class="stats-number" id="lbl-total">-</div>
+            <div class="stats-label">Pases Confirmados Totales</div>
+        </div>
+
+        <!-- LISTA EN VIVO -->
+        <div class="card">
+            <div class="list-header">
+                <h2> Actividad Reciente</h2>
+                <button class="btn-refresh" onclick="loadList()">↻ Actualizar</button>
+            </div>
+            <div id="lista-invitados">
+                <p style="text-align: center; font-size: 12px; color: #999;">Cargando lista...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========================================================
+        // LA MISMA URL DE TU GOOGLE SCRIPT
+        // ========================================================
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx-ZdYQsLiTRMN1F8uUYlBoQILH14tUVaacL2Y25Xg8aO5qtmNCcEpUJZWyPzYG9Ys84g/exec';
+
+        //  TU LINK REAL DE LA INVITACIÓN
+        // Como están juntos en la misma carpeta, deducimos el link de index.html
+        let BASE_INVITATION_URL = window.location.href;
+        if (BASE_INVITATION_URL.includes('panel.html')) {
+            BASE_INVITATION_URL = BASE_INVITATION_URL.replace('panel.html', 'index.html');
+        } else {
+            BASE_INVITATION_URL = BASE_INVITATION_URL.replace(/\/$/, '') + '/index.html';
+        }
+
+        function sendWhatsApp() {
+            const name = document.getElementById('inv_name').value.trim();
+            const passes = document.getElementById('inv_passes').value;
+
+            if (!name) { alert('Escribe el nombre del invitado.'); return; }
+
+            // Generar el link único
+            const link = BASE_INVITATION_URL + "?nombre=" + encodeURIComponent(name) + "&pases=" + passes;
+
+            // Texto del mensaje elegante
+            const text = `¡Hola *${name}*! Tenemos el honor de invitarlos a nuestra Boda Civil. 🥂\n\nAquí tienes tu invitación digital y tus pases VIP. Por favor, confirma tu asistencia abriendo este enlace único:\n\n👉 ${link}`;
+
+            // Abrir WhatsApp Web o la App en celular
+            window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+
+            // Limpiar input para la siguiente invitación
+            document.getElementById('inv_name').value = '';
+        }
+
+        function loadList() {
+            const listContainer = document.getElementById('lista-invitados');
+            listContainer.innerHTML = '<p style="text-align: center; font-size: 12px; color: #999;">Actualizando...</p>';
+
+            fetch(SCRIPT_URL + '?action=get_list')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('lbl-total').innerText = data.total;
+
+                        if (data.lista.length === 0) {
+                            listContainer.innerHTML = '<p style="text-align: center; font-size: 12px; color: #999;">Aún no hay respuestas registradas.</p>';
+                            return;
+                        }
+
+                        let html = '';
+                        data.lista.forEach(inv => {
+                            // Omitir si la fila está vacía
+                            if (!inv.nombre) return;
+
+                            let statusHtml = '';
+                            if (inv.asistencia === 'Sí') statusHtml = '<span class="status-yes">✅ Asistirá</span>';
+                            else if (inv.asistencia === 'No') statusHtml = '<span class="status-no">❌ No Asistirá</span>';
+                            else statusHtml = '<span class="status-pending">⏳ Sin respuesta</span>';
+
+                            html += `
+                        <div class="guest-item">
+                            <div class="guest-info">
+                                <div class="guest-name">${inv.nombre}</div>
+                                <div class="guest-status">${statusHtml}</div>
+                            </div>
+                            <div class="guest-passes">${inv.pases}</div>
+                        </div>
+                        `;
+                        });
+
+                        if (html === '') html = '<p style="text-align: center; font-size: 12px; color: #999;">Aún no hay respuestas válidas.</p>';
+                        listContainer.innerHTML = html;
+                    } else {
+                        listContainer.innerHTML = '<p style="text-align: center; font-size: 12px; color: red;">Error al cargar datos.</p>';
+                    }
+                })
+                .catch(err => {
+                    listContainer.innerHTML = '<p style="text-align: center; font-size: 12px; color: red;">Error de conexión. Revisa el script.</p>';
+                });
+        }
+
+        // Cargar lista al iniciar
+        window.onload = loadList;
+
+        // Registrar Service Worker para PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').then(reg => {
+                    console.log('Service Worker registrado', reg);
+                }).catch(err => {
+                    console.log('Fallo el Service Worker', err);
+                });
+            });
+        }
+    </script>
+</body>
+
+</html>

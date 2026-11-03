@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>EventPass Soporte: consola interna</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ===== EventPass design tokens (idénticos en landing y consola) ===== */
+@layer reset,tokens,base,components,motion,theme;
+@layer reset{*,*::before,*::after{box-sizing:border-box}body,h1,h2,h3,p,dl,dd,ul,ol{margin:0}button,input,select,textarea{font:inherit;color:inherit}img,svg{display:block;max-inline-size:100%}}
+@layer tokens{:root{color-scheme:light dark;
+--navy-900:#0b1230;--navy-700:#14224f;--navy-600:#1d2f6b;--green-500:#10b981;--green-300:#6ee7b7;--blue-500:#2456d6;--red-500:#e5484d;--amber-500:#f59e0b;
+--bg:#fbfcfe;--surface:#fff;--ink:#14224f;--muted:#5b6785;--line:#dde3ee;--accent:var(--green-500);--on-accent:#04281d;--deep:var(--navy-700);--deep-2:var(--navy-600);--on-deep:#fff;--on-deep-muted:#b9c3e6;--band-bg:linear-gradient(180deg,#fff,#edf7f3);--tint-mint:#eaf8f2;--tint-blue:#edf2ff;
+--ok-bg:#e3f7ef;--ok-fg:#067a56;--warn-bg:#fff3d6;--warn-fg:#8a5a00;--bad-bg:#fdeceb;--bad-fg:#b3262b;--info-bg:#e6edff;--info-fg:#2456d6;
+--r-s:10px;--r-m:18px;--r-l:28px;--ease:cubic-bezier(.2,.8,.2,1);--sh-1:0 1px 2px rgb(20 34 79/.06),0 10px 30px rgb(20 34 79/.08);--sh-2:0 30px 70px rgb(20 34 79/.3);
+--font-display:"DM Serif Display",Georgia,serif;--font-ui:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b1230;--surface:#131d44;--ink:#eef2ff;--muted:#a3aed0;--line:#26346b;--deep:#101b47;--deep-2:#18276a;--ok-bg:#0d3a30;--ok-fg:#6ee7b7;--warn-bg:#3d3210;--warn-fg:#f5b842;--bad-bg:#3d1c24;--bad-fg:#ff8a8f;--info-bg:#1b2a63;--info-fg:#8fb0ff;--band-bg:var(--deep);--tint-mint:#0f3a31;--tint-blue:#17265c}}
+:root[data-theme="dark"]{--bg:#0b1230;--surface:#131d44;--ink:#eef2ff;--muted:#a3aed0;--line:#26346b;--deep:#101b47;--deep-2:#18276a;--ok-bg:#0d3a30;--ok-fg:#6ee7b7;--warn-bg:#3d3210;--warn-fg:#f5b842;--bad-bg:#3d1c24;--bad-fg:#ff8a8f;--info-bg:#1b2a63;--info-fg:#8fb0ff;--band-bg:var(--deep);--tint-mint:#0f3a31;--tint-blue:#17265c}}
+@layer base{html{scroll-behavior:smooth;scroll-padding-top:calc(env(safe-area-inset-top,0px) + 72px)}body{background:var(--bg);color:var(--ink);font:400 1rem/1.6 var(--font-ui);-webkit-font-smoothing:antialiased}h1,h2,h3{font-family:var(--font-display);font-weight:400;line-height:1.05;text-wrap:balance}p{text-wrap:pretty}a{color:inherit}:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:30}}
+@layer components{
+body{min-block-size:100vh;background:radial-gradient(60% 40% at 90% 0%,color-mix(in oklab,var(--blue-500) 14%,transparent),transparent),radial-gradient(50% 40% at 0% 100%,color-mix(in oklab,var(--green-500) 12%,transparent),transparent),var(--bg)}
+.btn{display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:999px;padding:10px 18px;background:var(--accent);color:var(--on-accent);font-weight:600;cursor:pointer;transition:transform .25s var(--ease),box-shadow .25s;box-shadow:0 6px 18px -8px var(--accent)}
+.btn:hover{transform:translateY(-2px)}.btn:active{transform:none}.btn.g{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}.btn.s{padding:7px 14px;font-size:.88rem}
+input,select,textarea{inline-size:100%;border:1px solid var(--line);border-radius:var(--r-s);padding:11px 13px;background:var(--surface);transition:border-color .2s,box-shadow .2s}
+input:focus,select:focus,textarea:focus{outline:0;border-color:var(--accent);box-shadow:0 0 0 4px color-mix(in oklab,var(--accent) 22%,transparent)}
+label{display:block;font-size:.8rem;font-weight:600;margin-block:14px 5px;color:var(--muted)}
+.logo{display:inline-grid;place-items:center;inline-size:38px;block-size:38px;border-radius:11px;background:linear-gradient(135deg,var(--navy-700),var(--navy-600));color:#fff;font-weight:700;font-size:.8rem;box-shadow:0 0 0 3px color-mix(in oklab,var(--accent) 35%,transparent)}
+#login{min-block-size:100vh;display:grid;place-items:center;padding:20px;background:radial-gradient(45% 45% at 25% 25%,color-mix(in oklab,var(--green-500) 28%,transparent),transparent 70%),radial-gradient(45% 45% at 80% 70%,color-mix(in oklab,var(--blue-500) 30%,transparent),transparent 70%)}
+.lbox{background:color-mix(in oklab,var(--surface) 88%,transparent);backdrop-filter:blur(18px);border:1px solid var(--line);border-radius:var(--r-l);padding:34px;inline-size:min(380px,100%);box-shadow:var(--sh-2)}
+.lbox h1{font-size:2rem;margin-block:14px 4px}.note{font-size:.8rem;color:var(--muted);margin-block-start:14px}
+#app{display:none}
+header{display:flex;justify-content:space-between;align-items:center;padding:14px 24px;background:linear-gradient(90deg,var(--deep),var(--deep-2));color:#fff;position:sticky;top:env(safe-area-inset-top,0px);z-index:20}
+header b{display:flex;align-items:center;gap:12px;font-family:var(--font-display);font-weight:400;font-size:1.25rem}header span{font-size:.85rem;color:var(--on-deep-muted)}
+header button{background:transparent;border:1px solid rgb(255 255 255/.25);color:#fff;border-radius:999px;padding:7px 16px;cursor:pointer;transition:background .2s}header button:hover{background:rgb(255 255 255/.12)}
+.tabs{display:flex;gap:4px;padding:18px 24px 0}.tabs button{border:0;background:transparent;padding:10px 18px;border-radius:12px 12px 0 0;cursor:pointer;font-weight:600;color:var(--muted);transition:color .2s}.tabs button:hover{color:var(--ink)}.tabs button[aria-selected=true]{background:var(--surface);color:var(--ink);box-shadow:0 -2px 0 var(--accent) inset}
+main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:20px;padding:0 24px 48px;align-items:start}
+.pan{background:var(--surface);border:1px solid var(--line);border-radius:0 var(--r-m) var(--r-m) var(--r-m);padding:22px;box-shadow:var(--sh-1)}
+.pan h2{font-family:var(--font-display);font-weight:400;font-size:1.5rem;margin-block-end:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}.pan h3{font-family:var(--font-ui);font-size:.82rem;font-weight:700;color:var(--muted);margin-block:24px 10px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-block-end:14px}
+.chip{border:1px solid var(--line);background:transparent;border-radius:999px;padding:6px 14px;cursor:pointer;font-size:.88rem;transition:background .2s,color .2s,transform .2s var(--ease)}.chip:hover{transform:translateY(-1px)}.chip[aria-pressed=true]{background:var(--deep);color:#fff;border-color:var(--deep)}
+.ev{position:relative;inline-size:100%;text-align:start;display:flex;justify-content:space-between;gap:12px;align-items:center;padding:14px 16px;border:1px solid var(--line);border-radius:var(--r-m);background:transparent;margin-block-end:10px;cursor:pointer;transition:transform .3s var(--ease),border-color .2s,background .2s}
+.ev:hover{transform:translateX(4px);border-color:color-mix(in oklab,var(--accent) 55%,var(--line))}.ev[aria-current=true]{border-color:var(--accent);background:color-mix(in oklab,var(--accent) 10%,transparent);box-shadow:0 0 0 4px color-mix(in oklab,var(--accent) 14%,transparent)}.ev small{display:block;color:var(--muted)}
+.st{display:inline-flex;align-items:center;gap:7px;font:700 .75rem var(--font-ui);border-radius:999px;padding:4px 12px;white-space:nowrap}.st::before{content:"";inline-size:7px;block-size:7px;border-radius:50%;background:currentColor}
+.st.c{background:var(--info-bg);color:var(--info-fg)}.st.u{background:var(--ok-bg);color:var(--ok-fg)}.st.u::before{animation:live 1.6s ease-out infinite}.st.f{background:var(--line);color:var(--muted)}
+.kv{display:grid;grid-template-columns:120px 1fr;gap:8px 14px;font-size:.92rem}.kv dt{color:var(--muted)}
+.box{border-radius:var(--r-m);padding:16px;font-size:.92rem}.lock{background:var(--warn-bg);color:var(--ink);border:1px dashed var(--warn-fg)}.ok{background:var(--ok-bg);border:1px solid var(--ok-fg)}
+.mets{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.met{border:1px solid var(--line);border-radius:var(--r-m);padding:14px}.met b{font:400 1.9rem/1 var(--font-display);display:block;font-variant-numeric:tabular-nums}.met span{font-size:.75rem;color:var(--muted)}
+.tk{border:1px solid var(--line);border-radius:var(--r-m);padding:14px 16px;margin-block-start:10px;transition:border-color .2s}.tk:hover{border-color:var(--muted)}.tk p{margin-block:6px 10px;color:var(--muted)}
+.pr{font-weight:700;font-size:.78rem}.pr.a{color:var(--bad-fg)}.pr.m{color:var(--warn-fg)}.pr.b{color:var(--muted)}
+.empty{color:var(--muted);padding:22px 4px}
+dialog{border:0;border-radius:var(--r-l);padding:26px;inline-size:min(440px,92vw);background:var(--surface);color:var(--ink);box-shadow:var(--sh-2)}dialog[open]{animation:dlg .35s var(--ease)}dialog::backdrop{background:rgb(5 10 30/.6);backdrop-filter:blur(4px)}
+}
+@layer motion{
+@keyframes live{0%{box-shadow:0 0 0 0 currentColor}100%{box-shadow:0 0 0 8px transparent}}@keyframes dlg{from{opacity:0;scale:.94;translate:0 14px}}
+@keyframes inpanel{from{opacity:0;translate:0 10px}}.pan>*{animation:inpanel .4s var(--ease) both}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+}
+@media (max-width:860px){main{grid-template-columns:1fr}.pan{border-radius:var(--r-m)}.mets{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div id="login"><form class="lbox" id="lf">
+<span class="logo">EP</span><h1>EventPass Soporte</h1><div class="note" style="margin:0">Acceso solo para el equipo.</div>
+<label for="u">Usuario</label><input id="u" value="soporte" autocomplete="username">
+<label for="p">Contraseña</label><input id="p" type="password" value="demo1234" autocomplete="current-password">
+<button class="btn" style="width:100%;margin-top:18px" type="submit">Entrar</button>
+<div class="note">Demo: cualquier usuario entra. En producción se usan cuentas por persona, doble verificación y registro de cada acción.</div>
+</form></div>
+
+<div id="app">
+<header><b><span class="logo" style="inline-size:30px;block-size:30px;font-size:.7rem">EP</span>EventPass Soporte</b><span id="who"></span><button id="out">Salir</button></header>
+<div class="tabs" role="tablist"><button role="tab" aria-selected="true" data-t="ev">Eventos</button><button role="tab" aria-selected="false" data-t="tk">Incidencias abiertas</button></div>
+<main>
+<section class="pan" id="left"></section>
+<section class="pan" id="right"></section>
+</main>
+</div>
+
+<dialog id="dlg"><form method="dialog" id="df"></form></dialog>
+
+<script>
+var $=function(i){return document.getElementById(i)};
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+var ST={c:"En creación",u:"En uso",f:"Finalizada"};
+var D=[
+{id:"EVP-0001",n:"Boda de Sofía & Mateo",cl:"Laura Méndez",tel:"667 000 0001",tipo:"Boda",f:"2026-10-24",lug:"Hacienda Los Olivos",aforo:250,plan:"Evento",s:"u",acc:0,m:{v:38,e:1,l:240},tk:[{c:"Escáner en puerta",d:"El escáner tarda en validar el QR.",p:"a",e:"Abierta",h:"21:40"}]},
+{id:"EVP-0002",n:"XV años de Valeria",cl:"Marcela Ortiz",tel:"667 000 0002",tipo:"XV años",f:"2026-11-14",lug:"Salón Real",aforo:180,plan:"Evento",s:"c",acc:0,m:{v:0,e:0,l:0},tk:[]},
+{id:"EVP-0003",n:"Graduación Ing. Sistemas",cl:"Agencia Brillo",tel:"667 000 0003",tipo:"Graduación",f:"2026-10-10",lug:"Instituto Tecnológico",aforo:120,plan:"Agencia",s:"f",acc:0,m:{v:0,e:0,l:0},tk:[{c:"Invitaciones",d:"Invitados no recibieron el enlace por WhatsApp.",p:"m",e:"Resuelta",h:"10/10"}]}
+];
+var sel=null,flt="all",tab="ev",n=4;
+$("lf").onsubmit=function(e){e.preventDefault();$("who").textContent="Sesión: "+($("u").value||"soporte");$("login").style.display="none";$("app").style.display="block";sel=D[0].id;draw()};
+$("out").onclick=function(){$("app").style.display="none";$("login").style.display="grid"};
+document.querySelectorAll(".tabs button").forEach(function(b){b.onclick=function(){tab=b.dataset.t;document.querySelectorAll(".tabs button").forEach(function(x){x.setAttribute("aria-selected",x===b)});draw()}});
+function cur(){return D.filter(function(x){return x.id===sel})[0]}
+function draw(){tab==="ev"?drawEv():drawTk();drawRight()}
+function drawEv(){
+var h='<h2>Eventos registrados</h2><div class="row">'+[["all","Todos"],["c","En creación"],["u","En uso"],["f","Finalizadas"]].map(function(x){return '<button class="chip" data-f="'+x[0]+'" aria-pressed="'+(flt===x[0])+'">'+x[1]+'</button>'}).join("")+'</div><input id="q" placeholder="Buscar por código, evento o cliente" aria-label="Buscar" style="margin-bottom:12px">';
+h+='<div id="lst"></div><button class="btn" id="nw" style="margin-top:6px">Registrar evento</button>';
+$("left").innerHTML=h;
+$("left").querySelectorAll(".chip").forEach(function(b){b.onclick=function(){flt=b.dataset.f;drawEv()}});
+$("q").oninput=list;$("nw").onclick=newEv;list()}
+function list(){var q=($("q")?$("q").value:"").toLowerCase();
+var r=D.filter(function(x){return(flt==="all"||x.s===flt)&&(x.id+x.n+x.cl).toLowerCase().indexOf(q)>-1});
+$("lst").innerHTML=r.length?r.map(function(x){return '<button class="ev" data-i="'+x.id+'" aria-current="'+(x.id===sel)+'"><span><b>'+esc(x.n)+'</b><small>'+x.id+' · '+esc(x.cl)+' · '+x.f+'</small></span><span class="st '+x.s+'">'+ST[x.s]+'</span></button>'}).join(""):'<div class="empty">No hay eventos con ese filtro.</div>';
+$("lst").querySelectorAll(".ev").forEach(function(b){b.onclick=function(){sel=b.dataset.i;list();drawRight()}})}
+function drawTk(){var a=[];D.forEach(function(x){x.tk.forEach(function(t){if(t.e!=="Resuelta")a.push([x,t])})});
+$("left").innerHTML='<h2>Incidencias abiertas</h2>'+(a.length?a.map(function(z){return '<button class="ev" data-i="'+z[0].id+'"><span><b>'+esc(z[1].c)+'</b><small>'+esc(z[0].n)+' · '+z[1].e+'</small></span><span class="pr '+z[1].p+'">'+({a:"Alta",m:"Media",b:"Baja"})[z[1].p]+'</span></button>'}).join(""):'<div class="empty">Sin incidencias abiertas.</div>');
+$("left").querySelectorAll(".ev").forEach(function(b){b.onclick=function(){sel=b.dataset.i;drawRight()}})}
+function drawRight(){var x=cur();if(!x){$("right").innerHTML='<div class="empty">Elige un evento.</div>';return}
+var h='<h2>'+esc(x.n)+' <span class="st '+x.s+'">'+ST[x.s]+'</span></h2><dl class="kv"><dt>Código</dt><dd>'+x.id+'</dd><dt>Cliente</dt><dd>'+esc(x.cl)+' · '+esc(x.tel)+'</dd><dt>Tipo y fecha</dt><dd>'+esc(x.tipo)+' · '+x.f+'</dd><dt>Lugar</dt><dd>'+esc(x.lug)+'</dd><dt>Aforo y plan</dt><dd>'+x.aforo+' invitados · Plan '+x.plan+'</dd></dl>';
+h+='<label for="es">Estado del evento</label><select id="es">'+Object.keys(ST).map(function(k){return '<option value="'+k+'"'+(k===x.s?" selected":"")+'>'+ST[k]+'</option>'}).join("")+'</select>';
+h+='<h3>Salud técnica (datos agregados)</h3>';
+h+=x.s==="u"?'<div class="mets"><div class="met"><b>'+x.m.v+'</b><span>validaciones por minuto</span></div><div class="met"><b>'+x.m.e+'</b><span>errores en la última hora</span></div><div class="met"><b>'+x.m.l+' ms</b><span>tiempo de respuesta</span></div></div>':'<div class="empty" style="padding:6px 0">Las métricas aparecen cuando el evento está en uso.</div>';
+h+='<h3>Datos de invitados</h3>'+(x.acc?'<div class="box ok"><b>Acceso temporal activo por 30 minutos.</b><br>El cliente lo autorizó y queda registrado quién entró y cuándo. Aquí se abriría la lista de invitados del evento.</div>':'<div class="box lock"><b>Protegidos.</b> Soporte no ve nombres, teléfonos ni respuestas. Para revisar un caso puntual, el cliente debe autorizar un acceso temporal.<br><button class="btn s" id="ra" style="margin-top:10px">Solicitar acceso temporal</button></div>');
+h+='<h3>Incidencias</h3>'+(x.tk.length?x.tk.map(function(t,i){return '<div class="tk"><span class="pr '+t.p+'">'+({a:"Prioridad alta",m:"Prioridad media",b:"Prioridad baja"})[t.p]+'</span> · '+esc(t.c)+' · '+esc(t.h)+'<p>'+esc(t.d)+'</p><button class="btn g s" data-k="'+i+'">'+t.e+' (cambiar)</button></div>'}).join(""):'<div class="empty" style="padding:6px 0">Sin incidencias en este evento.</div>');
+h+='<button class="btn" id="nt" style="margin-top:12px">Registrar incidencia</button>';
+$("right").innerHTML=h;
+$("es").onchange=function(){x.s=this.value;draw()};
+var ra=$("ra");if(ra)ra.onclick=function(){reqAcc(x)};
+$("nt").onclick=function(){newTk(x)};
+$("right").querySelectorAll("[data-k]").forEach(function(b){b.onclick=function(){var t=x.tk[b.dataset.k],o=["Abierta","En revisión","Resuelta"];t.e=o[(o.indexOf(t.e)+1)%3];draw()}})}
+function open(html,fn){$("df").innerHTML=html;$("dlg").showModal();fn&&fn()}
+function reqAcc(x){open('<h3 style="margin:0 0 8px;font-size:18px">Acceso temporal a '+esc(x.n)+'</h3><p>Se envía un código de 6 dígitos al WhatsApp del cliente ('+esc(x.tel)+'). Solo con su autorización se abre el acceso por 30 minutos.</p><p class="note" id="wt">Esperando autorización del cliente…</p><div class="row"><button class="btn g" value="c">Cancelar</button><button class="btn" id="ap" type="button">Simular aprobación del cliente</button></div>',function(){$("ap").onclick=function(){x.acc=1;$("dlg").close();draw()}})}
+function newTk(x){open('<h3 style="margin:0;font-size:18px">Registrar incidencia</h3><label for="tc">¿Dónde falla?</label><select id="tc"><option>Invitaciones y WhatsApp</option><option>RSVP del invitado</option><option>Código QR</option><option>Escáner en puerta</option><option>Panel del organizador</option></select><label for="tp">Prioridad</label><select id="tp"><option value="a">Alta (evento en curso)</option><option value="m" selected>Media</option><option value="b">Baja</option></select><label for="td">Qué reporta el cliente</label><textarea id="td" rows="3"></textarea><div class="row" style="margin-top:16px"><button class="btn g" value="c">Cancelar</button><button class="btn" id="sv" type="button">Guardar</button></div>',function(){$("sv").onclick=function(){var d=$("td").value.trim();if(!d){$("td").focus();return}x.tk.unshift({c:$("tc").value,d:d,p:$("tp").value,e:"Abierta",h:new Date().toTimeString().slice(0,5)});$("dlg").close();draw()}})}
+function newEv(){open('<h3 style="margin:0;font-size:18px">Registrar evento</h3><label for="a1">Nombre del evento</label><input id="a1"><label for="a2">Cliente</label><input id="a2"><label for="a3">WhatsApp del cliente</label><input id="a3" inputmode="tel"><label for="a4">Fecha</label><input id="a4" type="date"><label for="a5">Aforo</label><input id="a5" type="number" min="1"><div class="row" style="margin-top:16px"><button class="btn g" value="c">Cancelar</button><button class="btn" id="sv" type="button">Crear en estado “En creación”</button></div>',function(){$("sv").onclick=function(){if(!$("a1").value.trim()||!$("a2").value.trim()){$("a1").focus();return}var id="EVP-000"+(n++);D.unshift({id:id,n:$("a1").value,cl:$("a2").value,tel:$("a3").value||"Sin dato",tipo:"Por definir",f:$("a4").value||"Por definir",lug:"Por definir",aforo:+$("a5").value||0,plan:"Evento",s:"c",acc:0,m:{v:0,e:0,l:0},tk:[]});sel=id;flt="all";$("dlg").close();draw()}})}
+</script>
+</body>
+</html>

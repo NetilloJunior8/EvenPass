@@ -1,0 +1,15 @@
+{
+  "name": "Escáner VIP Ivonne",
+  "short_name": "Escáner Ivonne",
+  "start_url": "./escaner.html",
+  "display": "standalone",
+  "background_color": "#050505",
+  "theme_color": "#050505",
+  "icons": [
+    {
+      "src": "logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

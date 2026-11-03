@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <defs>
+    <linearGradient id="avatarBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2456d6"/>
+      <stop offset="100%" stop-color="#10b981"/>
+    </linearGradient>
+    <radialGradient id="ringGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="70%" stop-color="#e0e7ff" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#c7d2fe" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Circular Outer Halo -->
+  <circle cx="50" cy="50" r="46" fill="url(#ringGlow)" stroke="#c7d2fe" stroke-width="2"/>
+  <circle cx="50" cy="50" r="40" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+
+  <!-- EvenPass Butler / Concierge Mascot ("Passito") -->
+  <!-- Body/Tuxedo -->
+  <path d="M35 78 C35 62, 65 62, 65 78 Z" fill="#14224f"/>
+  <path d="M46 62 L54 62 L50 72 Z" fill="#ffffff"/>
+  <!-- Bowtie -->
+  <polygon points="46,62 50,65 46,68" fill="#10b981"/>
+  <polygon points="54,62 50,65 54,68" fill="#10b981"/>
+  <circle cx="50" cy="65" r="2" fill="#04281d"/>
+
+  <!-- Head (Tech Butler) -->
+  <rect x="34" y="30" width="32" height="28" rx="10" fill="#f8fafc" stroke="#2456d6" stroke-width="2.5"/>
+  <!-- Visor / Eyes -->
+  <rect x="38" y="38" width="24" height="11" rx="5" fill="#14224f"/>
+  <!-- Glowing Eye dots -->
+  <circle cx="44" cy="43.5" r="2.5" fill="#10b981"/>
+  <circle cx="56" cy="43.5" r="2.5" fill="#10b981"/>
+  <path d="M46 52 Q50 55 54 52" stroke="#2456d6" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+
+  <!-- Antenna with signal spark -->
+  <line x1="50" y1="30" x2="50" y2="21" stroke="#2456d6" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="50" cy="18" r="4" fill="#10b981"/>
+
+  <!-- VIP Event Pass Lanyard Badge -->
+  <rect x="44" y="73" width="12" height="15" rx="2" fill="#2456d6"/>
+  <rect x="46" y="76" width="8" height="2" fill="#ffffff"/>
+  <rect x="46" y="80" width="5" height="2" fill="#10b981"/>
+</svg>
