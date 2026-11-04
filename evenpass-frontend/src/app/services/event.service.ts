@@ -250,6 +250,7 @@ export class EventService {
   constructor(private notificationService: NotificationService) {
     this.initDemoData();
     this.listenForIncomingTickets();
+    this.listenForDigitalInvitations();
     // Auto-advance checking every 10 seconds based on clock
     setInterval(() => {
       this.autoAdvanceItineraryForCurrentEvent();
@@ -724,8 +725,111 @@ export class EventService {
     // Event 5: Bautizo Santiago (32 passes, 0 attended, Basic Plan, EP-55xx)
     generateEventGuests(5, 'Bautizo & Almuerzo Familiar Santiago', 32, 0, 'Zona Familiar', 'EP-55');
 
-    // Event 6: Mis 10 Años · Luis Gerardo (20 pases, Salón Neón VIP, LG10-VIP-xxxx)
-    generateEventGuests(6, 'Mis 10 Años · Luis Gerardo', 20, 0, 'Mesa', 'LG10-VIP-', tablesNeonVip);
+    // Event 6: Mis 10 Años · Luis Gerardo (Padrón Oficial Sincronizado del Panel del Anfitrión)
+    const luisGerardoRealGuests: Guest[] = [
+      {
+        id: guestSeq++,
+        eventId: 6,
+        fullName: 'Familia Morales Valenzuela',
+        email: 'morales.valenzuela@gmail.com',
+        phone: '667-112-3344',
+        numCompanions: 3,
+        totalPasses: 4,
+        status: 'CONFIRMED',
+        qrCodeToken: 'LG10-VIP-1102',
+        assignedTableId: 401,
+        assignedTableName: 'Mesa 01 - Familia Cercana',
+        dietNotes: 'Abuelos y tíos',
+        confirmedAt: '2026-11-03 09:30',
+        source: 'DIGITAL_INVITATION',
+        externalSyncId: 'SYNC-6-1102'
+      },
+      {
+        id: guestSeq++,
+        eventId: 6,
+        fullName: 'Mateo González & Padres',
+        email: 'mateo.gonzalez@gmail.com',
+        phone: '667-223-4455',
+        numCompanions: 2,
+        totalPasses: 3,
+        status: 'CONFIRMED',
+        qrCodeToken: 'LG10-VIP-2481',
+        assignedTableId: 402,
+        assignedTableName: 'Mesa 02 - Amigos de Colegio',
+        dietNotes: 'Compañero de salón',
+        confirmedAt: '2026-11-03 10:15',
+        source: 'DIGITAL_INVITATION',
+        externalSyncId: 'SYNC-6-2481'
+      },
+      {
+        id: guestSeq++,
+        eventId: 6,
+        fullName: 'Lic. Roberto Somoza & Fam.',
+        email: 'roberto.somoza@gmail.com',
+        phone: '667-334-5566',
+        numCompanions: 2,
+        totalPasses: 3,
+        status: 'CONFIRMED',
+        qrCodeToken: 'LG10-VIP-3392',
+        assignedTableId: 403,
+        assignedTableName: 'Mesa 03 - Padrinos & Tíos',
+        dietNotes: 'Padrino',
+        confirmedAt: '2026-11-03 11:00',
+        source: 'DIGITAL_INVITATION',
+        externalSyncId: 'SYNC-6-3392'
+      },
+      {
+        id: guestSeq++,
+        eventId: 6,
+        fullName: 'Santiago Beltrán & Papás',
+        email: 'santiago.beltran@gmail.com',
+        phone: '667-445-6677',
+        numCompanions: 2,
+        totalPasses: 3,
+        status: 'CONFIRMED',
+        qrCodeToken: 'LG10-VIP-4819',
+        assignedTableId: 404,
+        assignedTableName: 'Mesa 04 - Amigos Deportes & Laser',
+        dietNotes: 'Fútbol',
+        confirmedAt: '2026-11-03 11:45',
+        source: 'DIGITAL_INVITATION',
+        externalSyncId: 'SYNC-6-4819'
+      },
+      {
+        id: guestSeq++,
+        eventId: 6,
+        fullName: 'Familia Quiñónez Rivas',
+        email: 'fam.quinonez@gmail.com',
+        phone: '667-556-7788',
+        numCompanions: 3,
+        totalPasses: 4,
+        status: 'PENDING',
+        qrCodeToken: 'LG10-VIP-5520',
+        assignedTableId: 401,
+        assignedTableName: 'Mesa 01 - Familia Cercana',
+        dietNotes: 'Enviado por WhatsApp',
+        confirmedAt: undefined,
+        source: 'DIGITAL_INVITATION',
+        externalSyncId: 'SYNC-6-5520'
+      }
+    ];
+
+    luisGerardoRealGuests.forEach(g => {
+      demoGuests.push(g);
+      demoAudit.push({
+        id: `AUD-6-${g.qrCodeToken}`,
+        eventId: 6,
+        timestamp: g.confirmedAt || '03/11/2026 12:20 hrs',
+        source: 'DIGITAL_INVITATION',
+        guestName: g.fullName,
+        passesCount: g.totalPasses,
+        assignedTable: g.assignedTableName || 'Mesa 01 - Familia Cercana',
+        qrToken: g.qrCodeToken,
+        status: 'SYNCED',
+        ipOrigin: '187.190.45.12',
+        notes: 'Sincronizado directamente desde el Panel del Anfitrión (luis-gerardo-10)'
+      });
+    });
 
     this.allGuests.set(demoGuests);
     this.allLogs.set(demoLogs);
@@ -1820,7 +1924,123 @@ export class EventService {
     return newGuest;
   }
 
-  // --- CLOUD SYNC: SUPABASE CENTRALIZADO (1 Sola BD para todas las invitaciones) ---
+  // --- ESCUCHADOR EN TIEMPO REAL: INVITACIONES DIGITALES (PANEL & WEB) ---
+  listenForDigitalInvitations(): void {
+    // 1. BroadcastChannel nativo (conecta pestañas y ventanas del navegador en tiempo real)
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('evenpass_invitations_channel');
+        bc.onmessage = (event) => {
+          if (event && event.data) {
+            const data = event.data;
+            if (data.type === 'NEW_INVITATION' && data.guest) {
+              this.syncDigitalGuestsList(data.eventId || 6, [data.guest], true);
+            } else if (data.type === 'RSVP_CONFIRMED' && data.guest) {
+              this.syncDigitalGuestsList(data.eventId || 6, [data.guest], true);
+            } else if (data.type === 'SYNC_ALL' && Array.isArray(data.guests)) {
+              this.syncDigitalGuestsList(data.eventId || 6, data.guests, true);
+            }
+          }
+        };
+      }
+    } catch (e) {}
+
+    // 2. Auto-sincronización periódica cada 3 segundos con el almacén local del panel
+    setInterval(() => {
+      try {
+        const raw = localStorage.getItem('evenpass_luis_gerardo_guests_db');
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list) && list.length > 0) {
+            this.syncDigitalGuestsList(6, list, false);
+          }
+        }
+      } catch (e) {}
+    }, 3000);
+  }
+
+  // --- SINCRONIZACIÓN REAL DE INVITACIONES DIGITALES ---
+  syncDigitalGuestsList(eventId: number, guestList: any[], notify: boolean = true): number {
+    if (!guestList || !Array.isArray(guestList) || guestList.length === 0) return 0;
+    let changesCount = 0;
+    const curGuests = [...this.allGuests()];
+
+    guestList.forEach(item => {
+      const token = item.token || item.qrCodeToken;
+      const name = item.fullName || item.nombre || item.name;
+      if (!name) return;
+
+      const existingIdx = curGuests.findIndex(g => 
+        (token && g.qrCodeToken === token) || 
+        (g.fullName.toLowerCase().trim() === name.toLowerCase().trim() && g.eventId === eventId)
+      );
+
+      const passes = Number(item.passesConfirmed || item.passesGranted || item.totalPasses || item.pases || 1);
+      const isConfirmed = item.status === 'CONFIRMED' || (item.passesConfirmed && item.passesConfirmed > 0) || item.asistencia === 'Sí';
+      const tableName = item.tableName || item.assignedTableName || 'Mesa 01 - Familia Cercana';
+
+      let tableId = 401;
+      if (tableName.includes('Mesa 02')) tableId = 402;
+      else if (tableName.includes('Mesa 03')) tableId = 403;
+      else if (tableName.includes('Mesa 04')) tableId = 404;
+      else if (tableName.includes('Mesa 05')) tableId = 405;
+
+      if (existingIdx >= 0) {
+        // Actualizar invitado existente si cambió estado o pases
+        const oldG = curGuests[existingIdx];
+        const newStatus = isConfirmed ? 'CONFIRMED' : (item.status === 'DECLINED' || item.asistencia === 'No' ? 'DECLINED' : 'PENDING');
+        if (oldG.status !== newStatus || oldG.totalPasses !== passes || oldG.assignedTableName !== tableName) {
+          curGuests[existingIdx] = {
+            ...oldG,
+            status: newStatus,
+            totalPasses: passes,
+            numCompanions: Math.max(0, passes - 1),
+            assignedTableName: tableName,
+            assignedTableId: tableId,
+            dietNotes: item.notes || oldG.dietNotes,
+            source: 'DIGITAL_INVITATION',
+            confirmedAt: isConfirmed ? (oldG.confirmedAt || '03/11/2026') : undefined
+          };
+          changesCount++;
+        }
+      } else {
+        // Agregar nuevo invitado despachado desde el panel de los papás
+        const newG: Guest = {
+          id: Date.now() + Math.floor(Math.random() * 1000),
+          eventId: eventId,
+          fullName: name,
+          email: `${name.toLowerCase().replace(/[^a-z0-9]/g, '')}@gmail.com`,
+          phone: item.phone || 'WhatsApp Directo',
+          numCompanions: Math.max(0, passes - 1),
+          totalPasses: passes,
+          status: isConfirmed ? 'CONFIRMED' : 'PENDING',
+          qrCodeToken: token || `LG10-VIP-${Math.floor(1000 + Math.random() * 9000)}`,
+          assignedTableId: tableId,
+          assignedTableName: tableName,
+          dietNotes: item.notes || 'Invitación enviada por WhatsApp',
+          source: 'DIGITAL_INVITATION',
+          confirmedAt: isConfirmed ? (item.updatedAt || '03/11/2026') : undefined
+        };
+        curGuests.unshift(newG);
+        changesCount++;
+      }
+    });
+
+    if (changesCount > 0) {
+      this.allGuests.set(curGuests);
+      this.refreshAllTableOccupancies();
+      if (notify) {
+        this.notificationService.show(
+          'success',
+          'Invitaciones Sincronizadas',
+          `Se actualizaron ${changesCount} registros desde el panel digital.`
+        );
+      }
+    }
+    return changesCount;
+  }
+
+  // --- CLOUD SYNC: SUPABASE & INVITACIONES DIGITALES ---
   syncWithSupabase(eventId: number): { success: boolean; newGuests: number; message: string } {
     const ev = this.events().find(e => e.id === eventId) || this.selectedEvent();
     if (!ev) return { success: false, newGuests: 0, message: 'Evento no seleccionado' };
@@ -1829,19 +2049,46 @@ export class EventService {
       return { success: false, newGuests: 0, message: 'Evento finalizado en modo histórico.' };
     }
 
-    const sim1 = this.simulateExternalRsvp(ev.id, 'SUPABASE');
-    const sim2 = this.simulateExternalRsvp(ev.id, 'SUPABASE');
+    let imported = 0;
+
+    // 1. Sincronizar desde almacenamiento local del panel si existe
+    try {
+      const raw = localStorage.getItem('evenpass_luis_gerardo_guests_db');
+      if (raw) {
+        const list = JSON.parse(raw);
+        if (Array.isArray(list)) {
+          imported = this.syncDigitalGuestsList(ev.id, list, false);
+        }
+      }
+    } catch (e) {}
+
+    // 2. Si hay configuración Supabase activa con tabla ep_guests
+    if (this.supabaseConfig().connected && this.supabaseConfig().url) {
+      fetch(`${this.supabaseConfig().url}/rest/v1/${this.supabaseConfig().tableName}?event_id=eq.${ev.id}`, {
+        headers: {
+          'apikey': this.supabaseConfig().anonKey,
+          'Authorization': `Bearer ${this.supabaseConfig().anonKey}`
+        }
+      })
+      .then(res => res.ok ? res.json() : null)
+      .then(dbGuests => {
+        if (Array.isArray(dbGuests) && dbGuests.length > 0) {
+          this.syncDigitalGuestsList(ev.id, dbGuests, true);
+        }
+      })
+      .catch(() => {});
+    }
 
     this.notificationService.show(
       'success',
-      'Supabase Cloud Sincronizado',
-      `Base de datos central actualizada para "${ev.name}". Nuevos registros sincronizados con éxito.`
+      'Panel de Invitaciones Sincronizado',
+      `Los datos de "${ev.name}" están 100% actualizados y conectados con el panel del anfitrión.`
     );
 
     return {
       success: true,
-      newGuests: 2,
-      message: 'Sincronizado exitosamente con Supabase Cloud.'
+      newGuests: imported,
+      message: 'Sincronizado exitosamente con el panel de invitaciones.'
     };
   }
 

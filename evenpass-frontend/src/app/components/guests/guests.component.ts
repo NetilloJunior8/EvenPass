@@ -41,6 +41,16 @@ import jsPDF from 'jspdf';
             <app-icon name="refresh" [size]="15"></app-icon>
             <span>Sincronizar Confirmaciones</span>
           </button>
+          <button 
+            *ngIf="eventService.selectedEvent()?.templateSlug" 
+            class="btn-outline" 
+            style="border-color: #059669; color: #059669; background: rgba(5, 150, 105, 0.08);" 
+            (click)="syncDigitalPanelDirectly()"
+            title="Sincronizar en tiempo real con el Panel del Anfitrión (digital)"
+          >
+            <app-icon name="sparkles" [size]="15"></app-icon>
+            <span>Sincronizar Panel de Anfitriones</span>
+          </button>
 
           <!-- Hidden native file input browsing local PC or mobile files -->
           <input 
@@ -1400,6 +1410,12 @@ export class GuestsComponent {
       this.eventService.syncWithSupabase(ev.id);
       this.tabLinkAudit.set('AUDIT');
     }
+  }
+
+  syncDigitalPanelDirectly(): void {
+    const ev = this.eventService.selectedEvent();
+    if (!ev) return;
+    this.eventService.syncWithSupabase(ev.id);
   }
 
   async syncGoogleSheetNow(): Promise<void> {

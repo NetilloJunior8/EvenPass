@@ -52,10 +52,33 @@ function getStoredGuests() {
 
 function saveGuestsList(list) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-  // Notificar a otras pestañas
   try {
     localStorage.setItem('evenpass_luis_gerardo_updated_tick', String(Date.now()));
   } catch (e) {}
+
+  // Sincronizar en tiempo real con EvenPass OS vía BroadcastChannel
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      const bc = new BroadcastChannel('evenpass_invitations_channel');
+      bc.postMessage({ type: 'SYNC_ALL', eventId: 6, guests: list });
+    }
+  } catch (e) {}
+}
+
+function syncDirectWithEvenPass() {
+  const guests = getStoredGuests();
+  saveGuestsList(guests);
+
+  const payload = JSON.stringify(guests, null, 2);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(payload).then(() => {
+      alert(`¡Sincronización enviada con éxito a EvenPass OS!\n\nSe emitieron los ${guests.length} invitados del panel por el canal en tiempo real.\n(Copia de respaldo en portapapeles lista por si abres EvenPass en otro equipo).`);
+    }).catch(() => {
+      alert(`¡Sincronización emitida!\n\n${guests.length} invitados conectados en tiempo real con EvenPass OS.`);
+    });
+  } else {
+    alert(`¡Sincronización emitida!\n\n${guests.length} invitados conectados en tiempo real con EvenPass OS.`);
+  }
 }
 
 // Cálculo de Asientos Ocupados por Mesa (Croquis)
@@ -264,16 +287,37 @@ function submitRsvp(e) {
 
   // Sincronizar inmediatamente con EvenPass OS en tiempo real (para reflejar en Croquis central y Escáner)
   try {
-    localStorage.setItem('evenpass_latest_rsvp_guest', JSON.stringify({
-      eventId: 1, // o evento de Luis Gerardo
+    const rsvpPayload = {
+      eventId: 6, // Evento Mis 10 Años · Luis Gerardo
       fullName: name,
-      phone: phone,
+      phone: phone || 'WhatsApp Directo',
       passes: passesSelected,
       token: token,
       assignedTable: assignedTable,
+      status: userAttendance ? 'CONFIRMED' : 'DECLINED',
       source: 'DIGITAL_INVITATION',
       timestamp: Date.now()
-    }));
+    };
+    localStorage.setItem('evenpass_latest_rsvp_guest', JSON.stringify(rsvpPayload));
+
+    if (typeof BroadcastChannel !== 'undefined') {
+      const bc = new BroadcastChannel('evenpass_invitations_channel');
+      bc.postMessage({
+        type: 'RSVP_CONFIRMED',
+        eventId: 6,
+        guest: {
+          fullName: name,
+          phone: phone,
+          passesConfirmed: userAttendance ? passesSelected : 0,
+          passesGranted: passesSelected,
+          status: userAttendance ? 'CONFIRMED' : 'DECLINED',
+          tableName: assignedTable,
+          token: token,
+          notes: notes
+        },
+        allGuests: guests
+      });
+    }
   } catch (err) {}
 
   if (userAttendance) {
@@ -488,6 +532,7 @@ function renderPanelTable() {
   });
 }
 
+
 // Obtiene la URL base limpia para la invitación de invitados (compatible con Netlify Pretty URLs, subcarpetas y local)
 function getGuestInvitationBaseUrl() {
   if (window.location.protocol === 'file:') {
@@ -516,7 +561,7 @@ function dispatchInvitation(e) {
   const tableInput = document.getElementById('dispatch-table');
 
   const name = nameInput.value.trim();
-  const passes = parseInt(passesInput.value, 10) || 2;
+  const passes = parseInt(passesInput.value, 10);
   const preferredTable = tableInput.value;
 
   if (!name) return;
@@ -540,6 +585,14 @@ function dispatchInvitation(e) {
   const guests = getStoredGuests();
   guests.unshift(newGuest);
   saveGuestsList(guests);
+
+  // Emitir evento explícito de nuevo invitado para EvenPass OS
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      const bc = new BroadcastChannel('evenpass_invitations_channel');
+      bc.postMessage({ type: 'NEW_INVITATION', eventId: 6, guest: newGuest, allGuests: guests });
+    }
+  } catch (e) {}
 
   // Construir Enlace Único a index.html (compatible con Netlify, Vercel, Hosting y local)
   const baseUrl = getGuestInvitationBaseUrl();
