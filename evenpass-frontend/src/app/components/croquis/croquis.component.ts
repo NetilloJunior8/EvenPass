@@ -77,8 +77,12 @@ import jsPDF from 'jspdf';
         </div>
         <div class="locked-text-wrap">
           <strong>Evento Concluido · Plano CAD en Modo Histórico (Solo Lectura)</strong>
-          <p>Este evento ya finalizó. El croquis arquitectónico, la distribución de mesas y el aforo están archivados y no admiten modificaciones.</p>
+          <p>Este evento está marcado como finalizado. Si necesitas ajustar mesas, reasignar asientos o seguir planeando, reactívalo con un solo clic.</p>
         </div>
+        <button type="button" class="btn-unlock-banner" (click)="eventService.setEventStatus(eventService.selectedEvent()!.id, 'PENDIENTE')" title="Reabrir evento para continuar gestionando plano y mesas">
+          <app-icon name="refresh" [size]="14"></app-icon>
+          <span>Reactivar Plano &amp; Mesas</span>
+        </button>
       </div>
 
       <!-- Salon Selection & Global Controls Bar -->
@@ -1241,6 +1245,28 @@ import jsPDF from 'jspdf';
       font-size: 0.82rem;
       color: var(--text-secondary);
       margin: 0;
+    }
+
+    .btn-unlock-banner {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 16px;
+      background: #1d4ed8;
+      color: #ffffff;
+      border: none;
+      border-radius: var(--radius-md);
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 6px rgba(29, 78, 216, 0.3);
+    }
+    .btn-unlock-banner:hover {
+      background: #1e40af;
+      transform: translateY(-1px);
     }
 
     /* Restricted Mode When Event Plan Does Not Include Croquis */

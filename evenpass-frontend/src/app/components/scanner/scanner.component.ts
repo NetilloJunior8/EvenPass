@@ -76,9 +76,13 @@ import jsQR from 'jsqr';
           <app-icon name="lock" [size]="20"></app-icon>
         </div>
         <div class="locked-text-wrap">
-          <strong>Evento Concluido · Escáner Bloqueado (Solo Lectura)</strong>
-          <p>Este evento ya finalizó. El control de acceso en puerta se encuentra cerrado. El registro de auditoría e historial se mantiene accesible para consulta.</p>
+          <strong>Evento Concluido · Escáner en Modo Histórico</strong>
+          <p>Este evento está marcado como finalizado. Si necesitas reactivar el escaneo en puerta o continuar validando accesos, haz clic en reactivar.</p>
         </div>
+        <button type="button" class="btn-unlock-banner" (click)="eventService.setEventStatus(eventService.selectedEvent()!.id, 'EN_PROGRESO')" title="Reactivar escáner en puerta para este evento">
+          <app-icon name="refresh" [size]="14"></app-icon>
+          <span>Reactivar Acceso en Puerta</span>
+        </button>
       </div>
 
       <!-- Header Box -->
@@ -541,6 +545,28 @@ import jsQR from 'jsqr';
       font-size: 0.82rem;
       color: var(--text-secondary);
       margin: 0;
+    }
+
+    .btn-unlock-banner {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 16px;
+      background: #1d4ed8;
+      color: #ffffff;
+      border: none;
+      border-radius: var(--radius-md);
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 6px rgba(29, 78, 216, 0.3);
+    }
+    .btn-unlock-banner:hover {
+      background: #1e40af;
+      transform: translateY(-1px);
     }
 
     .scanner-header-card {

@@ -20,8 +20,12 @@ import { IconComponent } from '../icon.component';
         </div>
         <div class="locked-text-wrap">
           <strong>Evento Concluido · Cronograma Archivado (Solo Lectura)</strong>
-          <p>Este evento ya finalizó. La agenda completa ha concluido y se encuentra archivada en modo histórico. No se admiten modificaciones.</p>
+          <p>Este evento está marcado como finalizado. Si deseas reprogramar momentos, agregar fases o reactivar la agenda, haz clic en reactivar.</p>
         </div>
+        <button type="button" class="btn-unlock-banner" (click)="eventService.setEventStatus(eventService.selectedEvent()!.id, 'PENDIENTE')" title="Reabrir agenda del evento">
+          <app-icon name="refresh" [size]="14"></app-icon>
+          <span>Reactivar Agenda &amp; Horarios</span>
+        </button>
       </div>
 
       <!-- Real-Time Smart Clock & Simulation Controller -->
@@ -37,13 +41,13 @@ import { IconComponent } from '../icon.component';
           <p class="clock-desc">
             <b>Automatización Inteligente:</b> Los momentos de la agenda se marcan solos según el reloj si el anfitrión no los marca manualmente.
             <span *ngIf="eventService.selectedEvent()?.status === 'PENDIENTE'" class="status-cue pending">
-              Evento a las 19:00 hrs (En Espera).
+              Evento programado para el {{ eventService.selectedEvent()?.eventDate | date:'mediumDate' }} · Invitaciones y confirmaciones RSVP activas.
             </span>
             <span *ngIf="eventService.selectedEvent()?.status === 'EN_PROGRESO'" class="status-cue live">
-              Evento en curso en este momento.
+              Evento en curso en este momento · Recepción y control de acceso activos.
             </span>
             <span *ngIf="eventService.selectedEvent()?.status === 'FINALIZADO'" class="status-cue done">
-              Evento finalizado por completo.
+              Evento concluido según cronograma (Modo histórico).
             </span>
           </p>
         </div>
@@ -348,6 +352,28 @@ import { IconComponent } from '../icon.component';
       font-size: 0.82rem;
       color: var(--text-secondary);
       margin: 0;
+    }
+
+    .btn-unlock-banner {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 16px;
+      background: #1d4ed8;
+      color: #ffffff;
+      border: none;
+      border-radius: var(--radius-md);
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 6px rgba(29, 78, 216, 0.3);
+    }
+    .btn-unlock-banner:hover {
+      background: #1e40af;
+      transform: translateY(-1px);
     }
 
     /* Smart Real-Time Clock & Simulator Card */

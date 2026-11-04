@@ -20,9 +20,13 @@ import jsPDF from 'jspdf';
           <app-icon name="lock" [size]="20"></app-icon>
         </div>
         <div class="locked-text-wrap">
-          <strong>Evento Concluido · Padrón de Invitados Cerrado (Solo Lectura)</strong>
-          <p>Este evento ya finalizó. No es posible registrar, modificar ni dar de baja invitados. La consulta y la exportación de reportes continúan habilitadas.</p>
+          <strong>Evento Concluido · Modo Histórico (Solo Lectura)</strong>
+          <p>Este evento está marcado como finalizado. Si aún estás enviando invitaciones o necesitas registrar o modificar invitados, reactívalo con un solo clic.</p>
         </div>
+        <button type="button" class="btn-unlock-banner" (click)="eventService.setEventStatus(eventService.selectedEvent()!.id, 'PENDIENTE')" title="Reabrir evento para continuar enviando invitaciones y registrando confirmaciones">
+          <app-icon name="refresh" [size]="14"></app-icon>
+          <span>Reactivar Invitaciones &amp; Edición</span>
+        </button>
       </div>
 
       <!-- Header & Actions -->
@@ -449,6 +453,28 @@ import jsPDF from 'jspdf';
       font-size: 0.82rem;
       color: var(--text-secondary);
       margin: 0;
+    }
+
+    .btn-unlock-banner {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 16px;
+      background: #1d4ed8;
+      color: #ffffff;
+      border: none;
+      border-radius: var(--radius-md);
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 6px rgba(29, 78, 216, 0.3);
+    }
+    .btn-unlock-banner:hover {
+      background: #1e40af;
+      transform: translateY(-1px);
     }
 
     .guests-header-card {

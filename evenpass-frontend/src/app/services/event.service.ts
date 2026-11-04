@@ -12,7 +12,18 @@ import { NotificationService } from './notification.service';
 export class EventService {
   // All Events in Catalog
   events = signal<EventItem[]>([]);
-  activeEventId = signal<number>(1);
+  activeEventId = signal<number>(
+    (() => {
+      try {
+        const saved = localStorage.getItem('evenpass_active_event_id');
+        if (saved) {
+          const parsed = parseInt(saved, 10);
+          if (!isNaN(parsed)) return parsed;
+        }
+      } catch (e) {}
+      return 6; // Default to Luis Gerardo (Mis 10 Años)
+    })()
+  );
 
   // Computed Active Event
   selectedEvent = computed<EventItem | null>(() => {
@@ -152,7 +163,45 @@ export class EventService {
     if (!this.autoProgressionEnabled()) return;
     const activeEv = this.selectedEvent();
     if (!activeEv || !activeEv.itinerary || activeEv.itinerary.length === 0) return;
-    if (activeEv.status === 'FINALIZADO') return; // Read-only locked
+
+    // Normalizar fechas para comparar días de calendario (año, mes, día)
+    const now = new Date();
+    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    
+    let evDate = new Date();
+    try {
+      if (activeEv.eventDate) {
+        evDate = new Date(activeEv.eventDate);
+      }
+    } catch (e) {}
+    const evDayMidnight = new Date(evDate.getFullYear(), evDate.getMonth(), evDate.getDate()).getTime();
+
+    // 1. SI EL EVENTO ES EN EL FUTURO (Aún no llega el día del evento):
+    // El evento está en preparación activa: Despacho de invitaciones, confirmaciones y croquis.
+    // NUNCA debe marcarse como FINALIZADO ni bloquearse.
+    if (evDayMidnight > todayMidnight && !this.simulatedTime()) {
+      if (activeEv.status !== 'PENDIENTE') {
+        const updatedItinerary = activeEv.itinerary.map(item => ({ ...item, status: 'UPCOMING' as const }));
+        this.events.update(list => list.map(e => 
+          e.id === activeEv.id ? { ...e, status: 'PENDIENTE', itinerary: updatedItinerary } : e
+        ));
+      }
+      return;
+    }
+
+    // 2. SI EL DÍA DEL EVENTO ES ANTERIOR A HOY (Ya concluyó en días pasados):
+    if (evDayMidnight < todayMidnight && !this.simulatedTime()) {
+      if (activeEv.status !== 'FINALIZADO') {
+        const updatedItinerary = activeEv.itinerary.map(item => ({ ...item, status: 'COMPLETED' as const }));
+        this.events.update(list => list.map(e => 
+          e.id === activeEv.id ? { ...e, status: 'FINALIZADO', itinerary: updatedItinerary } : e
+        ));
+      }
+      return;
+    }
+
+    // 3. EL EVENTO ES HOY (o está activa una simulación manual de horario):
+    if (activeEv.status === 'FINALIZADO' && !this.simulatedTime()) return;
 
     const timeStr = this.currentEffectiveTime();
     const parts = timeStr.split(':').map(n => parseInt(n, 10));
@@ -160,12 +209,20 @@ export class EventService {
     const [currH, currM] = parts;
     const currTotalMins = currH * 60 + currM;
 
-    // Standard event starts at 19:00 (1140 mins)
-    const eventStartMins = 19 * 60;
+    // Hora de inicio según el primer elemento del itinerario (o 16:00 por defecto)
+    let eventStartMins = 16 * 60;
+    const firstItem = activeEv.itinerary[0];
+    if (firstItem && firstItem.time) {
+      const p = firstItem.time.split(':').map(n => parseInt(n, 10));
+      if (p.length >= 2 && !isNaN(p[0]) && !isNaN(p[1])) {
+        eventStartMins = p[0] * 60 + p[1];
+      }
+    }
+
     const isMorningBeforeEvent = currH >= 6 && currTotalMins < eventStartMins;
 
     if (isMorningBeforeEvent) {
-      // Event has not begun yet; in morning it is pending
+      // Evento del día de hoy antes de la hora de inicio
       let changed = false;
       let newStatus = activeEv.status;
       if (activeEv.status === 'EN_PROGRESO') {
@@ -188,7 +245,7 @@ export class EventService {
       return;
     }
 
-    // Normalized minutes for evening to early morning (00:00 to 05:59 treated as next day 24h+)
+    // Minutos normalizados para la tarde/noche y madrugada
     let normalizedCurr = currTotalMins;
     if (currH < 6) {
       normalizedCurr += 24 * 60;
@@ -247,6 +304,26 @@ export class EventService {
     }
   }
 
+  setEventStatus(eventId: number, newStatus: EventStatus): void {
+    this.events.update(list => list.map(e => {
+      if (e.id === eventId) {
+        let updatedItinerary = e.itinerary;
+        if (newStatus === 'PENDIENTE') {
+          updatedItinerary = (e.itinerary || []).map(item => ({ ...item, status: 'UPCOMING' as const }));
+        } else if (newStatus === 'FINALIZADO') {
+          updatedItinerary = (e.itinerary || []).map(item => ({ ...item, status: 'COMPLETED' as const }));
+        }
+        return { ...e, status: newStatus, itinerary: updatedItinerary };
+      }
+      return e;
+    }));
+    const ev = this.events().find(e => e.id === eventId);
+    const label = newStatus === 'PENDIENTE' 
+      ? 'Fase 1: En Planeación (Invitaciones & RSVP Abiertos)' 
+      : (newStatus === 'EN_PROGRESO' ? 'Fase 2: En Progreso (Día del Evento & Acceso en Puerta)' : 'Fase 3: Concluido (Histórico)');
+    this.notificationService.show('success', 'Estado del Evento Actualizado', `"${ev?.name}" ahora está en: ${label}.`);
+  }
+
   constructor(private notificationService: NotificationService) {
     this.initDemoData();
     this.listenForIncomingTickets();
@@ -262,6 +339,9 @@ export class EventService {
     const found = this.events().find(e => e.id === id);
     if (found) {
       this.activeEventId.set(id);
+      try {
+        localStorage.setItem('evenpass_active_event_id', String(id));
+      } catch (e) {}
       this.autoAdvanceItineraryForCurrentEvent();
       this.notificationService.show('info', 'Evento Activo', `Ahora gestionando: ${found.name}`);
     }
@@ -276,7 +356,7 @@ export class EventService {
         hostName: 'Laura Méndez',
         description: 'Ceremonia religiosa en Catedral y recepción de gala en Hacienda Los Olivos.',
         eventType: 'Boda',
-        eventDate: '2026-11-03T19:00:00',
+        eventDate: '2026-12-05T19:00:00',
         createdAt: '2026-10-25T10:00:00',
         venueName: 'Hacienda Los Olivos (Salón Imperial)',
         locationAddress: 'Carretera a Imala Km 4.5, Culiacán',

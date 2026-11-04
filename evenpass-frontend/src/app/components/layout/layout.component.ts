@@ -39,7 +39,7 @@ import { IconComponent } from '../icon.component';
               'badge-pending': eventService.selectedEvent()?.status === 'PENDIENTE',
               'badge-completed': eventService.selectedEvent()?.status === 'FINALIZADO'
             }">
-              {{ eventService.selectedEvent()?.status === 'EN_PROGRESO' ? 'En Progreso' : (eventService.selectedEvent()?.status === 'PENDIENTE' ? 'Pendiente' : 'Finalizado') }}
+              {{ eventService.selectedEvent()?.status === 'EN_PROGRESO' ? 'En Puerta' : (eventService.selectedEvent()?.status === 'PENDIENTE' ? 'Invitaciones & RSVP' : 'Concluido') }}
             </span>
           </div>
 

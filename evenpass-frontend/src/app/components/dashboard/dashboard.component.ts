@@ -55,6 +55,85 @@ import { IconComponent } from '../icon.component';
         </div>
       </div>
 
+      <!-- Interactive Event Lifecycle Stepper -->
+      <div class="lifecycle-stepper-card">
+        <div class="stepper-header-row">
+          <div class="stepper-title-block">
+            <app-icon name="sparkles" [size]="16"></app-icon>
+            <span class="stepper-title">Fases del Evento &amp; Control de Estado</span>
+          </div>
+          <span class="stepper-subtitle">Controla el ciclo de vida del evento activo en 1 clic</span>
+        </div>
+
+        <div class="stepper-stages-grid">
+          <!-- Step 1: Planeación & Invitaciones -->
+          <div class="stage-step-box" [class.is-active]="eventService.selectedEvent()?.status === 'PENDIENTE'">
+            <div class="stage-step-top">
+              <span class="stage-number-pill">1</span>
+              <span class="stage-tag" *ngIf="eventService.selectedEvent()?.status === 'PENDIENTE'">Fase Activa</span>
+            </div>
+            <strong class="stage-name">Invitaciones &amp; RSVP</strong>
+            <p class="stage-desc">Despacho de enlaces de WhatsApp, confirmaciones de invitados y asignación de mesas.</p>
+            <button 
+              *ngIf="eventService.selectedEvent()?.status !== 'PENDIENTE'" 
+              class="btn-stage-switch" 
+              (click)="eventService.setEventStatus(eventService.selectedEvent()!.id, 'PENDIENTE')"
+            >
+              <app-icon name="refresh" [size]="12"></app-icon>
+              <span>Activar Modo Invitaciones</span>
+            </button>
+            <div *ngIf="eventService.selectedEvent()?.status === 'PENDIENTE'" class="stage-status-current">
+              <span class="pulse-dot"></span>
+              <span>Recepción de confirmaciones abierta</span>
+            </div>
+          </div>
+
+          <!-- Step 2: Día del Evento (En Puerta) -->
+          <div class="stage-step-box" [class.is-active]="eventService.selectedEvent()?.status === 'EN_PROGRESO'">
+            <div class="stage-step-top">
+              <span class="stage-number-pill">2</span>
+              <span class="stage-tag tag-live" *ngIf="eventService.selectedEvent()?.status === 'EN_PROGRESO'">En Puerta</span>
+            </div>
+            <strong class="stage-name">Día del Evento · En Puerta</strong>
+            <p class="stage-desc">Escaneo de pases QR por hostess, validación anti-duplicados y agenda en tiempo real.</p>
+            <button 
+              *ngIf="eventService.selectedEvent()?.status !== 'EN_PROGRESO'" 
+              class="btn-stage-switch btn-stage-live" 
+              (click)="eventService.setEventStatus(eventService.selectedEvent()!.id, 'EN_PROGRESO')"
+            >
+              <app-icon name="camera" [size]="12"></app-icon>
+              <span>Iniciar Día del Evento</span>
+            </button>
+            <div *ngIf="eventService.selectedEvent()?.status === 'EN_PROGRESO'" class="stage-status-current text-live">
+              <span class="pulse-dot-green"></span>
+              <span>Recepción y escáner activos</span>
+            </div>
+          </div>
+
+          <!-- Step 3: Concluido -->
+          <div class="stage-step-box" [class.is-active]="eventService.selectedEvent()?.status === 'FINALIZADO'">
+            <div class="stage-step-top">
+              <span class="stage-number-pill">3</span>
+              <span class="stage-tag tag-done" *ngIf="eventService.selectedEvent()?.status === 'FINALIZADO'">Concluido</span>
+            </div>
+            <strong class="stage-name">Evento Concluido</strong>
+            <p class="stage-desc">Modo histórico de solo lectura, reporte final de asistencia y auditoría de pases.</p>
+            <button 
+              *ngIf="eventService.selectedEvent()?.status !== 'FINALIZADO'" 
+              class="btn-stage-switch" 
+              (click)="eventService.setEventStatus(eventService.selectedEvent()!.id, 'FINALIZADO')"
+            >
+              <app-icon name="lock" [size]="12"></app-icon>
+              <span>Concluir Evento</span>
+            </button>
+            <div *ngIf="eventService.selectedEvent()?.status === 'FINALIZADO'" class="stage-status-current text-muted">
+              <app-icon name="lock" [size]="12"></app-icon>
+              <span>Evento archivado (Solo lectura)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- KPI METRIC CARDS OF THIS EVENT -->
       <div class="kpi-cards-grid">
         
@@ -319,6 +398,186 @@ import { IconComponent } from '../icon.component';
     .banner-right-actions {
       display: flex;
       gap: 10px;
+    }
+
+    /* Lifecycle Stepper Card */
+    .lifecycle-stepper-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-ui);
+      border-radius: var(--radius-lg);
+      padding: 20px 24px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .stepper-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .stepper-title-block {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #1d4ed8;
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+
+    .stepper-subtitle {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .stepper-stages-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    @media (max-width: 900px) {
+      .stepper-stages-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .stage-step-box {
+      background: var(--bg-app);
+      border: 1.5px solid var(--border-ui);
+      border-radius: var(--radius-md);
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      position: relative;
+      transition: all 0.2s ease;
+    }
+
+    .stage-step-box.is-active {
+      border-color: #1d4ed8;
+      background: rgba(29, 78, 216, 0.04);
+      box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.12);
+    }
+
+    .stage-step-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .stage-number-pill {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--border-ui);
+      color: var(--text-secondary);
+      font-weight: 800;
+      font-size: 0.8rem;
+      display: grid;
+      place-items: center;
+    }
+
+    .stage-step-box.is-active .stage-number-pill {
+      background: #1d4ed8;
+      color: #ffffff;
+    }
+
+    .stage-tag {
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 12px;
+      background: #dbeafe;
+      color: #1e40af;
+    }
+
+    .stage-tag.tag-live {
+      background: #dcfce7;
+      color: #15803d;
+    }
+
+    .stage-tag.tag-done {
+      background: #f1f5f9;
+      color: #475569;
+    }
+
+    .stage-name {
+      font-size: 0.95rem;
+      color: var(--text-main);
+      font-weight: 700;
+    }
+
+    .stage-desc {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      line-height: 1.4;
+      margin: 0;
+      flex-grow: 1;
+    }
+
+    .btn-stage-switch {
+      margin-top: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 12px;
+      background: #ffffff;
+      border: 1px solid var(--border-ui);
+      border-radius: var(--radius-sm);
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-main);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-stage-switch:hover {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+    }
+
+    .btn-stage-live {
+      color: #15803d;
+      border-color: #86efac;
+    }
+    .btn-stage-live:hover {
+      background: #f0fdf4;
+    }
+
+    .stage-status-current {
+      margin-top: 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #1d4ed8;
+    }
+
+    .stage-status-current.text-live {
+      color: #15803d;
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #1d4ed8;
+      box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.25);
+    }
+
+    .pulse-dot-green {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #15803d;
+      box-shadow: 0 0 0 3px rgba(21, 128, 61, 0.25);
     }
 
     /* KPI Cards Grid */
