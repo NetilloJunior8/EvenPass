@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel del Anfitrión · Luis Gerardo (10 Años) | EvenPass</title>
+  
+  <meta name="theme-color" content="#1d4ed8">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <div class="panel-container">
+
+    <!-- Cabecera del Panel -->
+    <header class="panel-header-strip">
+      <div>
+        <h1>Panel de Control del Anfitrión</h1>
+        <p>Luis Gerardo · Mis 10 Años | Despacho de Invitaciones &amp; Croquis de Mesas</p>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="display: inline-flex; align-items: center; gap: 6px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #059669; font-size: 0.74rem; font-weight: 800; padding: 4px 12px; border-radius: 9999px;">
+          <span style="width: 7px; height: 7px; border-radius: 50%; background: #059669;"></span>
+          En Línea con EvenPass OS
+        </span>
+      </div>
+    </header>
+
+    <!-- ================================================================ -->
+    <!-- GENERADOR DE ENLACES PERSONALIZADOS Y ENVÍO POR WHATSAPP         -->
+    <!-- ================================================================ -->
+    <section class="card-module">
+      <div class="card-header-flex">
+        <div class="card-icon-bubble">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"></path><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+        </div>
+        <div>
+          <h2>Enviar Invitación Personalizada</h2>
+          <p>Genera el enlace único por invitado con sus pases y compártelo por WhatsApp</p>
+        </div>
+      </div>
+
+      <form id="form-dispatch-invitation" onsubmit="dispatchInvitation(event)">
+        <div style="display: grid; grid-template-columns: 2fr 1fr 1.5fr; gap: 12px; margin-bottom: 14px;">
+          <div>
+            <label class="form-label">Nombre de la Familia o Invitado *</label>
+            <input type="text" id="dispatch-name" class="form-input-clean" placeholder="Ej. Familia Morales Valenzuela" required autocomplete="off">
+          </div>
+
+          <div>
+            <label class="form-label">Pases a Otorgar</label>
+            <select id="dispatch-passes" class="form-input-clean">
+              <option value="1">1 Pase</option>
+              <option value="2" selected>2 Pases</option>
+              <option value="3">3 Pases</option>
+              <option value="4">4 Pases</option>
+              <option value="5">5 Pases</option>
+              <option value="6">6 Pases</option>
+              <option value="8">8 Pases</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="form-label">Mesa en Croquis (Opcional)</label>
+            <select id="dispatch-table" class="form-input-clean">
+              <option value="AUTO">Asignación Automática Inteligente</option>
+              <option value="Mesa 01 - Familia Cercana">Mesa 01 - Familia Cercana</option>
+              <option value="Mesa 02 - Amigos de Colegio">Mesa 02 - Amigos de Colegio</option>
+              <option value="Mesa 03 - Padrinos & Tíos">Mesa 03 - Padrinos & Tíos</option>
+              <option value="Mesa 04 - Amigos Deportes & Laser">Mesa 04 - Amigos Deportes & Laser</option>
+              <option value="Mesa 05 - Invitados Especiales">Mesa 05 - Invitados Especiales</option>
+            </select>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-whatsapp-direct" style="width: 100%; border: none; cursor: pointer;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
+          <span>Enviar Invitación Única por WhatsApp</span>
+        </button>
+      </form>
+    </section>
+
+    <!-- ================================================================ -->
+    <!-- MÉTRICAS EN VIVO                                                 -->
+    <!-- ================================================================ -->
+    <div class="panel-kpis-grid">
+      <div class="panel-kpi-card highlight">
+        <small>Pases Confirmados</small>
+        <strong id="kpi-panel-confirmed">0</strong>
+      </div>
+      <div class="panel-kpi-card">
+        <small>Aforo Salón (50 max)</small>
+        <strong id="kpi-panel-occupancy">0%</strong>
+      </div>
+      <div class="panel-kpi-card">
+        <small>Familias Asistentes</small>
+        <strong id="kpi-panel-families">0</strong>
+      </div>
+      <div class="panel-kpi-card">
+        <small>Invitaciones Pendientes</small>
+        <strong id="kpi-panel-pending">0</strong>
+      </div>
+    </div>
+
+    <!-- ================================================================ -->
+    <!-- CROQUIS: OCUPACIÓN DE MESAS                                      -->
+    <!-- ================================================================ -->
+    <section class="card-module">
+      <div class="card-header-flex" style="margin-bottom: 4px;">
+        <div class="card-icon-bubble">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path></svg>
+        </div>
+        <div>
+          <h2>Distribución de Mesas en Croquis (Capacidad 10 c/u)</h2>
+          <p>Asignación automática controlada sin sobrecupo para el acceso del evento</p>
+        </div>
+      </div>
+
+      <div id="panel-tables-grid" class="tables-grid-preview">
+        <!-- Renderizado dinámico de mesas -->
+      </div>
+    </section>
+
+    <!-- ================================================================ -->
+    <!-- PADRÓN EN VIVO DE INVITADOS                                      -->
+    <!-- ================================================================ -->
+    <section class="panel-table-box">
+      <div class="panel-table-actions">
+        <div class="panel-search-bar">
+          <input type="text" id="panel-search" placeholder="Buscar por invitado, teléfono, mesa o folio..." oninput="renderPanelTable()">
+        </div>
+
+        <div style="display: flex; gap: 8px;">
+          <button class="btn-outline" style="padding: 8px 14px; font-size: 0.8rem;" onclick="loadStoredGuests()">
+            ↻ Actualizar Lista
+          </button>
+          <button class="btn-primary" style="padding: 8px 14px; font-size: 0.8rem;" onclick="exportCsvForHostess()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            <span>Descargar Padrón (CSV)</span>
+          </button>
+        </div>
+      </div>
+
+      <div style="overflow-x: auto;">
+        <table class="panel-data-table">
+          <thead>
+            <tr>
+              <th>Invitado / Familia</th>
+              <th>Pases</th>
+              <th>Mesa Asignada</th>
+              <th>Folio QR</th>
+              <th>Estado</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody id="panel-table-body">
+            <!-- Filas dinámicas -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

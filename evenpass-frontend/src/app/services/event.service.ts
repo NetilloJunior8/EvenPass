@@ -419,6 +419,35 @@ export class EventService {
           { id: 2, time: '13:30', title: 'Recepción & Almuerzo Familiar', description: 'Salón Privado Jardín en Restaurante Los Arcos', status: 'UPCOMING', location: 'Salón Privado Jardín' },
           { id: 3, time: '15:30', title: 'Tradicional Bolo & Pastel', description: 'Entrega de recuerdos bendecidos y mesa de postres', status: 'UPCOMING', location: 'Mesa de Honor' }
         ]
+      },
+      {
+        id: 6,
+        name: 'Mis 10 Años · Luis Gerardo',
+        hostName: 'Familia Morales (Papás)',
+        description: 'Celebración de 10 años con torneo Laser Tag, arena de trampolines y banquete.',
+        eventType: 'Cumpleaños',
+        eventDate: '2026-11-14T16:00:00',
+        createdAt: '2026-11-03T10:00:00',
+        venueName: 'Arena Laser Quest & Salón Neón VIP',
+        locationAddress: 'Av. Paseo de los Héroes 450, Col. Las Quintas, Culiacán',
+        maxCapacity: 50,
+        status: 'PENDIENTE',
+        templateSlug: 'luis-gerardo-10',
+        invitationMode: 'TEMPLATE',
+        tierPlan: 'PREMIUM',
+        hasCroquis: true,
+        hasScanner: true,
+        numTables: 5,
+        totalGuests: 20,
+        confirmedGuests: 20,
+        attendedGuests: 0,
+        itinerary: [
+          { id: 1, time: '16:00', title: 'Recepción & Registro con Pase Digital', description: 'Escaneo en puerta por hostess y entrega de brazaletes de juego', status: 'UPCOMING', location: 'Acceso Salón Neón' },
+          { id: 2, time: '16:45', title: 'Torneo Laser Quest & Trampolines', description: 'Batalla por equipos en la arena láser y circuito de brincolines', status: 'UPCOMING', location: 'Arena Laser Quest' },
+          { id: 3, time: '18:15', title: 'Banquete & Servicio en Mesas', description: 'Servicio de alimentos a comensales en sus mesas asignadas', status: 'UPCOMING', location: 'Salón Neón VIP' },
+          { id: 4, time: '19:00', title: 'Canto de Mañanitas & Pastel', description: 'Celebración estelar, corte de pastel temático y piñata', status: 'UPCOMING', location: 'Pista Central' },
+          { id: 5, time: '20:00', title: 'Entrega de Souvenirs & Clausura', description: 'Agradecimiento formal por los anfitriones y clausura', status: 'UPCOMING', location: 'Salón Neón VIP' }
+        ]
       }
     ];
     this.events.set(demoEvents);
@@ -513,12 +542,33 @@ export class EventService {
       tables: tablesZafiro
     };
 
-    this.salons.set([salonImperial, salonWhitePoleTent, salonZafiro]);
+    // 2.4 Salón Neón VIP & Arena Laser Quest (Cumpleaños Luis Gerardo · 5 mesas de 10p = 50 lugares)
+    const tablesNeonVip: SalonTable[] = [
+      { id: 401, salonId: 4, tableNumber: 1, tableName: 'Mesa 01 - Familia Cercana', shape: 'ROUND', capacity: 10, posX: 140, posY: 180, occupiedSeats: 0 },
+      { id: 402, salonId: 4, tableNumber: 2, tableName: 'Mesa 02 - Amigos de Colegio', shape: 'ROUND', capacity: 10, posX: 360, posY: 180, occupiedSeats: 0 },
+      { id: 403, salonId: 4, tableNumber: 3, tableName: 'Mesa 03 - Padrinos & Tíos', shape: 'ROUND', capacity: 10, posX: 140, posY: 380, occupiedSeats: 0 },
+      { id: 404, salonId: 4, tableNumber: 4, tableName: 'Mesa 04 - Amigos Deportes & Laser', shape: 'ROUND', capacity: 10, posX: 360, posY: 380, occupiedSeats: 0 },
+      { id: 405, salonId: 4, tableNumber: 5, tableName: 'Mesa 05 - Invitados Especiales', shape: 'ROUND', capacity: 10, posX: 250, posY: 540, occupiedSeats: 0 }
+    ];
+
+    const salonNeonVip: Salon = {
+      id: 4,
+      name: 'Arena Laser Quest & Salón Neón VIP',
+      type: 'CUSTOM',
+      totalCapacity: 50,
+      widthMeters: 18,
+      lengthMeters: 18,
+      description: 'Salón Neón VIP con 5 mesas redondas para 10 personas cada una, pista central y acceso al campo Laser Quest.',
+      tables: tablesNeonVip
+    };
+
+    this.salons.set([salonImperial, salonWhitePoleTent, salonZafiro, salonNeonVip]);
 
     // Link events to their salons
     demoEvents[0].salonId = 1; // Boda -> Salón Real Imperial
     demoEvents[1].salonId = 2; // Mis 18 -> Carpa 40x60
     demoEvents[2].salonId = 3; // Graduación -> Salón Zafiro
+    demoEvents[5].salonId = 4; // Luis Gerardo -> Salón Neón VIP
     this.events.set(demoEvents);
 
     // 3. FULL REALISTIC GUESTS DATASETS (407 passes across 5 events)
@@ -673,6 +723,9 @@ export class EventService {
 
     // Event 5: Bautizo Santiago (32 passes, 0 attended, Basic Plan, EP-55xx)
     generateEventGuests(5, 'Bautizo & Almuerzo Familiar Santiago', 32, 0, 'Zona Familiar', 'EP-55');
+
+    // Event 6: Mis 10 Años · Luis Gerardo (20 pases, Salón Neón VIP, LG10-VIP-xxxx)
+    generateEventGuests(6, 'Mis 10 Años · Luis Gerardo', 20, 0, 'Mesa', 'LG10-VIP-', tablesNeonVip);
 
     this.allGuests.set(demoGuests);
     this.allLogs.set(demoLogs);
