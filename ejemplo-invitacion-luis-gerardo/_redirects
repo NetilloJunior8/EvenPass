@@ -1,0 +1,7 @@
+# Netlify Redirects configuration for EvenPass Digital Invitations
+# Redirigir enlaces generados con /panel/index.html hacia index.html preservando query params
+/panel/index.html    /index.html    301!
+
+# Reglas de Pretty URLs para acceso directo al panel del anfitrión
+/panel/              /panel.html    200
+/panel               /panel.html    200

@@ -488,6 +488,26 @@ function renderPanelTable() {
   });
 }
 
+// Obtiene la URL base limpia para la invitación de invitados (compatible con Netlify Pretty URLs, subcarpetas y local)
+function getGuestInvitationBaseUrl() {
+  if (window.location.protocol === 'file:') {
+    const raw = window.location.href.split('?')[0].split('#')[0];
+    return raw.replace(/panel(\.html)?$/i, 'index.html');
+  }
+
+  const url = new URL(window.location.href);
+  let pathname = url.pathname;
+
+  // Limpiar sufijos como /panel.html, /panel, o /index.html
+  pathname = pathname
+    .replace(/\/panel\.html$/i, '')
+    .replace(/\/panel\/?$/i, '')
+    .replace(/\/index\.html$/i, '')
+    .replace(/\/+$/, '');
+
+  return pathname ? `${url.origin}${pathname}/index.html` : `${url.origin}/index.html`;
+}
+
 function dispatchInvitation(e) {
   e.preventDefault();
 
@@ -521,14 +541,9 @@ function dispatchInvitation(e) {
   guests.unshift(newGuest);
   saveGuestsList(guests);
 
-  // Construir Enlace Único a index.html
-  let currentUrl = window.location.href.split('?')[0].split('#')[0];
-  let inviteUrl = currentUrl.replace(/panel\.html$/i, 'index.html');
-  if (!inviteUrl.endsWith('index.html')) {
-    inviteUrl = inviteUrl.replace(/\/+$/, '') + '/index.html';
-  }
-
-  inviteUrl += `?nombre=${encodeURIComponent(name)}&pases=${passes}&token=${token}`;
+  // Construir Enlace Único a index.html (compatible con Netlify, Vercel, Hosting y local)
+  const baseUrl = getGuestInvitationBaseUrl();
+  const inviteUrl = `${baseUrl}?nombre=${encodeURIComponent(name)}&pases=${passes}&token=${token}`;
 
   // Mensaje elegante para enviar por WhatsApp
   const msg = 
@@ -545,9 +560,8 @@ function dispatchInvitation(e) {
 }
 
 function copyGuestInviteLink(name, passes, token) {
-  let currentUrl = window.location.href.split('?')[0].split('#')[0];
-  let inviteUrl = currentUrl.replace(/panel\.html$/i, 'index.html');
-  inviteUrl += `?nombre=${encodeURIComponent(name)}&pases=${passes}&token=${token}`;
+  const baseUrl = getGuestInvitationBaseUrl();
+  const inviteUrl = `${baseUrl}?nombre=${encodeURIComponent(name)}&pases=${passes}&token=${token}`;
 
   navigator.clipboard.writeText(inviteUrl).then(() => {
     alert(`¡Enlace copiado para ${name}!\n\n${inviteUrl}`);
