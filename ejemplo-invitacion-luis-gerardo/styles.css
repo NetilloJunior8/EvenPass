@@ -559,6 +559,45 @@ body {
 /* ==========================================================================
    FORMULARIO RSVP & PASE DIGITAL VIP
    ========================================================================== */
+/* Tarjeta de Reconocimiento del Invitado en el RSVP */
+.rsvp-guest-card {
+  background: var(--blue-light);
+  border: 1px solid var(--border-blue);
+  border-radius: var(--radius-md);
+  padding: 14px 18px;
+  margin-bottom: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.rsvp-guest-label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--blue-primary);
+  letter-spacing: 0.8px;
+}
+
+.rsvp-guest-name {
+  font-family: var(--font-heading);
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text-navy);
+}
+
+.rsvp-passes-pill {
+  background: #ffffff;
+  border: 1px solid var(--border-blue);
+  color: var(--blue-primary);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
 .form-group-item {
   margin-bottom: 16px;
 }

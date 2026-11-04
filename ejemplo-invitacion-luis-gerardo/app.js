@@ -161,29 +161,38 @@ function initGuestPage() {
   const heroCal = document.getElementById('btn-hero-calendar');
   if (heroCal) heroCal.href = getGoogleCalendarUrl(nameParam || '', passesParam || 2);
 
-  // Si trae parámetros en URL (Enlace enviado por WhatsApp desde el Panel)
+  const defaultPasses = passesParam || 2;
+  const rTargetName = document.getElementById('rsvp-target-name');
+  const rPassesBadge = document.getElementById('rsvp-passes-badge');
+  const inputName = document.getElementById('input-name');
+  const selectPasses = document.getElementById('select-passes');
+
   if (nameParam) {
     const banner = document.getElementById('vip-guest-banner');
     const bName = document.getElementById('banner-guest-name');
     const bPasses = document.getElementById('banner-passes-text');
-    const inputName = document.getElementById('input-name');
-    const selectPasses = document.getElementById('select-passes');
 
     if (banner) banner.style.display = 'flex';
     if (bName) bName.innerText = nameParam;
-    if (bPasses) bPasses.innerText = `Pase reservado para: ${passesParam || 2} personas`;
+    if (bPasses) bPasses.innerText = `Pase reservado para: ${defaultPasses} personas`;
+    if (rTargetName) rTargetName.innerText = nameParam;
+    if (rPassesBadge) rPassesBadge.innerText = `${defaultPasses} Pases Reservados`;
     if (inputName) inputName.value = nameParam;
+  } else {
+    if (rTargetName) rTargetName.innerText = 'Familia Invitada';
+    if (rPassesBadge) rPassesBadge.innerText = `${defaultPasses} Pases Reservados`;
+    if (inputName) inputName.value = 'Familia Invitada';
+  }
 
-    // Configurar opciones de select según los pases otorgados
-    if (selectPasses && passesParam) {
-      selectPasses.innerHTML = '';
-      for (let i = 1; i <= passesParam; i++) {
-        const opt = document.createElement('option');
-        opt.value = i;
-        opt.innerText = `${i} ${i === 1 ? 'Persona' : 'Personas'}`;
-        if (i === passesParam) opt.selected = true;
-        selectPasses.appendChild(opt);
-      }
+  // Configurar opciones de select según los pases otorgados por los anfitriones
+  if (selectPasses) {
+    selectPasses.innerHTML = '';
+    for (let i = 1; i <= defaultPasses; i++) {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.innerText = `${i} ${i === 1 ? 'Persona' : 'Personas'}`;
+      if (i === defaultPasses) opt.selected = true;
+      selectPasses.appendChild(opt);
     }
   }
 
@@ -203,8 +212,8 @@ function initGuestPage() {
 function submitRsvp(e) {
   e.preventDefault();
 
-  const name = document.getElementById('input-name').value.trim();
-  const phone = document.getElementById('input-phone').value.trim();
+  const name = document.getElementById('input-name').value.trim() || 'Familia Invitada';
+  const phone = document.getElementById('input-phone').value.trim() || 'Enlace WhatsApp';
   const notes = document.getElementById('input-notes').value.trim();
   const passesSelected = userAttendance ? parseInt(document.getElementById('select-passes').value, 10) : 0;
 

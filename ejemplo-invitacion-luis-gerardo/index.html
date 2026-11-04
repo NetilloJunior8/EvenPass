@@ -271,17 +271,17 @@
           </div>
         </div>
 
-        <!-- Nombre -->
-        <div class="form-group-item">
-          <label class="form-label" for="input-name">Nombre de la Familia o Invitado *</label>
-          <input type="text" id="input-name" class="form-input-clean" placeholder="Ej. Familia Morales Valenzuela" required>
+        <!-- Invitado Reconocido por el Enlace (Sin pedir datos redundantes) -->
+        <div class="rsvp-guest-card">
+          <div>
+            <div class="rsvp-guest-label">INVITADO / FAMILIA</div>
+            <div class="rsvp-guest-name" id="rsvp-target-name">Familia Invitada</div>
+          </div>
+          <div class="rsvp-passes-pill" id="rsvp-passes-badge">2 Pases Reservados</div>
         </div>
 
-        <!-- Teléfono -->
-        <div class="form-group-item">
-          <label class="form-label" for="input-phone">Teléfono Móvil o WhatsApp *</label>
-          <input type="tel" id="input-phone" class="form-input-clean" placeholder="Ej. 667 123 4567" required>
-        </div>
+        <input type="hidden" id="input-name" value="Familia Invitada">
+        <input type="hidden" id="input-phone" value="">
 
         <!-- Pases a Utilizar -->
         <div id="passes-input-group" class="form-group-item">
