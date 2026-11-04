@@ -32,7 +32,13 @@ import jsPDF from 'jspdf';
       <!-- Header & Actions -->
       <div class="guests-header-card">
         <div>
-          <h2>Lista de Invitados &amp; RSVP</h2>
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 4px;">
+            <h2>Lista de Invitados &amp; RSVP</h2>
+            <span class="cloud-live-pill" title="Sincronización automática activa en tiempo real">
+              <span class="pulse-dot-green"></span>
+              <span>Nube en Tiempo Real Conectada</span>
+            </span>
+          </div>
           <p>
             Gestiona pases QR, confirmaciones y enlaces de WhatsApp para: 
             <b>{{ eventService.selectedEvent()?.name }}</b> (Anfitrión: {{ eventService.selectedEvent()?.hostName }})
@@ -40,10 +46,22 @@ import jsPDF from 'jspdf';
         </div>
 
         <div class="header-actions-row">
+          <!-- Botón directo al Panel del Anfitrión (Papás) -->
+          <button 
+            *ngIf="eventService.selectedEvent()?.templateSlug" 
+            class="btn-outline" 
+            style="border-color: #1d4ed8; color: #1d4ed8; background: rgba(29, 78, 216, 0.06);" 
+            (click)="openHostPanel()"
+            title="Abrir el panel privado del anfitrión donde los papás envían las invitaciones por WhatsApp"
+          >
+            <app-icon name="user" [size]="15"></app-icon>
+            <span>Panel del Anfitrión</span>
+          </button>
+
           <!-- 1-Click Sync Button -->
-          <button class="btn-outline" [disabled]="eventService.isEventLocked()" (click)="syncSupabaseNow()" title="Sincronizar confirmaciones de las invitaciones en tiempo real">
+          <button class="btn-outline" [disabled]="eventService.isEventLocked()" (click)="syncSupabaseNow()" title="Consultar confirmaciones más recientes">
             <app-icon name="refresh" [size]="15"></app-icon>
-            <span>Sincronizar Confirmaciones</span>
+            <span>Sincronizar Ahora</span>
           </button>
           <button 
             *ngIf="eventService.selectedEvent()?.templateSlug" 
@@ -494,6 +512,19 @@ import jsPDF from 'jspdf';
       font-size: 1.35rem;
       font-weight: 800;
       color: var(--text-main);
+    }
+
+    .cloud-live-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 12px;
+      background: rgba(16, 185, 129, 0.12);
+      color: #059669;
+      border: 1px solid rgba(16, 185, 129, 0.25);
     }
 
     .guests-header-card p {
@@ -1442,6 +1473,13 @@ export class GuestsComponent {
     const ev = this.eventService.selectedEvent();
     if (!ev) return;
     this.eventService.syncWithSupabase(ev.id);
+  }
+
+  openHostPanel(): void {
+    const ev = this.eventService.selectedEvent();
+    const evId = ev?.id || 6;
+    const url = `https://ejemplo-invitacion-luis-gerardo.netlify.app/panel.html?eventId=${evId}`;
+    window.open(url, '_blank');
   }
 
   async syncGoogleSheetNow(): Promise<void> {

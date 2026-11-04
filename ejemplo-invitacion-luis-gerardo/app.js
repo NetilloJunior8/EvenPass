@@ -25,44 +25,104 @@ const EVENT_DATA = {
   ]
 };
 
-const STORAGE_KEY = 'evenpass_luis_gerardo_guests_db';
+// Event ID dinámico para soportar este y todos los futuros eventos
+function getActiveEventId() {
+  const params = new URLSearchParams(window.location.search);
+  const paramId = params.get('eventId') || params.get('ev') || params.get('id');
+  if (paramId) {
+    const parsed = parseInt(paramId, 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+  return 6; // Por defecto: Mis 10 Años · Luis Gerardo (ID 6)
+}
+
+const CLOUD_SYNC_RELAY = 'https://ntfy.sh/evenpass_cloud_sync_relay';
+const STORAGE_KEY = `evenpass_event_${getActiveEventId()}_guests_db`;
+
+// Emisor en tiempo real hacia la nube (CORS libre, funciona en Netlify, localhost y móviles)
+function broadcastToCloud(payload) {
+  try {
+    fetch(CLOUD_SYNC_RELAY, {
+      method: 'POST',
+      headers: {
+        'Title': 'EvenPass Cloud Sync',
+        'Tags': 'ticket,cloud'
+      },
+      body: JSON.stringify(payload)
+    }).catch(err => console.warn('Cloud sync relay warn:', err));
+  } catch (e) {}
+}
 
 // ============================================================================
 // 2. BASE DE DATOS LOCAL Y SINCRONIZACIÓN
 // ============================================================================
 function getStoredGuests() {
-  const cached = localStorage.getItem(STORAGE_KEY);
+  const evId = getActiveEventId();
+  const cached = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('evenpass_luis_gerardo_guests_db');
   if (cached) {
     try {
-      return JSON.parse(cached);
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // Garantizar que Mario con 3 pases siempre esté disponible
+        if (!parsed.some(g => (g.fullName || '').toLowerCase().trim() === 'mario')) {
+          parsed.push({
+            id: 6,
+            fullName: 'Mario',
+            phone: '667-611-8835',
+            passesGranted: 3,
+            passesConfirmed: 0,
+            status: 'PENDING',
+            tableName: 'Mesa 01 - Familia Cercana',
+            token: 'LG10-VIP-8835',
+            notes: 'Invitación con 3 pases',
+            updatedAt: '12:45 PM'
+          });
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+          localStorage.setItem('evenpass_luis_gerardo_guests_db', JSON.stringify(parsed));
+        }
+        return parsed;
+      }
     } catch (e) {}
   }
 
-  // Padrón inicial de demostración
+  // Padrón inicial oficial sincronizado con EvenPass
   const initial = [
     { id: 1, fullName: 'Familia Morales Valenzuela', phone: '667-112-3344', passesGranted: 4, passesConfirmed: 4, status: 'CONFIRMED', tableName: 'Mesa 01 - Familia Cercana', token: 'LG10-VIP-1102', notes: 'Abuelos y tíos', updatedAt: '09:30 AM' },
     { id: 2, fullName: 'Mateo González & Padres', phone: '667-223-4455', passesGranted: 3, passesConfirmed: 3, status: 'CONFIRMED', tableName: 'Mesa 02 - Amigos de Colegio', token: 'LG10-VIP-2481', notes: 'Compañero de salón', updatedAt: '10:15 AM' },
     { id: 3, fullName: 'Lic. Roberto Somoza & Fam.', phone: '667-334-5566', passesGranted: 3, passesConfirmed: 3, status: 'CONFIRMED', tableName: 'Mesa 03 - Padrinos & Tíos', token: 'LG10-VIP-3392', notes: 'Padrino', updatedAt: '11:00 AM' },
     { id: 4, fullName: 'Santiago Beltrán & Papás', phone: '667-445-6677', passesGranted: 3, passesConfirmed: 3, status: 'CONFIRMED', tableName: 'Mesa 04 - Amigos Deportes & Laser', token: 'LG10-VIP-4819', notes: 'Fútbol', updatedAt: '11:45 AM' },
-    { id: 5, fullName: 'Familia Quiñónez Rivas', phone: '667-556-7788', passesGranted: 4, passesConfirmed: 0, status: 'PENDING', tableName: 'Mesa 01 - Familia Cercana', token: 'LG10-VIP-5520', notes: 'Enviado por WhatsApp', updatedAt: '12:20 PM' }
+    { id: 5, fullName: 'Familia Quiñónez Rivas', phone: '667-556-7788', passesGranted: 4, passesConfirmed: 0, status: 'PENDING', tableName: 'Mesa 01 - Familia Cercana', token: 'LG10-VIP-5520', notes: 'Enviado por WhatsApp', updatedAt: '12:20 PM' },
+    { id: 6, fullName: 'Mario', phone: '667-611-8835', passesGranted: 3, passesConfirmed: 0, status: 'PENDING', tableName: 'Mesa 01 - Familia Cercana', token: 'LG10-VIP-8835', notes: 'Invitación con 3 pases', updatedAt: '12:45 PM' }
   ];
   localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
+  localStorage.setItem('evenpass_luis_gerardo_guests_db', JSON.stringify(initial));
   return initial;
 }
 
 function saveGuestsList(list) {
+  const evId = getActiveEventId();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
   try {
+    localStorage.setItem(`evenpass_event_${evId}_guests_db`, JSON.stringify(list));
+    localStorage.setItem('evenpass_luis_gerardo_guests_db', JSON.stringify(list));
     localStorage.setItem('evenpass_luis_gerardo_updated_tick', String(Date.now()));
   } catch (e) {}
 
-  // Sincronizar en tiempo real con EvenPass OS vía BroadcastChannel
+  // 1. Sincronizar en la misma pestaña/navegador vía BroadcastChannel
   try {
     if (typeof BroadcastChannel !== 'undefined') {
       const bc = new BroadcastChannel('evenpass_invitations_channel');
-      bc.postMessage({ type: 'SYNC_ALL', eventId: 6, guests: list });
+      bc.postMessage({ type: 'SYNC_ALL', eventId: evId, guests: list });
     }
   } catch (e) {}
+
+  // 2. Sincronizar hacia la nube para EvenPass OS en tiempo real (Netlify <-> EvenPass)
+  broadcastToCloud({
+    type: 'SYNC_ALL',
+    eventId: evId,
+    guests: list,
+    timestamp: Date.now()
+  });
 }
 
 function syncDirectWithEvenPass() {
@@ -286,9 +346,10 @@ function submitRsvp(e) {
   saveGuestsList(guests);
 
   // Sincronizar inmediatamente con EvenPass OS en tiempo real (para reflejar en Croquis central y Escáner)
+  const evId = getActiveEventId();
   try {
     const rsvpPayload = {
-      eventId: 6, // Evento Mis 10 Años · Luis Gerardo
+      eventId: evId,
       fullName: name,
       phone: phone || 'WhatsApp Directo',
       passes: passesSelected,
@@ -304,7 +365,7 @@ function submitRsvp(e) {
       const bc = new BroadcastChannel('evenpass_invitations_channel');
       bc.postMessage({
         type: 'RSVP_CONFIRMED',
-        eventId: 6,
+        eventId: evId,
         guest: {
           fullName: name,
           phone: phone,
@@ -318,6 +379,23 @@ function submitRsvp(e) {
         allGuests: guests
       });
     }
+
+    broadcastToCloud({
+      type: 'RSVP_CONFIRMED',
+      eventId: evId,
+      guest: {
+        fullName: name,
+        phone: phone,
+        passesConfirmed: userAttendance ? passesSelected : 0,
+        passesGranted: passesSelected,
+        status: userAttendance ? 'CONFIRMED' : 'DECLINED',
+        tableName: assignedTable,
+        token: token,
+        notes: notes
+      },
+      allGuests: guests,
+      timestamp: Date.now()
+    });
   } catch (err) {}
 
   if (userAttendance) {
@@ -586,17 +664,27 @@ function dispatchInvitation(e) {
   guests.unshift(newGuest);
   saveGuestsList(guests);
 
-  // Emitir evento explícito de nuevo invitado para EvenPass OS
+  const evId = getActiveEventId();
+
+  // Emitir evento explícito de nuevo invitado para EvenPass OS (Local + Nube)
   try {
     if (typeof BroadcastChannel !== 'undefined') {
       const bc = new BroadcastChannel('evenpass_invitations_channel');
-      bc.postMessage({ type: 'NEW_INVITATION', eventId: 6, guest: newGuest, allGuests: guests });
+      bc.postMessage({ type: 'NEW_INVITATION', eventId: evId, guest: newGuest, allGuests: guests });
     }
   } catch (e) {}
 
+  broadcastToCloud({
+    type: 'NEW_GUEST',
+    eventId: evId,
+    guest: newGuest,
+    allGuests: guests,
+    timestamp: Date.now()
+  });
+
   // Construir Enlace Único a index.html (compatible con Netlify, Vercel, Hosting y local)
   const baseUrl = getGuestInvitationBaseUrl();
-  const inviteUrl = `${baseUrl}?nombre=${encodeURIComponent(name)}&pases=${passes}&token=${token}`;
+  const inviteUrl = `${baseUrl}?eventId=${evId}&nombre=${encodeURIComponent(name)}&pases=${passes}&token=${token}`;
 
   // Mensaje elegante para enviar por WhatsApp
   const msg = 
@@ -613,8 +701,9 @@ function dispatchInvitation(e) {
 }
 
 function copyGuestInviteLink(name, passes, token) {
+  const evId = getActiveEventId();
   const baseUrl = getGuestInvitationBaseUrl();
-  const inviteUrl = `${baseUrl}?nombre=${encodeURIComponent(name)}&pases=${passes}&token=${token}`;
+  const inviteUrl = `${baseUrl}?eventId=${evId}&nombre=${encodeURIComponent(name)}&pases=${passes}&token=${token}`;
 
   navigator.clipboard.writeText(inviteUrl).then(() => {
     alert(`¡Enlace copiado para ${name}!\n\n${inviteUrl}`);

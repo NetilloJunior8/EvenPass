@@ -520,7 +520,7 @@ export class EventService {
         hasScanner: true,
         numTables: 5,
         totalGuests: 20,
-        confirmedGuests: 20,
+        confirmedGuests: 13,
         attendedGuests: 0,
         itinerary: [
           { id: 1, time: '16:00', title: 'Recepción & Registro con Pase Digital', description: 'Escaneo en puerta por hostess y entrega de brazaletes de juego', status: 'UPCOMING', location: 'Acceso Salón Neón' },
@@ -891,6 +891,23 @@ export class EventService {
         confirmedAt: undefined,
         source: 'DIGITAL_INVITATION',
         externalSyncId: 'SYNC-6-5520'
+      },
+      {
+        id: guestSeq++,
+        eventId: 6,
+        fullName: 'Mario',
+        email: 'mario@gmail.com',
+        phone: '667-611-8835',
+        numCompanions: 2,
+        totalPasses: 3,
+        status: 'PENDING',
+        qrCodeToken: 'LG10-VIP-8835',
+        assignedTableId: 401,
+        assignedTableName: 'Mesa 01 - Familia Cercana',
+        dietNotes: 'Invitación con 3 pases',
+        confirmedAt: undefined,
+        source: 'DIGITAL_INVITATION',
+        externalSyncId: 'SYNC-6-8835'
       }
     ];
 
@@ -2004,46 +2021,121 @@ export class EventService {
     return newGuest;
   }
 
-  // --- ESCUCHADOR EN TIEMPO REAL: INVITACIONES DIGITALES (PANEL & WEB) ---
+  // --- CANAL DE SINCRONIZACIÓN EN LA NUBE EN TIEMPO REAL (Universal para todos los eventos) ---
+  readonly CLOUD_SYNC_RELAY = 'https://ntfy.sh/evenpass_cloud_sync_relay';
+  cloudSyncConnected = signal<boolean>(false);
+
   listenForDigitalInvitations(): void {
-    // 1. BroadcastChannel nativo (conecta pestañas y ventanas del navegador en tiempo real)
+    // 1. Escuchar por BroadcastChannel nativo (entre pestañas del mismo navegador)
     try {
       if (typeof BroadcastChannel !== 'undefined') {
         const bc = new BroadcastChannel('evenpass_invitations_channel');
         bc.onmessage = (event) => {
           if (event && event.data) {
-            const data = event.data;
-            if (data.type === 'NEW_INVITATION' && data.guest) {
-              this.syncDigitalGuestsList(data.eventId || 6, [data.guest], true);
-            } else if (data.type === 'RSVP_CONFIRMED' && data.guest) {
-              this.syncDigitalGuestsList(data.eventId || 6, [data.guest], true);
-            } else if (data.type === 'SYNC_ALL' && Array.isArray(data.guests)) {
-              this.syncDigitalGuestsList(data.eventId || 6, data.guests, true);
-            }
+            this.processSyncMessage(event.data, true);
           }
         };
       }
     } catch (e) {}
 
-    // 2. Auto-sincronización periódica cada 3 segundos con el almacén local del panel
+    // 2. Conectar flujo SSE en tiempo real hacia la nube (Netlify <-> EvenPass OS)
+    this.connectCloudRealtimeStream();
+
+    // 3. Auto-sincronización periódica de respaldo cada 3.5 segundos
     setInterval(() => {
-      try {
-        const raw = localStorage.getItem('evenpass_luis_gerardo_guests_db');
+      this.pollCloudSyncUpdates();
+      this.pollLocalStorageAllEvents();
+    }, 3500);
+
+    // Consulta inicial inmediata
+    this.pollCloudSyncUpdates();
+    this.pollLocalStorageAllEvents();
+  }
+
+  private connectCloudRealtimeStream(): void {
+    try {
+      if (typeof EventSource === 'undefined') return;
+      const sse = new EventSource(`${this.CLOUD_SYNC_RELAY}/sse`);
+      sse.onopen = () => {
+        this.cloudSyncConnected.set(true);
+      };
+      sse.onmessage = (event) => {
+        try {
+          const raw = JSON.parse(event.data);
+          if (raw.message) {
+            const data = JSON.parse(raw.message);
+            this.processSyncMessage(data, true);
+          }
+        } catch (e) {}
+      };
+      sse.onerror = () => {
+        this.cloudSyncConnected.set(false);
+      };
+    } catch (e) {}
+  }
+
+  private pollCloudSyncUpdates(): void {
+    fetch(`${this.CLOUD_SYNC_RELAY}/json?poll=1&since=24h`, { method: 'GET', mode: 'cors' })
+      .then(res => res.ok ? res.text() : '')
+      .then(text => {
+        if (!text) return;
+        const lines = text.trim().split('\n');
+        for (const line of lines) {
+          try {
+            const parsed = JSON.parse(line);
+            if (parsed.message) {
+              const data = JSON.parse(parsed.message);
+              this.processSyncMessage(data, false);
+            }
+          } catch (e) {}
+        }
+      })
+      .catch(() => {});
+  }
+
+  private pollLocalStorageAllEvents(): void {
+    try {
+      // Monitorear todos los eventos registrados
+      this.events().forEach(ev => {
+        const raw = localStorage.getItem(`evenpass_event_${ev.id}_guests_db`) || 
+                    (ev.id === 6 ? localStorage.getItem('evenpass_luis_gerardo_guests_db') : null);
         if (raw) {
           const list = JSON.parse(raw);
           if (Array.isArray(list) && list.length > 0) {
-            this.syncDigitalGuestsList(6, list, false);
+            this.syncDigitalGuestsList(ev.id, list, false);
           }
         }
-      } catch (e) {}
-    }, 3000);
+      });
+    } catch (e) {}
   }
 
-  // --- SINCRONIZACIÓN REAL DE INVITACIONES DIGITALES ---
+  private processSyncMessage(data: any, isLive: boolean): void {
+    if (!data) return;
+    const targetEventId = Number(data.eventId) || 6;
+
+    if (data.type === 'NEW_GUEST' || data.type === 'NEW_INVITATION') {
+      if (data.guest) {
+        this.syncDigitalGuestsList(targetEventId, [data.guest], isLive);
+      } else if (Array.isArray(data.allGuests)) {
+        this.syncDigitalGuestsList(targetEventId, data.allGuests, isLive);
+      }
+    } else if (data.type === 'RSVP_CONFIRMED') {
+      if (data.guest) {
+        this.syncDigitalGuestsList(targetEventId, [data.guest], isLive);
+      } else if (Array.isArray(data.allGuests)) {
+        this.syncDigitalGuestsList(targetEventId, data.allGuests, isLive);
+      }
+    } else if (data.type === 'SYNC_ALL' && Array.isArray(data.guests)) {
+      this.syncDigitalGuestsList(targetEventId, data.guests, false);
+    }
+  }
+
+  // --- SINCRONIZACIÓN REAL DE INVITACIONES DIGITALES (AUTOMÁTICA Y UNIVERSAL) ---
   syncDigitalGuestsList(eventId: number, guestList: any[], notify: boolean = true): number {
     if (!guestList || !Array.isArray(guestList) || guestList.length === 0) return 0;
     let changesCount = 0;
     const curGuests = [...this.allGuests()];
+    const targetEv = this.events().find(e => e.id === eventId);
 
     guestList.forEach(item => {
       const token = item.token || item.qrCodeToken;
@@ -2059,11 +2151,17 @@ export class EventService {
       const isConfirmed = item.status === 'CONFIRMED' || (item.passesConfirmed && item.passesConfirmed > 0) || item.asistencia === 'Sí';
       const tableName = item.tableName || item.assignedTableName || 'Mesa 01 - Familia Cercana';
 
-      let tableId = 401;
-      if (tableName.includes('Mesa 02')) tableId = 402;
-      else if (tableName.includes('Mesa 03')) tableId = 403;
-      else if (tableName.includes('Mesa 04')) tableId = 404;
-      else if (tableName.includes('Mesa 05')) tableId = 405;
+      // Encontrar tableId en el salón del evento
+      const targetSalon = this.salons().find(s => s.id === (targetEv?.salonId || 4));
+      let tableId = targetSalon?.tables?.[0]?.id || 401;
+      if (targetSalon && targetSalon.tables) {
+        const found = targetSalon.tables.find(t => 
+          t.tableName.toLowerCase().trim() === tableName.toLowerCase().trim() ||
+          tableName.toLowerCase().includes(`mesa 0${t.tableNumber}`) ||
+          tableName.toLowerCase().includes(`mesa ${t.tableNumber}`)
+        );
+        if (found) tableId = found.id;
+      }
 
       if (existingIdx >= 0) {
         // Actualizar invitado existente si cambió estado o pases
@@ -2079,12 +2177,20 @@ export class EventService {
             assignedTableId: tableId,
             dietNotes: item.notes || oldG.dietNotes,
             source: 'DIGITAL_INVITATION',
-            confirmedAt: isConfirmed ? (oldG.confirmedAt || '03/11/2026') : undefined
+            confirmedAt: isConfirmed ? (oldG.confirmedAt || new Date().toLocaleString()) : undefined
           };
           changesCount++;
+
+          if (notify && newStatus === 'CONFIRMED') {
+            this.notificationService.show(
+              'success',
+              'Confirmación en Vivo',
+              `"${name}" confirmó ${passes} pases para ${targetEv?.name || 'el evento'}.`
+            );
+          }
         }
       } else {
-        // Agregar nuevo invitado despachado desde el panel de los papás
+        // Agregar nuevo invitado despachado desde el panel de invitaciones del anfitrión
         const newG: Guest = {
           id: Date.now() + Math.floor(Math.random() * 1000),
           eventId: eventId,
@@ -2099,23 +2205,35 @@ export class EventService {
           assignedTableName: tableName,
           dietNotes: item.notes || 'Invitación enviada por WhatsApp',
           source: 'DIGITAL_INVITATION',
-          confirmedAt: isConfirmed ? (item.updatedAt || '03/11/2026') : undefined
+          confirmedAt: isConfirmed ? (item.updatedAt || new Date().toLocaleString()) : undefined
         };
         curGuests.unshift(newG);
         changesCount++;
+
+        if (notify) {
+          this.notificationService.show(
+            'success',
+            'Nuevo Invitado en Vivo',
+            `"${name}" (${passes} pases) se registró desde el panel del anfitrión.`
+          );
+        }
       }
     });
 
     if (changesCount > 0) {
       this.allGuests.set(curGuests);
       this.refreshAllTableOccupancies();
-      if (notify) {
-        this.notificationService.show(
-          'success',
-          'Invitaciones Sincronizadas',
-          `Se actualizaron ${changesCount} registros desde el panel digital.`
-        );
-      }
+
+      // Recalcular métricas de asistentes para el evento correspondiente
+      const evGuests = curGuests.filter(g => g.eventId === eventId);
+      const confirmedCount = evGuests
+        .filter(g => g.status === 'CONFIRMED' || g.status === 'ATTENDED')
+        .reduce((sum, g) => sum + g.totalPasses, 0);
+      const totalCount = evGuests.reduce((sum, g) => sum + g.totalPasses, 0);
+
+      this.events.update(list => list.map(e => 
+        e.id === eventId ? { ...e, totalGuests: totalCount, confirmedGuests: confirmedCount } : e
+      ));
     }
     return changesCount;
   }
