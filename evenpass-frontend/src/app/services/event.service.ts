@@ -37,6 +37,36 @@ export class EventService {
   salons = signal<Salon[]>([]);
   activeSalonId = signal<number>(1);
 
+  // --- PERSISTENCE STORAGE KEYS ---
+  readonly STORAGE_EVENTS = 'evenpass_events_db';
+  readonly STORAGE_SALONS = 'evenpass_salons_db';
+  readonly STORAGE_GUESTS = 'evenpass_all_guests_db';
+  readonly STORAGE_LOGS = 'evenpass_all_logs_db';
+
+  persistSalons(): void {
+    try {
+      localStorage.setItem(this.STORAGE_SALONS, JSON.stringify(this.salons()));
+    } catch (e) {
+      console.warn('Error guardando salones en localStorage:', e);
+    }
+  }
+
+  persistGuests(): void {
+    try {
+      localStorage.setItem(this.STORAGE_GUESTS, JSON.stringify(this.allGuests()));
+    } catch (e) {
+      console.warn('Error guardando invitados en localStorage:', e);
+    }
+  }
+
+  persistEvents(): void {
+    try {
+      localStorage.setItem(this.STORAGE_EVENTS, JSON.stringify(this.events()));
+    } catch (e) {
+      console.warn('Error guardando eventos en localStorage:', e);
+    }
+  }
+
   currentSalon = computed<Salon | null>(() => {
     const activeEv = this.selectedEvent();
     const targetId = activeEv?.salonId || this.activeSalonId();
@@ -317,6 +347,7 @@ export class EventService {
       }
       return e;
     }));
+    this.persistEvents();
     const ev = this.events().find(e => e.id === eventId);
     const label = newStatus === 'PENDIENTE' 
       ? 'Fase 1: En Planeación (Invitaciones & RSVP Abiertos)' 
@@ -531,7 +562,6 @@ export class EventService {
         ]
       }
     ];
-    this.events.set(demoEvents);
 
     // 2. Multi-Salon Architectural Layouts (Imperial, Carpa 40x60, Salón Zafiro)
     // 2.1 Salón Real Imperial (16 tables: 8 Round 10p + 8 Rectangular 8p = 144 seats)
@@ -643,14 +673,51 @@ export class EventService {
       tables: tablesNeonVip
     };
 
-    this.salons.set([salonImperial, salonWhitePoleTent, salonZafiro, salonNeonVip]);
-
-    // Link events to their salons
+    // Link default events to their salons
     demoEvents[0].salonId = 1; // Boda -> Salón Real Imperial
     demoEvents[1].salonId = 2; // Mis 18 -> Carpa 40x60
     demoEvents[2].salonId = 3; // Graduación -> Salón Zafiro
     demoEvents[5].salonId = 4; // Luis Gerardo -> Salón Neón VIP
-    this.events.set(demoEvents);
+
+    // Restore persisted events if available
+    let loadedEvents: EventItem[] | null = null;
+    try {
+      const rawEvents = localStorage.getItem(this.STORAGE_EVENTS);
+      if (rawEvents) {
+        const parsed = JSON.parse(rawEvents);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const evMap = new Map<number, EventItem>();
+          demoEvents.forEach(e => evMap.set(e.id, e));
+          parsed.forEach((e: EventItem) => evMap.set(e.id, { ...(evMap.get(e.id) || {}), ...e }));
+          loadedEvents = Array.from(evMap.values());
+        }
+      }
+    } catch (e) {}
+
+    const finalEvents = loadedEvents || demoEvents;
+    this.events.set(finalEvents);
+    this.persistEvents();
+
+    // Restore persisted salons (custom tables, geometry changes, new salons)
+    let loadedSalons: Salon[] | null = null;
+    try {
+      const rawSalons = localStorage.getItem(this.STORAGE_SALONS);
+      if (rawSalons) {
+        const parsed = JSON.parse(rawSalons);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const salonMap = new Map<number, Salon>();
+          [salonImperial, salonWhitePoleTent, salonZafiro, salonNeonVip].forEach(s => salonMap.set(s.id, s));
+          parsed.forEach((s: Salon) => {
+            salonMap.set(s.id, s);
+          });
+          loadedSalons = Array.from(salonMap.values());
+        }
+      }
+    } catch (e) {}
+
+    const finalSalons = loadedSalons || [salonImperial, salonWhitePoleTent, salonZafiro, salonNeonVip];
+    this.salons.set(finalSalons);
+    this.persistSalons();
 
     // 3. FULL REALISTIC GUESTS DATASETS (407 passes across 5 events)
     // Mexican First and Last Names for authentic guest generation
@@ -885,8 +952,8 @@ export class EventService {
         totalPasses: 4,
         status: 'PENDING',
         qrCodeToken: 'LG10-VIP-5520',
-        assignedTableId: 401,
-        assignedTableName: 'Mesa 01 - Familia Cercana',
+        assignedTableId: 405,
+        assignedTableName: 'Mesa 05 - Invitados Especiales',
         dietNotes: 'Enviado por WhatsApp',
         confirmedAt: undefined,
         source: 'DIGITAL_INVITATION',
@@ -902,8 +969,8 @@ export class EventService {
         totalPasses: 3,
         status: 'PENDING',
         qrCodeToken: 'LG10-VIP-8835',
-        assignedTableId: 401,
-        assignedTableName: 'Mesa 01 - Familia Cercana',
+        assignedTableId: 402,
+        assignedTableName: 'Mesa 02 - Amigos de Colegio',
         dietNotes: 'Invitación con 3 pases',
         confirmedAt: undefined,
         source: 'DIGITAL_INVITATION',
@@ -920,7 +987,7 @@ export class EventService {
         source: 'DIGITAL_INVITATION',
         guestName: g.fullName,
         passesCount: g.totalPasses,
-        assignedTable: g.assignedTableName || 'Mesa 01 - Familia Cercana',
+        assignedTable: g.assignedTableName || 'Mesa Asignada',
         qrToken: g.qrCodeToken,
         status: 'SYNCED',
         ipOrigin: '187.190.45.12',
@@ -928,9 +995,51 @@ export class EventService {
       });
     });
 
-    this.allGuests.set(demoGuests);
+    // 4. Restore persisted guests & apply self-healing
+    let loadedGuests: Guest[] | null = null;
+    try {
+      const rawGuests = localStorage.getItem(this.STORAGE_GUESTS);
+      if (rawGuests) {
+        const parsed = JSON.parse(rawGuests);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Self-healing migration for Event 6 overcapacity if legacy cached:
+          parsed.forEach((g: Guest) => {
+            if (g.eventId === 6) {
+              if (g.qrCodeToken === 'LG10-VIP-5520' || g.fullName?.includes('Quiñónez')) {
+                if (g.assignedTableId === 401 || !g.assignedTableId) {
+                  g.assignedTableId = 405;
+                  g.assignedTableName = 'Mesa 05 - Invitados Especiales';
+                }
+              }
+              if (g.qrCodeToken === 'LG10-VIP-8835' || g.fullName?.toLowerCase() === 'mario') {
+                if (g.assignedTableId === 401 || !g.assignedTableId) {
+                  g.assignedTableId = 402;
+                  g.assignedTableName = 'Mesa 02 - Amigos de Colegio';
+                }
+              }
+            }
+          });
+          loadedGuests = parsed;
+        }
+      }
+    } catch (e) {}
+
+    const finalGuests = loadedGuests || demoGuests;
+    this.allGuests.set(finalGuests);
     this.allLogs.set(demoLogs);
     this.allAuditEntries.set(demoAudit);
+    this.persistGuests();
+
+    // Sincronizar pases existentes desde panel del anfitrión si hay alguno registrado
+    try {
+      const rawHost = localStorage.getItem('evenpass_luis_gerardo_guests_db');
+      if (rawHost) {
+        const list = JSON.parse(rawHost);
+        if (Array.isArray(list) && list.length > 0) {
+          this.syncDigitalGuestsList(6, list, false);
+        }
+      }
+    } catch (e) {}
 
     // 5. Initial Expanded Templates (6 Professional Templates)
     this.templates.set([
@@ -1186,6 +1295,8 @@ export class EventService {
       s.id === salon.id ? { ...s, tables: updatedTables } : s
     ));
     this.allGuests.set(allGuestsCopy);
+    this.persistSalons();
+    this.persistGuests();
 
     const result: AutoAssignResult = {
       salonId: salon.id,
@@ -1341,6 +1452,8 @@ export class EventService {
     this.events.update(list => list.map(ev => 
       ev.id === activeEvId ? { ...ev, totalGuests: ev.totalGuests + 1 } : ev
     ));
+    this.persistGuests();
+    this.persistEvents();
     this.notificationService.show('success', 'Invitado Registrado', `${newGuest.fullName} añadido a este evento.`);
   }
 
@@ -1354,6 +1467,8 @@ export class EventService {
     this.events.update(list => list.map(ev => 
       ev.id === activeEvId ? { ...ev, totalGuests: Math.max(0, ev.totalGuests - 1) } : ev
     ));
+    this.persistGuests();
+    this.persistEvents();
     this.notificationService.show('info', 'Invitado Eliminado', 'Registro removido.');
   }
 
@@ -1369,21 +1484,11 @@ export class EventService {
     const guest = this.allGuests().find(g => g.id === guestId);
     if (!guest) return;
 
-    // Strictly check if target table has sufficient physical capacity
     const seatedInTarget = this.allGuests().filter(
-      g => g.eventId === this.activeEventId() && g.assignedTableId === tableId && g.id !== guestId
+      g => g.eventId === this.activeEventId() && g.assignedTableId === tableId && g.id !== guestId && g.status !== 'DECLINED'
     );
     const occupiedSeats = seatedInTarget.reduce((sum, g) => sum + g.totalPasses, 0);
-    const freeSeats = table.capacity - occupiedSeats;
-
-    if (freeSeats < guest.totalPasses) {
-      this.notificationService.show(
-        'warning',
-        'Capacidad Máxima Alcanzada',
-        `La mesa "${table.tableName}" solo tiene ${Math.max(0, freeSeats)} asiento(s) libre(s). Este invitado requiere ${guest.totalPasses} pases.`
-      );
-      return;
-    }
+    const isOver = (occupiedSeats + guest.totalPasses) > table.capacity;
 
     const now = Date.now();
     this.allGuests.update(list => list.map(g => {
@@ -1399,7 +1504,18 @@ export class EventService {
     }));
     this.refreshAllTableOccupancies();
     this.broadcastTableReassignment(guestId, tableId, table.tableName);
-    this.notificationService.show('success', 'Mesa Asignada', `"${guest.fullName}" asignado a ${table.tableName}`);
+    this.persistGuests();
+    this.persistSalons();
+
+    if (isOver) {
+      this.notificationService.show(
+        'warning',
+        'Mesa Asignada (Aviso de Aforo)',
+        `"${guest.fullName}" asignado a ${table.tableName}. La mesa supera su capacidad (${occupiedSeats + guest.totalPasses}/${table.capacity}p).`
+      );
+    } else {
+      this.notificationService.show('success', 'Mesa Asignada', `"${guest.fullName}" asignado a ${table.tableName}`);
+    }
   }
 
   unassignGuestTable(guestId: number): void {
@@ -1421,6 +1537,8 @@ export class EventService {
     }));
     this.refreshAllTableOccupancies();
     this.broadcastTableReassignment(guestId, undefined, 'Sin asignar');
+    this.persistGuests();
+    this.persistSalons();
     this.notificationService.show('info', 'Invitado Liberado', 'El comensal quedó sin mesa asignada.');
   }
 
@@ -1443,21 +1561,11 @@ export class EventService {
       return false;
     }
 
-    // Strictly check if target table has sufficient capacity
     const seatedInTarget = this.allGuests().filter(g => 
-      g.eventId === this.activeEventId() && g.assignedTableId === targetTableId && g.id !== guestId
+      g.eventId === this.activeEventId() && g.assignedTableId === targetTableId && g.id !== guestId && g.status !== 'DECLINED'
     );
     const occupiedSeats = seatedInTarget.reduce((sum, g) => sum + g.totalPasses, 0);
-    const freeSeats = targetTable.capacity - occupiedSeats;
-
-    if (freeSeats < guest.totalPasses) {
-      this.notificationService.show(
-        'warning',
-        'Mesa Completa',
-        `La mesa "${targetTable.tableName}" no tiene lugares suficientes (disponibles: ${Math.max(0, freeSeats)}, requeridos: ${guest.totalPasses}). No es posible sobrepasar la capacidad de la mesa.`
-      );
-      return false;
-    }
+    const isOver = (occupiedSeats + guest.totalPasses) > targetTable.capacity;
 
     const now = Date.now();
     this.allGuests.update(list => list.map(g => {
@@ -1474,12 +1582,22 @@ export class EventService {
 
     this.refreshAllTableOccupancies();
     this.broadcastTableReassignment(guestId, targetTable.id, targetTable.tableName);
+    this.persistGuests();
+    this.persistSalons();
 
-    this.notificationService.show(
-      'success',
-      'Comensal Reubicado',
-      `"${guest.fullName}" (${guest.totalPasses} pases) ahora está sentado en ${targetTable.tableName}.`
-    );
+    if (isOver) {
+      this.notificationService.show(
+        'warning',
+        'Comensal Reubicado (Aviso de Aforo)',
+        `"${guest.fullName}" (${guest.totalPasses} pases) movido a ${targetTable.tableName}. La mesa supera su capacidad (${occupiedSeats + guest.totalPasses}/${targetTable.capacity}p).`
+      );
+    } else {
+      this.notificationService.show(
+        'success',
+        'Comensal Reubicado',
+        `"${guest.fullName}" (${guest.totalPasses} pases) ahora está sentado en ${targetTable.tableName}.`
+      );
+    }
     return true;
   }
 
@@ -1645,6 +1763,7 @@ export class EventService {
       }
       return s;
     }));
+    this.persistSalons();
     this.notificationService.show('success', 'Recinto Actualizado', 'Dimensiones y datos del salón guardados.');
   }
 
@@ -1679,6 +1798,7 @@ export class EventService {
     };
 
     this.salons.update(list => [...list, newSalon]);
+    this.persistSalons();
     this.selectSalon(newId);
     this.notificationService.show('success', 'Salón Registrado', `"${newSalon.name}" se guardó en el catálogo.`);
     return newSalon;
@@ -1726,18 +1846,19 @@ export class EventService {
     };
 
     this.salons.update(list => [...list, importedSalon]);
+    this.persistSalons();
     this.selectSalon(newId);
     this.notificationService.show('success', 'Detección CAD Exitosa', `Se detectaron ${tableCount} mesas con capacidad total de ${calculatedCapacity} personas.`);
     return importedSalon;
   }
 
-  addTableToCurrentSalon(table: Partial<SalonTable>): void {
+  addTableToCurrentSalon(table: Partial<SalonTable>): SalonTable | null {
     if (this.isEventLocked()) {
       this.notificationService.show('warning', 'Evento Concluido', 'Este evento ha finalizado. El plano arquitectónico está archivado en modo de solo lectura.');
-      return;
+      return null;
     }
     const cur = this.currentSalon();
-    if (!cur) return;
+    if (!cur) return null;
 
     const newTableNumber = (cur.tables.length > 0) ? Math.max(...cur.tables.map(t => t.tableNumber)) + 1 : 1;
     const newTable: SalonTable = {
@@ -1756,7 +1877,9 @@ export class EventService {
     this.salons.update(list => list.map(s => 
       s.id === cur.id ? { ...s, tables: updatedTables, totalCapacity: s.totalCapacity + newTable.capacity } : s
     ));
+    this.persistSalons();
     this.notificationService.show('success', 'Mesa Creada', `Mesa ${newTable.tableNumber} añadida al salón actual.`);
+    return newTable;
   }
 
   updateTableInCurrentSalon(tableId: number, changes: Partial<SalonTable>, silent: boolean = false): void {
@@ -1776,6 +1899,7 @@ export class EventService {
     this.salons.update(list => list.map(s => 
       s.id === cur.id ? { ...s, tables: updatedTables } : s
     ));
+    this.persistSalons();
     if (!silent) {
       this.notificationService.show('info', 'Mesa Modificada', 'Cambios guardados en la mesa.');
     }
@@ -1800,8 +1924,10 @@ export class EventService {
     ));
 
     this.salons.update(list => list.map(s => 
-      s.id === cur.id ? { ...s, tables: updatedTables } : s
+      s.id === cur.id ? { ...s, tables: updatedTables, totalCapacity: Math.max(0, s.totalCapacity - (targetTable?.capacity || 0)) } : s
     ));
+    this.persistSalons();
+    this.persistGuests();
     this.notificationService.show('info', 'Mesa Removida', 'Mesa eliminada del plano y comensales desasignados.');
   }
 
@@ -2371,6 +2497,8 @@ export class EventService {
     if (changesCount > 0) {
       this.allGuests.set(curGuests);
       this.refreshAllTableOccupancies();
+      this.persistGuests();
+      this.persistSalons();
 
       // Recalcular métricas de asistentes para el evento correspondiente
       const evGuests = curGuests.filter(g => g.eventId === eventId);
@@ -2382,6 +2510,7 @@ export class EventService {
       this.events.update(list => list.map(e => 
         e.id === eventId ? { ...e, totalGuests: totalCount, confirmedGuests: confirmedCount } : e
       ));
+      this.persistEvents();
     }
     return changesCount;
   }

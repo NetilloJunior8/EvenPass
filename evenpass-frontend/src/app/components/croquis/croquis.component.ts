@@ -1,4 +1,4 @@
-import { Component, signal, HostListener } from '@angular/core';
+import { Component, signal, computed, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
@@ -687,52 +687,52 @@ import jsPDF from 'jspdf';
           <div class="inspector-header">
             <div>
               <h3>Inspección de Mesa</h3>
-              <p *ngIf="selectedTable()">{{ selectedTable()?.tableName }}</p>
-              <p *ngIf="!selectedTable()">Selecciona una mesa en el plano para ver detalles</p>
+              <p *ngIf="activeSelectedTable()">{{ activeSelectedTable()?.tableName }}</p>
+              <p *ngIf="!activeSelectedTable()">Selecciona una mesa en el plano para ver detalles</p>
             </div>
-            <span *ngIf="selectedTable()" class="badge" [ngClass]="{
-              'badge-danger': (selectedTable()?.occupiedSeats || 0) >= (selectedTable()?.capacity || 1),
-              'badge-success': (selectedTable()?.occupiedSeats || 0) < (selectedTable()?.capacity || 1) && (selectedTable()?.occupiedSeats || 0) > 0,
-              'badge-info': (selectedTable()?.occupiedSeats || 0) === 0
+            <span *ngIf="activeSelectedTable()" class="badge" [ngClass]="{
+              'badge-danger': getTableOccupiedSeats(activeSelectedTable()) >= (activeSelectedTable()?.capacity || 1),
+              'badge-success': getTableOccupiedSeats(activeSelectedTable()) < (activeSelectedTable()?.capacity || 1) && getTableOccupiedSeats(activeSelectedTable()) > 0,
+              'badge-info': getTableOccupiedSeats(activeSelectedTable()) === 0
             }">
-              {{ (selectedTable()?.occupiedSeats || 0) >= (selectedTable()?.capacity || 1) ? 'Llena' : ((selectedTable()?.occupiedSeats || 0) > 0 ? 'Con Espacio' : 'Disponible') }}
+              {{ getTableOccupiedSeats(activeSelectedTable()) >= (activeSelectedTable()?.capacity || 1) ? 'Llena' : (getTableOccupiedSeats(activeSelectedTable()) > 0 ? 'Con Espacio' : 'Disponible') }}
             </span>
           </div>
 
-          <div *ngIf="selectedTable()" class="inspector-body">
+          <div *ngIf="activeSelectedTable()" class="inspector-body">
             
             <!-- Metric Stats Grid -->
             <div class="table-stats-grid">
               <div class="stat-box">
                 <span class="stat-label">Capacidad</span>
-                <strong class="stat-val">{{ selectedTable()?.capacity }} personas</strong>
+                <strong class="stat-val">{{ activeSelectedTable()?.capacity }} personas</strong>
               </div>
               <div class="stat-box">
                 <span class="stat-label">Pases Ocupados</span>
-                <strong class="stat-val" [class.text-danger]="(selectedTable()?.occupiedSeats || 0) >= (selectedTable()?.capacity || 1)">
-                  {{ selectedTable()?.occupiedSeats || 0 }} pases
+                <strong class="stat-val" [class.text-danger]="getTableOccupiedSeats(activeSelectedTable()) >= (activeSelectedTable()?.capacity || 1)">
+                  {{ getTableOccupiedSeats(activeSelectedTable()) }} pases
                 </strong>
               </div>
               <div class="stat-box">
                 <span class="stat-label">Asientos Libres</span>
                 <strong class="stat-val text-success">
-                  {{ (selectedTable()?.capacity || 0) - (selectedTable()?.occupiedSeats || 0) }} libres
+                  {{ (activeSelectedTable()?.capacity || 0) - getTableOccupiedSeats(activeSelectedTable()) }} libres
                 </strong>
               </div>
               <div class="stat-box">
                 <span class="stat-label">Geometría</span>
-                <strong class="stat-val">{{ selectedTable()?.shape === 'ROUND' ? 'Redonda' : 'Imperial / Rectangular' }}</strong>
+                <strong class="stat-val">{{ activeSelectedTable()?.shape === 'ROUND' ? 'Redonda' : 'Imperial / Rectangular' }}</strong>
               </div>
             </div>
 
             <!-- Overcapacity Alert Banner (Sobrecupo 10/8 Fix) -->
-            <div *ngIf="(selectedTable()?.occupiedSeats || 0) > (selectedTable()?.capacity || 0)" class="overcapacity-banner">
+            <div *ngIf="isOvercapacity(activeSelectedTable())" class="overcapacity-banner">
               <div class="overcap-title">
                 <app-icon name="alert-triangle" [size]="18"></app-icon>
-                <strong>Sobrecupo Detectado ({{ selectedTable()?.occupiedSeats }}/{{ selectedTable()?.capacity }} pases)</strong>
+                <strong>Sobrecupo Detectado ({{ getTableOccupiedSeats(activeSelectedTable()) }}/{{ activeSelectedTable()?.capacity }} pases)</strong>
               </div>
-              <p>Esta mesa sobrepasa su capacidad física por {{ (selectedTable()?.occupiedSeats || 0) - (selectedTable()?.capacity || 0) }} asiento(s). Puedes reubicar los comensales excedentes automáticamente.</p>
-              <button class="btn-resolve-overcap" (click)="resolveOvercapacity(selectedTable()!)">
+              <p>Esta mesa sobrepasa su capacidad física por {{ getTableOccupiedSeats(activeSelectedTable()) - (activeSelectedTable()?.capacity || 0) }} asiento(s). Puedes reubicar los comensales excedentes automáticamente.</p>
+              <button class="btn-resolve-overcap" (click)="resolveOvercapacity(activeSelectedTable()!)">
                 <app-icon name="sparkles" [size]="14"></app-icon>
                 <span>Reubicar Excedentes Automáticamente</span>
               </button>
@@ -745,7 +745,7 @@ import jsPDF from 'jspdf';
                   <app-icon name="croquis" [size]="14"></app-icon>
                   Ajuste de Posición en Plano CAD
                 </span>
-                <span class="coords-pill">X: {{ selectedTable()?.posX }}px · Y: {{ selectedTable()?.posY }}px</span>
+                <span class="coords-pill">X: {{ activeSelectedTable()?.posX }}px · Y: {{ activeSelectedTable()?.posY }}px</span>
               </div>
               <div class="nudge-controls-wrap">
                 <div class="nudge-pad">
@@ -764,11 +764,11 @@ import jsPDF from 'jspdf';
                 <div class="direct-coords-inputs">
                   <div class="coord-field">
                     <label>Eje X (Horizontal)</label>
-                    <input type="number" [ngModel]="selectedTable()?.posX" (ngModelChange)="setTableCoord('posX', $event)" step="5" min="20" max="580">
+                    <input type="number" [ngModel]="activeSelectedTable()?.posX" (ngModelChange)="setTableCoord('posX', $event)" step="5" min="20" max="580">
                   </div>
                   <div class="coord-field">
                     <label>Eje Y (Vertical)</label>
-                    <input type="number" [ngModel]="selectedTable()?.posY" (ngModelChange)="setTableCoord('posY', $event)" step="5" min="20" max="840">
+                    <input type="number" [ngModel]="activeSelectedTable()?.posY" (ngModelChange)="setTableCoord('posY', $event)" step="5" min="20" max="840">
                   </div>
                 </div>
               </div>
@@ -2638,6 +2638,14 @@ import jsPDF from 'jspdf';
 export class CroquisComponent {
   zoomScale = signal<number>(1.0);
   selectedTable = signal<SalonTable | null>(null);
+
+  // Real-time reactive selected table synchronized with currentSalon
+  activeSelectedTable = computed<SalonTable | null>(() => {
+    const sel = this.selectedTable();
+    if (!sel) return null;
+    const curSalon = this.eventService.currentSalon();
+    return curSalon?.tables.find(t => t.id === sel.id) || sel;
+  });
   lastAssignmentResult = signal<any | null>(null);
   guestToSeatId: number | null = null;
 
@@ -2721,8 +2729,11 @@ export class CroquisComponent {
 
   // FIXED RELIABLE GUEST LOOKUP FOR SELECTED TABLE
   getGuestsForSelectedTable(): Guest[] {
-    const t = this.selectedTable();
+    const t = this.activeSelectedTable();
     if (!t) return [];
+    if (t.assignedGuests && t.assignedGuests.length > 0) {
+      return t.assignedGuests;
+    }
     return this.eventService.eventGuests().filter(g => 
       (g.assignedTableId != null && Number(g.assignedTableId) === Number(t.id)) ||
       (g.assignedTableName && g.assignedTableName.toLowerCase().trim() === t.tableName.toLowerCase().trim()) ||
@@ -2731,11 +2742,11 @@ export class CroquisComponent {
   }
 
   getSeatedGuestsPassesCount(): number {
-    return this.getGuestsForSelectedTable().reduce((sum, g) => sum + g.totalPasses, 0);
+    return this.getTableOccupiedSeats(this.activeSelectedTable());
   }
 
   getUnassignedGuests(): Guest[] {
-    return this.eventService.eventGuests().filter(g => !g.assignedTableId && (g.status === 'CONFIRMED' || g.status === 'ATTENDED'));
+    return this.eventService.eventGuests().filter(g => !g.assignedTableId && g.status !== 'DECLINED');
   }
 
   handleManualSeatGuest(): void {
@@ -2840,8 +2851,11 @@ export class CroquisComponent {
 
   handleCreateTable(): void {
     if (!this.newTableForm.tableName) return;
-    this.eventService.addTableToCurrentSalon(this.newTableForm);
+    const created = this.eventService.addTableToCurrentSalon(this.newTableForm);
     this.showNewTableModal.set(false);
+    if (created) {
+      this.selectedTable.set(created);
+    }
     this.newTableForm = {
       tableName: '',
       shape: 'ROUND',
@@ -2926,30 +2940,20 @@ export class CroquisComponent {
 
   getTableOccupiedSeats(table: SalonTable | null | undefined): number {
     if (!table) return 0;
-    const curEvId = this.eventService.activeEventId();
-    const guests = this.eventService.allGuests().filter(
-      g => g.eventId === curEvId &&
-           g.assignedTableId === table.id &&
-           (g.status === 'CONFIRMED' || g.status === 'ATTENDED')
-    );
-    const sum = guests.reduce((acc, g) => acc + (g.totalPasses || 1), 0);
-    return Math.min(table.capacity, sum);
+    const curTable = this.eventService.currentSalon()?.tables.find(t => t.id === table.id) || table;
+    return curTable.occupiedSeats ?? 0;
   }
 
   getTableRawOccupiedSeats(table: SalonTable | null | undefined): number {
     if (!table) return 0;
-    const curEvId = this.eventService.activeEventId();
-    const guests = this.eventService.allGuests().filter(
-      g => g.eventId === curEvId &&
-           g.assignedTableId === table.id &&
-           (g.status === 'CONFIRMED' || g.status === 'ATTENDED')
-    );
-    return guests.reduce((acc, g) => acc + (g.totalPasses || 1), 0);
+    const curTable = this.eventService.currentSalon()?.tables.find(t => t.id === table.id) || table;
+    return curTable.occupiedSeats ?? 0;
   }
 
   isOvercapacity(table: SalonTable | null): boolean {
     if (!table) return false;
-    return this.getTableRawOccupiedSeats(table) > table.capacity;
+    const curTable = this.eventService.currentSalon()?.tables.find(t => t.id === table.id) || table;
+    return (curTable.occupiedSeats ?? 0) > curTable.capacity;
   }
 
   resolveOvercapacity(table: SalonTable): void {
@@ -3005,6 +3009,10 @@ export class CroquisComponent {
     this.eventService.reassignGuestToTable(g.id, targetTableId);
     this.showReassignModal.set(false);
     this.guestToReassign.set(null);
+    const target = this.eventService.currentSalon()?.tables.find(t => t.id === targetTableId);
+    if (target) {
+      this.selectedTable.set(target);
+    }
   }
 
   getTableOccupantsNames(tableId: number): string[] {

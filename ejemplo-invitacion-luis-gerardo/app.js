@@ -63,6 +63,21 @@ function getStoredGuests() {
     try {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed) && parsed.length > 0) {
+        let changed = false;
+
+        // Auto-sanar sobrecupo heredado de Mesa 01 si Quiñónez y Mario siguen asignados a Mesa 01
+        parsed.forEach(g => {
+          const name = (g.fullName || '').toLowerCase().trim();
+          if ((name.includes('quiñónez') || name.includes('quinonez')) && (g.tableName || '').includes('Mesa 01')) {
+            g.tableName = 'Mesa 05 - Invitados Especiales';
+            changed = true;
+          }
+          if (name === 'mario' && (g.tableName || '').includes('Mesa 01')) {
+            g.tableName = 'Mesa 02 - Amigos de Colegio';
+            changed = true;
+          }
+        });
+
         // Garantizar que Mario con 3 pases siempre esté disponible
         if (!parsed.some(g => (g.fullName || '').toLowerCase().trim() === 'mario')) {
           parsed.push({
@@ -72,12 +87,17 @@ function getStoredGuests() {
             passesGranted: 3,
             passesConfirmed: 0,
             status: 'PENDING',
-            tableName: 'Mesa 01 - Familia Cercana',
+            tableName: 'Mesa 02 - Amigos de Colegio',
             token: 'LG10-VIP-8835',
             notes: 'Invitación con 3 pases',
             updatedAt: '12:45 PM'
           });
+          changed = true;
+        }
+
+        if (changed) {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+          localStorage.setItem(`evenpass_event_${evId}_guests_db`, JSON.stringify(parsed));
           localStorage.setItem('evenpass_luis_gerardo_guests_db', JSON.stringify(parsed));
         }
         return parsed;
@@ -85,14 +105,14 @@ function getStoredGuests() {
     } catch (e) {}
   }
 
-  // Padrón inicial oficial sincronizado con EvenPass
+  // Padrón inicial oficial sincronizado con EvenPass (distribución balanceada sin sobrecupo)
   const initial = [
     { id: 1, fullName: 'Familia Morales Valenzuela', phone: '667-112-3344', passesGranted: 4, passesConfirmed: 4, status: 'CONFIRMED', tableName: 'Mesa 01 - Familia Cercana', token: 'LG10-VIP-1102', notes: 'Abuelos y tíos', updatedAt: '09:30 AM' },
     { id: 2, fullName: 'Mateo González & Padres', phone: '667-223-4455', passesGranted: 3, passesConfirmed: 3, status: 'CONFIRMED', tableName: 'Mesa 02 - Amigos de Colegio', token: 'LG10-VIP-2481', notes: 'Compañero de salón', updatedAt: '10:15 AM' },
     { id: 3, fullName: 'Lic. Roberto Somoza & Fam.', phone: '667-334-5566', passesGranted: 3, passesConfirmed: 3, status: 'CONFIRMED', tableName: 'Mesa 03 - Padrinos & Tíos', token: 'LG10-VIP-3392', notes: 'Padrino', updatedAt: '11:00 AM' },
     { id: 4, fullName: 'Santiago Beltrán & Papás', phone: '667-445-6677', passesGranted: 3, passesConfirmed: 3, status: 'CONFIRMED', tableName: 'Mesa 04 - Amigos Deportes & Laser', token: 'LG10-VIP-4819', notes: 'Fútbol', updatedAt: '11:45 AM' },
-    { id: 5, fullName: 'Familia Quiñónez Rivas', phone: '667-556-7788', passesGranted: 4, passesConfirmed: 0, status: 'PENDING', tableName: 'Mesa 01 - Familia Cercana', token: 'LG10-VIP-5520', notes: 'Enviado por WhatsApp', updatedAt: '12:20 PM' },
-    { id: 6, fullName: 'Mario', phone: '667-611-8835', passesGranted: 3, passesConfirmed: 0, status: 'PENDING', tableName: 'Mesa 01 - Familia Cercana', token: 'LG10-VIP-8835', notes: 'Invitación con 3 pases', updatedAt: '12:45 PM' }
+    { id: 5, fullName: 'Familia Quiñónez Rivas', phone: '667-556-7788', passesGranted: 4, passesConfirmed: 0, status: 'PENDING', tableName: 'Mesa 05 - Invitados Especiales', token: 'LG10-VIP-5520', notes: 'Enviado por WhatsApp', updatedAt: '12:20 PM' },
+    { id: 6, fullName: 'Mario', phone: '667-611-8835', passesGranted: 3, passesConfirmed: 0, status: 'PENDING', tableName: 'Mesa 02 - Amigos de Colegio', token: 'LG10-VIP-8835', notes: 'Invitación con 3 pases', updatedAt: '12:45 PM' }
   ];
   localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
   localStorage.setItem('evenpass_luis_gerardo_guests_db', JSON.stringify(initial));
