@@ -183,6 +183,7 @@ function balanceGuestsAgainstCapacity(guestsList) {
         }
 
         g.tableName = alt.name;
+        g.manualAssignmentTimestamp = Date.now();
         occTracker.set(alt.name, (occTracker.get(alt.name) || 0) + passes);
         changed = true;
       } else {
@@ -740,6 +741,9 @@ function renderIssuedPass(name, passes, tableName, token, notes = '') {
 // ============================================================================
 // 5. LÓGICA DEL PANEL DEL ANFITRIÓN (PANEL.HTML) & SINCRONIZACIÓN EN TIEMPO REAL
 // ============================================================================
+const processedCloudMsgIds = new Set();
+let isFirstAppPoll = true;
+
 function applyTableReassignment(data) {
   if (!data) return;
   const targetEvId = Number(data.eventId) || 6;
@@ -747,25 +751,36 @@ function applyTableReassignment(data) {
 
   const guests = getStoredGuests();
   let modified = false;
+  const msgTimestamp = Number(data.timestamp || 0);
 
   guests.forEach(g => {
     const matchToken = data.guestToken && g.token === data.guestToken;
     const matchName = data.fullName && g.fullName && g.fullName.toLowerCase().trim() === data.fullName.toLowerCase().trim();
     if (matchToken || matchName) {
-      const newTbl = data.newTableName === 'Sin asignar' ? 'Sin asignar' : (data.newTableName || 'Sin asignar');
+      const curTs = Number(g.manualAssignmentTimestamp || 0);
+      // Evitar que mensajes viejos reviertan cambios manuales más recientes
+      if (curTs && msgTimestamp && msgTimestamp < curTs) {
+        return;
+      }
+
+      const tables = getEventTablesRaw();
+      const matchedTable = tables.find(t => matchesTableName(data.newTableName, t));
+      const newTbl = data.newTableName === 'Sin asignar' 
+        ? 'Sin asignar' 
+        : (matchedTable ? matchedTable.name : (data.newTableName || 'Sin asignar'));
+
       if (g.tableName !== newTbl) {
         g.tableName = newTbl;
-        g.manualAssignmentTimestamp = data.timestamp || Date.now();
+        g.manualAssignmentTimestamp = msgTimestamp || Date.now();
         modified = true;
       }
     }
   });
 
   if (modified) {
-    const evId = getActiveEventId();
     saveGuestsListSilently(guests);
 
-    // Si estamos en panel.html, refrescar tablero y tabla
+    // Si estamos en panel.html, refrescar tablero y tabla EN VIVO SIN REFRESCAR PÁGINA
     if (typeof loadStoredGuests === 'function' && document.getElementById('panel-tables-grid')) {
       loadStoredGuests();
     }
@@ -794,11 +809,51 @@ function applyFullStateSync(data) {
     } catch (e) {}
   }
 
-  // 2. Guardar invitados sincronizados
+  // 2. Fusionar invitados inteligentemente (sin sobrescribir asignaciones locales más recientes)
   if (Array.isArray(data.allGuests) && data.allGuests.length > 0) {
     try {
-      saveGuestsListSilently(data.allGuests);
-      changed = true;
+      const localGuests = getStoredGuests();
+      const mergedGuests = [...localGuests];
+
+      data.allGuests.forEach(incomingG => {
+        const idx = mergedGuests.findIndex(g => 
+          (incomingG.token && g.token === incomingG.token) ||
+          (incomingG.id && g.id === incomingG.id) ||
+          (incomingG.fullName && g.fullName && g.fullName.toLowerCase().trim() === incomingG.fullName.toLowerCase().trim())
+        );
+
+        if (idx >= 0) {
+          const cur = mergedGuests[idx];
+          const localTs = Number(cur.manualAssignmentTimestamp || 0);
+          const incomingTs = Number(incomingG.manualAssignmentTimestamp || data.timestamp || 0);
+
+          const preserveLocalTable = localTs > incomingTs;
+          const finalTableName = preserveLocalTable ? cur.tableName : incomingG.tableName;
+          const finalTs = preserveLocalTable ? localTs : incomingTs;
+
+          const isLocalConfirmed = cur.status === 'CONFIRMED' || cur.status === 'ATTENDED';
+          const isIncomingConfirmed = incomingG.status === 'CONFIRMED' || incomingG.status === 'ATTENDED';
+          const finalStatus = (isLocalConfirmed || isIncomingConfirmed) ? 'CONFIRMED' : (incomingG.status || cur.status);
+
+          if (cur.tableName !== finalTableName || cur.status !== finalStatus || cur.passesGranted !== incomingG.passesGranted) {
+            mergedGuests[idx] = {
+              ...cur,
+              ...incomingG,
+              tableName: finalTableName,
+              manualAssignmentTimestamp: finalTs,
+              status: finalStatus
+            };
+            changed = true;
+          }
+        } else {
+          mergedGuests.push(incomingG);
+          changed = true;
+        }
+      });
+
+      if (changed) {
+        saveGuestsListSilently(mergedGuests);
+      }
     } catch (e) {}
   }
 
@@ -824,8 +879,20 @@ function handleIncomingCloudMessage(data) {
     applyFullStateSync(data);
   } else if (data.type === 'TABLE_REASSIGNED') {
     applyTableReassignment(data);
+  } else if (data.type === 'GUEST_DELETED') {
+    if (data.eventId === getActiveEventId() || !data.eventId) {
+      const guests = getStoredGuests();
+      const filtered = guests.filter(g => 
+        !( (data.guestToken && g.token === data.guestToken) ||
+           (data.fullName && g.fullName && g.fullName.toLowerCase().trim() === data.fullName.toLowerCase().trim()) ||
+           (data.guestId && g.id === data.guestId) )
+      );
+      if (filtered.length !== guests.length) {
+        saveGuestsListSilently(filtered);
+        if (document.getElementById('panel-tables-grid')) loadStoredGuests();
+      }
+    }
   } else if (data.type === 'AUTO_TABLE_CREATED') {
-    // EvenPass o el panel creó una mesa automáticamente — sincronizar al almacén local
     if (data.table && (data.eventId === getActiveEventId() || !data.eventId)) {
       try {
         const evId = getActiveEventId();
@@ -837,7 +904,6 @@ function handleIncomingCloudMessage(data) {
           localStorage.setItem(`evenpass_event_${evId}_tables_db`, JSON.stringify(existing));
         }
       } catch (e) {}
-      // Refrescar el select de despacho si estamos en el panel
       if (typeof populateDispatchTablesSelect === 'function') populateDispatchTablesSelect();
       if (typeof loadStoredGuests === 'function' && document.getElementById('panel-tables-grid')) loadStoredGuests();
     }
@@ -882,6 +948,10 @@ function startLiveCloudSyncListener() {
       const bc = new BroadcastChannel('evenpass_invitations_channel');
       bc.onmessage = (event) => {
         if (event && event.data) {
+          if (event.data.msgId) {
+            if (processedCloudMsgIds.has(event.data.msgId)) return;
+            processedCloudMsgIds.add(event.data.msgId);
+          }
           handleIncomingCloudMessage(event.data);
         }
       };
@@ -895,8 +965,18 @@ function startLiveCloudSyncListener() {
       sse.onmessage = (e) => {
         try {
           const raw = JSON.parse(e.data);
+          if (raw.id) {
+            if (processedCloudMsgIds.has(raw.id)) return;
+            processedCloudMsgIds.add(raw.id);
+            if (processedCloudMsgIds.size > 500) {
+              const first = processedCloudMsgIds.values().next().value;
+              if (first) processedCloudMsgIds.delete(first);
+            }
+          }
           if (raw.message) {
             const data = JSON.parse(raw.message);
+            if (data.msgId && processedCloudMsgIds.has(data.msgId)) return;
+            if (data.msgId) processedCloudMsgIds.add(data.msgId);
             handleIncomingCloudMessage(data);
           }
         } catch (err) {}
@@ -906,7 +986,10 @@ function startLiveCloudSyncListener() {
 
   // 3. Polling de respaldo cada 3.5 segundos
   setInterval(() => {
-    fetch(`${CLOUD_SYNC_RELAY}/json?poll=1&since=5m`, { method: 'GET', mode: 'cors' })
+    const timeParam = isFirstAppPoll ? 'since=1h' : 'since=30s';
+    isFirstAppPoll = false;
+
+    fetch(`${CLOUD_SYNC_RELAY}/json?poll=1&${timeParam}`, { method: 'GET', mode: 'cors' })
       .then(res => res.ok ? res.text() : '')
       .then(text => {
         if (!text) return;
@@ -914,8 +997,18 @@ function startLiveCloudSyncListener() {
         for (const line of lines) {
           try {
             const parsed = JSON.parse(line);
+            if (parsed.id) {
+              if (processedCloudMsgIds.has(parsed.id)) continue;
+              processedCloudMsgIds.add(parsed.id);
+              if (processedCloudMsgIds.size > 500) {
+                const first = processedCloudMsgIds.values().next().value;
+                if (first) processedCloudMsgIds.delete(first);
+              }
+            }
             if (parsed.message) {
               const data = JSON.parse(parsed.message);
+              if (data.msgId && processedCloudMsgIds.has(data.msgId)) continue;
+              if (data.msgId) processedCloudMsgIds.add(data.msgId);
               handleIncomingCloudMessage(data);
             }
           } catch (e) {}
@@ -1090,10 +1183,11 @@ function reassignGuestTableFromPanel(guestId, newTableName) {
   const guest = guests.find(g => g.id === guestId);
   if (!guest) return;
 
+  let targetTable = null;
   // Verificación de aforo antes de reasignar
   if (newTableName && newTableName !== 'Sin asignar') {
     const tables = getEventTables();
-    const targetTable = tables.find(t => matchesTableName(newTableName, t));
+    targetTable = tables.find(t => matchesTableName(newTableName, t));
     if (targetTable) {
       const occ = getTableOccupancies();
       // Si el comensal ya estaba en esta mesa, no sumar doble
@@ -1115,19 +1209,24 @@ function reassignGuestTableFromPanel(guestId, newTableName) {
   }
 
   const evId = getActiveEventId();
-  guest.tableName = newTableName === 'Sin asignar' ? 'Sin asignar' : newTableName;
+  guest.tableName = newTableName === 'Sin asignar' ? 'Sin asignar' : (targetTable ? targetTable.name : newTableName);
   guest.manualAssignmentTimestamp = Date.now();
   guest.updatedAt = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
 
   saveGuestsList(guests);
 
+  const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  processedCloudMsgIds.add(msgId);
+
   const payload = {
     type: 'TABLE_REASSIGNED',
+    msgId: msgId,
     eventId: evId,
     guestId: guest.id,
     guestToken: guest.token,
     fullName: guest.fullName,
     newTableName: guest.tableName,
+    newTableId: targetTable ? targetTable.id : undefined,
     timestamp: guest.manualAssignmentTimestamp
   };
 
@@ -1340,9 +1439,37 @@ function copyGuestInviteLink(name, passes, token) {
 
 function deleteHostGuest(id) {
   if (!confirm('¿Deseas eliminar a este invitado y liberar sus lugares asignados?')) return;
-  const list = getStoredGuests().filter(g => g.id !== id);
+  const guests = getStoredGuests();
+  const guestToDelete = guests.find(g => g.id === id);
+  if (!guestToDelete) return;
+
+  const list = guests.filter(g => g.id !== id);
+  const evId = getActiveEventId();
   saveGuestsList(list);
   loadStoredGuests();
+
+  const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  processedCloudMsgIds.add(msgId);
+
+  const payload = {
+    type: 'GUEST_DELETED',
+    msgId: msgId,
+    eventId: evId,
+    guestId: id,
+    guestToken: guestToDelete.token,
+    fullName: guestToDelete.fullName,
+    tableName: guestToDelete.tableName,
+    timestamp: Date.now()
+  };
+
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      const bc = new BroadcastChannel('evenpass_invitations_channel');
+      bc.postMessage(payload);
+    }
+  } catch (e) {}
+
+  broadcastToCloud(payload);
 }
 
 function exportCsvForHostess() {

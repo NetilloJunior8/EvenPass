@@ -266,11 +266,11 @@ import jsPDF from 'jspdf';
                    style="cursor: grab; touch-action: none;"
                 >
                   <!-- Selection Halo -->
-                  <circle *ngIf="selectedTable()?.id === table.id && table.shape === 'ROUND'" [attr.cx]="table.posX" [attr.cy]="table.posY" r="44" fill="none" stroke="#0284c7" stroke-width="2.5" stroke-dasharray="4,4" />
-                  <rect *ngIf="selectedTable()?.id === table.id && table.shape === 'RECTANGULAR'" [attr.x]="table.posX - 38" [attr.y]="table.posY - 30" width="76" height="60" rx="8" fill="none" stroke="#0284c7" stroke-width="2.5" stroke-dasharray="4,4" />
+                  <circle *ngIf="selectedTable()?.id === table.id && !isRectTable(table)" [attr.cx]="table.posX" [attr.cy]="table.posY" r="44" fill="none" stroke="#0284c7" stroke-width="2.5" stroke-dasharray="4,4" />
+                  <rect *ngIf="selectedTable()?.id === table.id && isRectTable(table)" [attr.x]="table.posX - 38" [attr.y]="table.posY - 30" width="76" height="60" rx="8" fill="none" stroke="#0284c7" stroke-width="2.5" stroke-dasharray="4,4" />
 
                   <!-- Round Table -->
-                  <ng-container *ngIf="table.shape === 'ROUND'">
+                  <ng-container *ngIf="!isRectTable(table)">
                     <circle 
                       [attr.cx]="table.posX" 
                       [attr.cy]="table.posY" 
@@ -298,7 +298,7 @@ import jsPDF from 'jspdf';
                   </ng-container>
 
                   <!-- Rectangular / Imperial Table -->
-                  <ng-container *ngIf="table.shape === 'RECTANGULAR'">
+                  <ng-container *ngIf="isRectTable(table)">
                     <rect 
                       [attr.x]="table.posX - 30" 
                       [attr.y]="table.posY - 22" 
@@ -401,11 +401,11 @@ import jsPDF from 'jspdf';
                    style="cursor: grab; touch-action: none;"
                 >
                   <!-- Selection Halo -->
-                  <circle *ngIf="selectedTable()?.id === table.id && table.shape === 'ROUND'" [attr.cx]="table.posX" [attr.cy]="table.posY" r="42" fill="none" stroke="#0284c7" stroke-width="2.5" stroke-dasharray="4,4" />
-                  <rect *ngIf="selectedTable()?.id === table.id && table.shape === 'RECTANGULAR'" [attr.x]="table.posX - 8" [attr.y]="table.posY - 8" width="176" height="52" rx="8" fill="none" stroke="#0284c7" stroke-width="2.5" stroke-dasharray="4,4" />
+                  <circle *ngIf="selectedTable()?.id === table.id && !isRectTable(table)" [attr.cx]="table.posX" [attr.cy]="table.posY" r="42" fill="none" stroke="#0284c7" stroke-width="2.5" stroke-dasharray="4,4" />
+                  <rect *ngIf="selectedTable()?.id === table.id && isRectTable(table)" [attr.x]="table.posX - 8" [attr.y]="table.posY - 8" width="176" height="52" rx="8" fill="none" stroke="#0284c7" stroke-width="2.5" stroke-dasharray="4,4" />
 
                   <!-- Head Table (Presidium 12 seats) -->
-                  <ng-container *ngIf="table.shape === 'RECTANGULAR'">
+                  <ng-container *ngIf="isRectTable(table)">
                     <rect 
                       [attr.x]="table.posX" 
                       [attr.y]="table.posY" 
@@ -439,7 +439,7 @@ import jsPDF from 'jspdf';
                   </ng-container>
 
                   <!-- 14 Round Tables 60" (8 Chairs each) -->
-                  <ng-container *ngIf="table.shape === 'ROUND'">
+                  <ng-container *ngIf="!isRectTable(table)">
                     <circle 
                       [attr.cx]="table.posX" 
                       [attr.cy]="table.posY" 
@@ -528,11 +528,11 @@ import jsPDF from 'jspdf';
                    style="cursor: grab; touch-action: none;"
                 >
                   <!-- Selection Halo -->
-                  <circle *ngIf="selectedTable()?.id === table.id && table.shape === 'ROUND'" [attr.cx]="table.posX" [attr.cy]="table.posY" r="48" fill="none" stroke="#0284c7" stroke-width="2.5" stroke-dasharray="4,4" />
-                  <rect *ngIf="selectedTable()?.id === table.id && table.shape === 'RECTANGULAR'" [attr.x]="table.posX - 28" [attr.y]="table.posY - 8" width="56" height="156" rx="8" fill="none" stroke="#0284c7" stroke-width="2.5" stroke-dasharray="4,4" />
+                  <circle *ngIf="selectedTable()?.id === table.id && !isRectTable(table)" [attr.cx]="table.posX" [attr.cy]="table.posY" r="48" fill="none" stroke="#0284c7" stroke-width="2.5" stroke-dasharray="4,4" />
+                  <rect *ngIf="selectedTable()?.id === table.id && isRectTable(table)" [attr.x]="table.posX - 28" [attr.y]="table.posY - 8" width="56" height="156" rx="8" fill="none" stroke="#0284c7" stroke-width="2.5" stroke-dasharray="4,4" />
 
                   <!-- Long Top Table (6 single-sided seats along right wall) -->
-                  <ng-container *ngIf="table.shape === 'RECTANGULAR'">
+                  <ng-container *ngIf="isRectTable(table)">
                     <rect 
                       [attr.x]="table.posX - 20" 
                       [attr.y]="table.posY" 
@@ -557,7 +557,7 @@ import jsPDF from 'jspdf';
                   </ng-container>
 
                   <!-- 5 Round Banquet Tables (10p each) -->
-                  <ng-container *ngIf="table.shape === 'ROUND'">
+                  <ng-container *ngIf="!isRectTable(table)">
                     <circle 
                       [attr.cx]="table.posX" 
                       [attr.cy]="table.posY" 
@@ -2741,13 +2741,10 @@ export class CroquisComponent {
     return s.includes('RECT') || s.includes('IMPERIAL');
   }
 
-  // FIXED RELIABLE GUEST LOOKUP FOR SELECTED TABLE
+  // FIXED RELIABLE GUEST LOOKUP FOR SELECTED TABLE (Purely reactive from eventGuests signal)
   getGuestsForSelectedTable(): Guest[] {
     const t = this.activeSelectedTable();
     if (!t) return [];
-    if (t.assignedGuests && t.assignedGuests.length > 0) {
-      return t.assignedGuests;
-    }
     return this.eventService.eventGuests().filter(g => 
       (g.assignedTableId != null && Number(g.assignedTableId) === Number(t.id)) ||
       (g.assignedTableName && g.assignedTableName.toLowerCase().trim() === t.tableName.toLowerCase().trim()) ||

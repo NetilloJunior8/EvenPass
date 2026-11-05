@@ -1,4 +1,4 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, signal, computed, NgZone } from '@angular/core';
 import { 
   EventItem, Guest, Salon, SalonTable, SalonType, CheckInLog, 
   InvitationTemplate, AutoAssignResult, SupportTicket, SystemConfig, ItineraryItem, EventStatus,
@@ -398,7 +398,10 @@ export class EventService {
     this.notificationService.show('success', 'Estado del Evento Actualizado', `"${ev?.name}" ahora está en: ${label}.`);
   }
 
-  constructor(private notificationService: NotificationService) {
+  constructor(
+    private notificationService: NotificationService,
+    private ngZone: NgZone
+  ) {
     this.initDemoData();
     this.listenForIncomingTickets();
     this.listenForDigitalInvitations();
@@ -1226,79 +1229,90 @@ export class EventService {
     try {
       window.addEventListener('storage', (e) => {
         if (e.key === 'evenpass_latest_client_incident' && e.newValue) {
-          const inc = JSON.parse(e.newValue);
-          const newTicket: SupportTicket = {
-            id: inc.folio || `INC-${Date.now()}`,
-            subject: `[${inc.type || 'SOPORTE'}] ${inc.clientName || 'Cliente'}: ${inc.issue ? inc.issue.slice(0, 45) + '...' : 'Incidencia'}`,
-            eventId: 1,
-            eventName: inc.eventName || 'Evento Cliente',
-            priority: (inc.issue && /problema|error|falla|urgente/i.test(inc.issue)) ? 'ALTA' : 'MEDIA',
-            status: 'ABIERTO',
-            createdAt: inc.date || 'Reciente',
-            description: `${inc.issue}\n\nContacto: ${inc.clientName} (WhatsApp: ${inc.phone})`
-          };
-          this.supportTickets.update(tickets => [newTicket, ...tickets.filter(t => t.id !== newTicket.id)]);
+          this.ngZone.run(() => {
+            const inc = JSON.parse(e.newValue!);
+            const newTicket: SupportTicket = {
+              id: inc.folio || `INC-${Date.now()}`,
+              subject: `[${inc.type || 'SOPORTE'}] ${inc.clientName || 'Cliente'}: ${inc.issue ? inc.issue.slice(0, 45) + '...' : 'Incidencia'}`,
+              eventId: 1,
+              eventName: inc.eventName || 'Evento Cliente',
+              priority: (inc.issue && /problema|error|falla|urgente/i.test(inc.issue)) ? 'ALTA' : 'MEDIA',
+              status: 'ABIERTO',
+              createdAt: inc.date || 'Reciente',
+              description: `${inc.issue}\n\nContacto: ${inc.clientName} (WhatsApp: ${inc.phone})`
+            };
+            this.supportTickets.update(tickets => [newTicket, ...tickets.filter(t => t.id !== newTicket.id)]);
+          });
+        }
+
+        // Live sync from host panel when running in same browser
+        if (e.key === 'evenpass_luis_gerardo_updated_tick' || (e.key && e.key.includes('_guests_db'))) {
+          this.ngZone.run(() => {
+            this.pollLocalStorageAllEvents();
+          });
         }
 
         if (e.key === 'evenpass_latest_rsvp_guest' && e.newValue) {
           try {
             const rsvp = JSON.parse(e.newValue);
-            const activeEv = this.selectedEvent();
-            if (activeEv && !this.isEventLocked(activeEv)) {
-              let tableId: number | undefined = undefined;
-              let tableName = 'Sin mesa asignada';
-              const curSalon = this.currentSalon();
-              const passesNeeded = rsvp.passes || 1;
+            this.ngZone.run(() => {
+              const activeEv = this.selectedEvent();
+              if (activeEv && !this.isEventLocked(activeEv)) {
+                let tableId: number | undefined = undefined;
+                let tableName = 'Sin mesa asignada';
+                const curSalon = this.currentSalon();
+                const passesNeeded = rsvp.passes || 1;
 
-              if (activeEv.hasCroquis && curSalon && curSalon.tables.length > 0) {
-                const activeEventGuests = this.allGuests().filter(
-                  g => g.eventId === activeEv.id && (g.status === 'CONFIRMED' || g.status === 'ATTENDED')
-                );
-                const tableUsage = new Map<number, number>();
-                curSalon.tables.forEach(t => tableUsage.set(t.id, 0));
-                activeEventGuests.forEach(g => {
-                  if (g.assignedTableId) {
-                    const c = tableUsage.get(g.assignedTableId) || 0;
-                    tableUsage.set(g.assignedTableId, c + g.totalPasses);
+                if (activeEv.hasCroquis && curSalon && curSalon.tables.length > 0) {
+                  const activeEventGuests = this.allGuests().filter(
+                    g => g.eventId === activeEv.id && (g.status === 'CONFIRMED' || g.status === 'ATTENDED')
+                  );
+                  const tableUsage = new Map<number, number>();
+                  curSalon.tables.forEach(t => tableUsage.set(t.id, 0));
+                  activeEventGuests.forEach(g => {
+                    if (g.assignedTableId) {
+                      const c = tableUsage.get(g.assignedTableId) || 0;
+                      tableUsage.set(g.assignedTableId, c + g.totalPasses);
+                    }
+                  });
+
+                  const availableTable = curSalon.tables.find(t => {
+                    const occ = tableUsage.get(t.id) || 0;
+                    return (t.capacity - occ) >= passesNeeded;
+                  });
+
+                  if (availableTable) {
+                    tableId = availableTable.id;
+                    tableName = availableTable.tableName;
                   }
-                });
-
-                const availableTable = curSalon.tables.find(t => {
-                  const occ = tableUsage.get(t.id) || 0;
-                  return (t.capacity - occ) >= passesNeeded;
-                });
-
-                if (availableTable) {
-                  tableId = availableTable.id;
-                  tableName = availableTable.tableName;
                 }
+
+                const newGuest: Guest = {
+                  id: Date.now(),
+                  eventId: activeEv.id,
+                  fullName: rsvp.fullName || 'Invitado Digital',
+                  phone: rsvp.phone || 'N/A',
+                  email: `${(rsvp.fullName || 'invitado').toLowerCase().replace(/[^a-z]/g, '')}@gmail.com`,
+                  numCompanions: Math.max(0, passesNeeded - 1),
+                  totalPasses: passesNeeded,
+                  status: 'CONFIRMED',
+                  qrCodeToken: rsvp.token || `EP-${Math.floor(1000 + Math.random() * 9000)}`,
+                  assignedTableId: tableId,
+                  assignedTableName: tableName,
+                  source: 'DIGITAL_INVITATION',
+                  confirmedAt: new Date().toLocaleDateString('es-MX'),
+                  dietNotes: 'Confirmación en vivo vía Invitación Web'
+                };
+
+                this.allGuests.update(list => [newGuest, ...list]);
+                this.refreshAllTableOccupancies();
+                this.notificationService.show(
+                  'success',
+                  'Confirmación RSVP en Vivo',
+                  `${newGuest.fullName} (${newGuest.totalPasses} pases) confirmado en el sistema. Asignado a: ${tableName}.`
+                );
               }
-
-              const newGuest: Guest = {
-                id: Date.now(),
-                eventId: activeEv.id,
-                fullName: rsvp.fullName || 'Invitado Digital',
-                phone: rsvp.phone || 'N/A',
-                email: `${(rsvp.fullName || 'invitado').toLowerCase().replace(/[^a-z]/g, '')}@gmail.com`,
-                numCompanions: Math.max(0, passesNeeded - 1),
-                totalPasses: passesNeeded,
-                status: 'CONFIRMED',
-                qrCodeToken: rsvp.token || `EP-${Math.floor(1000 + Math.random() * 9000)}`,
-                assignedTableId: tableId,
-                assignedTableName: tableName,
-                source: 'DIGITAL_INVITATION',
-                confirmedAt: new Date().toLocaleDateString('es-MX'),
-                dietNotes: 'Confirmación en vivo vía Invitación Web'
-              };
-
-              this.allGuests.update(list => [newGuest, ...list]);
-              this.refreshAllTableOccupancies();
-              this.notificationService.show(
-                'success',
-                'Confirmación RSVP en Vivo',
-                `${newGuest.fullName} (${newGuest.totalPasses} pases) confirmado en el sistema. Asignado a: ${tableName}.`
-              );
-            }
+            });
           } catch (err) {}
         }
       });
@@ -1612,14 +1626,67 @@ export class EventService {
       this.notificationService.show('warning', 'Evento Concluido', 'Este evento ha finalizado y está en modo histórico. No se pueden eliminar invitados.');
       return;
     }
-    const activeEvId = this.activeEventId();
+    const guest = this.allGuests().find(g => g.id === id);
+    if (!guest) return;
+
+    const activeEvId = guest.eventId || this.activeEventId();
     this.allGuests.update(list => list.filter(g => g.id !== id));
     this.events.update(list => list.map(ev => 
       ev.id === activeEvId ? { ...ev, totalGuests: Math.max(0, ev.totalGuests - 1) } : ev
     ));
+    this.refreshAllTableOccupancies();
     this.persistGuests();
     this.persistEvents();
-    this.notificationService.show('info', 'Invitado Eliminado', 'Registro removido.');
+    this.persistSalons();
+
+    const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    this.processedCloudMsgIds.add(msgId);
+
+    const payload = {
+      type: 'GUEST_DELETED',
+      msgId: msgId,
+      eventId: activeEvId,
+      guestId: guest.id,
+      guestToken: guest.qrCodeToken,
+      fullName: guest.fullName,
+      tableName: guest.assignedTableName,
+      timestamp: Date.now()
+    };
+
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('evenpass_invitations_channel');
+        bc.postMessage(payload);
+      }
+    } catch (e) {}
+
+    try {
+      fetch(this.CLOUD_SYNC_RELAY, {
+        method: 'POST',
+        headers: { 'Title': 'EvenPass Guest Deleted', 'Tags': 'guest,delete' },
+        body: JSON.stringify(payload)
+      }).catch(() => {});
+    } catch (e) {}
+
+    try {
+      const keys = [`evenpass_event_${activeEvId}_guests_db`, activeEvId === 6 ? 'evenpass_luis_gerardo_guests_db' : null].filter(Boolean) as string[];
+      keys.forEach(k => {
+        const raw = localStorage.getItem(k);
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            const filtered = list.filter((item: any) => 
+              !( (guest.qrCodeToken && item.token === guest.qrCodeToken) ||
+                 (guest.fullName && item.fullName && item.fullName.toLowerCase().trim() === guest.fullName.toLowerCase().trim()) )
+            );
+            localStorage.setItem(k, JSON.stringify(filtered));
+          }
+        }
+      });
+      localStorage.setItem('evenpass_luis_gerardo_updated_tick', String(Date.now()));
+    } catch (e) {}
+
+    this.notificationService.show('info', 'Invitado Eliminado', `"${guest.fullName}" removido y lugar liberado.`);
   }
 
   assignTableToGuest(guestId: number, tableId: number, forceOverride: boolean = false): void {
@@ -1782,21 +1849,26 @@ export class EventService {
       ((newTableId ? this.currentSalon()?.tables.find(t => t.id === newTableId)?.tableName : undefined) || 'Sin asignar');
 
     const now = Date.now();
+    const msgId = 'msg_' + now + '_' + Math.random().toString(36).substr(2, 9);
+    this.processedCloudMsgIds.add(msgId);
+
+    const payload = {
+      type: 'TABLE_REASSIGNED',
+      msgId: msgId,
+      eventId: evId,
+      guestId: guest.id,
+      guestToken: token,
+      fullName: fullName,
+      newTableName: finalTableName,
+      newTableId: newTableId,
+      timestamp: now
+    };
 
     // 1. Broadcast via BroadcastChannel
     try {
       if (typeof BroadcastChannel !== 'undefined') {
         const bc = new BroadcastChannel('evenpass_invitations_channel');
-        bc.postMessage({
-          type: 'TABLE_REASSIGNED',
-          eventId: evId,
-          guestId: guest.id,
-          guestToken: token,
-          fullName: fullName,
-          newTableName: finalTableName,
-          newTableId: newTableId,
-          timestamp: now
-        });
+        bc.postMessage(payload);
       }
     } catch (e) {}
 
@@ -1808,16 +1880,7 @@ export class EventService {
           'Title': 'EvenPass Table Reassigned',
           'Tags': 'chair,seating'
         },
-        body: JSON.stringify({
-          type: 'TABLE_REASSIGNED',
-          eventId: evId,
-          guestId: guest.id,
-          guestToken: token,
-          fullName: fullName,
-          newTableName: finalTableName,
-          newTableId: newTableId,
-          timestamp: now
-        })
+        body: JSON.stringify(payload)
       }).catch(() => {});
     } catch (e) {}
 
@@ -1850,7 +1913,6 @@ export class EventService {
         }
       });
     } catch (e) {}
-    this.broadcastFullStateToCloud(evId);
   }
 
   broadcastFullStateToCloud(targetEventId?: number): void {
@@ -1929,17 +1991,19 @@ export class EventService {
       g => g.eventId === activeEvId && g.status !== 'DECLINED'
     );
 
-    const counts = new Map<number, number>();
-    for (const g of activeGuests) {
-      if (g.assignedTableId) {
-        counts.set(g.assignedTableId, (counts.get(g.assignedTableId) || 0) + g.totalPasses);
-      }
-    }
-
-    const updatedTables = curSalon.tables.map(t => ({
-      ...t,
-      occupiedSeats: counts.get(t.id) || 0
-    }));
+    const updatedTables = curSalon.tables.map(t => {
+      const seated = activeGuests.filter(g => 
+        (g.assignedTableId != null && Number(g.assignedTableId) === Number(t.id)) ||
+        (g.assignedTableName && g.assignedTableName.toLowerCase().trim() === t.tableName.toLowerCase().trim()) ||
+        (g.assignedTableName && new RegExp(`\\b(mesa|table)\\s*0*${t.tableNumber}\\b`, 'i').test(g.assignedTableName))
+      );
+      const totalOccupied = seated.reduce((sum, g) => sum + g.totalPasses, 0);
+      return {
+        ...t,
+        occupiedSeats: totalOccupied,
+        assignedGuests: seated
+      };
+    });
 
     this.salons.update(list => list.map(s => 
       s.id === curSalon.id ? { ...s, tables: updatedTables } : s
@@ -2610,6 +2674,9 @@ export class EventService {
   // --- CANAL DE SINCRONIZACIÓN EN LA NUBE EN TIEMPO REAL (Universal para todos los eventos) ---
   readonly CLOUD_SYNC_RELAY = 'https://ntfy.sh/evenpass_cloud_sync_relay';
   cloudSyncConnected = signal<boolean>(false);
+  private processedCloudMsgIds = new Set<string>();
+  private isFirstCloudPoll = true;
+  private lastStorageTick: string | null = null;
 
   listenForDigitalInvitations(): void {
     // 1. Escuchar por BroadcastChannel nativo (entre pestañas del mismo navegador)
@@ -2618,7 +2685,13 @@ export class EventService {
         const bc = new BroadcastChannel('evenpass_invitations_channel');
         bc.onmessage = (event) => {
           if (event && event.data) {
-            this.processSyncMessage(event.data, true);
+            if (event.data.msgId) {
+              if (this.processedCloudMsgIds.has(event.data.msgId)) return;
+              this.processedCloudMsgIds.add(event.data.msgId);
+            }
+            this.ngZone.run(() => {
+              this.processSyncMessage(event.data, true);
+            });
           }
         };
       }
@@ -2648,9 +2721,21 @@ export class EventService {
       sse.onmessage = (event) => {
         try {
           const raw = JSON.parse(event.data);
+          if (raw.id) {
+            if (this.processedCloudMsgIds.has(raw.id)) return;
+            this.processedCloudMsgIds.add(raw.id);
+            if (this.processedCloudMsgIds.size > 500) {
+              const first = this.processedCloudMsgIds.values().next().value;
+              if (first) this.processedCloudMsgIds.delete(first);
+            }
+          }
           if (raw.message) {
             const data = JSON.parse(raw.message);
-            this.processSyncMessage(data, true);
+            if (data.msgId && this.processedCloudMsgIds.has(data.msgId)) return;
+            if (data.msgId) this.processedCloudMsgIds.add(data.msgId);
+            this.ngZone.run(() => {
+              this.processSyncMessage(data, true);
+            });
           }
         } catch (e) {}
       };
@@ -2661,7 +2746,10 @@ export class EventService {
   }
 
   private pollCloudSyncUpdates(): void {
-    fetch(`${this.CLOUD_SYNC_RELAY}/json?poll=1&since=24h`, { method: 'GET', mode: 'cors' })
+    const timeParam = this.isFirstCloudPoll ? 'since=1h' : 'since=30s';
+    this.isFirstCloudPoll = false;
+
+    fetch(`${this.CLOUD_SYNC_RELAY}/json?poll=1&${timeParam}`, { method: 'GET', mode: 'cors' })
       .then(res => res.ok ? res.text() : '')
       .then(text => {
         if (!text) return;
@@ -2669,9 +2757,21 @@ export class EventService {
         for (const line of lines) {
           try {
             const parsed = JSON.parse(line);
+            if (parsed.id) {
+              if (this.processedCloudMsgIds.has(parsed.id)) continue;
+              this.processedCloudMsgIds.add(parsed.id);
+              if (this.processedCloudMsgIds.size > 500) {
+                const first = this.processedCloudMsgIds.values().next().value;
+                if (first) this.processedCloudMsgIds.delete(first);
+              }
+            }
             if (parsed.message) {
               const data = JSON.parse(parsed.message);
-              this.processSyncMessage(data, false);
+              if (data.msgId && this.processedCloudMsgIds.has(data.msgId)) continue;
+              if (data.msgId) this.processedCloudMsgIds.add(data.msgId);
+              this.ngZone.run(() => {
+                this.processSyncMessage(data, false);
+              });
             }
           } catch (e) {}
         }
@@ -2681,6 +2781,12 @@ export class EventService {
 
   private pollLocalStorageAllEvents(): void {
     try {
+      const currentTick = localStorage.getItem('evenpass_luis_gerardo_updated_tick');
+      if (currentTick && currentTick === this.lastStorageTick) {
+        return; // Sin cambios locales recientes
+      }
+      this.lastStorageTick = currentTick;
+
       // Monitorear todos los eventos registrados
       this.events().forEach(ev => {
         const raw = localStorage.getItem(`evenpass_event_${ev.id}_guests_db`) || 
@@ -2713,7 +2819,8 @@ export class EventService {
 
       if (idx >= 0) {
         const curG = curGuests[idx];
-        if (!curG.manualAssignmentTimestamp || msgTimestamp >= curG.manualAssignmentTimestamp) {
+        const curTs = Number(curG.manualAssignmentTimestamp || 0);
+        if (!curTs || msgTimestamp >= curTs) {
           const targetSalon = this.salons().find(s => s.id === (this.selectedEvent()?.salonId || 4));
           let tableId = data.newTableId;
           if (!tableId && targetSalon && targetSalon.tables) {
@@ -2735,7 +2842,47 @@ export class EventService {
           this.refreshAllTableOccupancies();
           this.persistGuests();
           this.persistSalons();
-          this.broadcastFullStateToCloud(targetEventId);
+
+          if (isLive) {
+            this.notificationService.show(
+              'info',
+              'Comensal Reubicado en Vivo',
+              `"${name}" ahora está en ${newTableName || 'Sin asignar'}.`
+            );
+          }
+        }
+      }
+      return;
+    }
+
+    if (data.type === 'GUEST_DELETED') {
+      const token = data.guestToken;
+      const name = data.fullName;
+      const curGuests = this.allGuests();
+      const updated = curGuests.filter(g => 
+        !( (token && g.qrCodeToken === token) || 
+           (name && g.fullName.toLowerCase().trim() === name.toLowerCase().trim() && g.eventId === targetEventId) )
+      );
+
+      if (updated.length !== curGuests.length) {
+        this.allGuests.set(updated);
+        this.refreshAllTableOccupancies();
+        this.persistGuests();
+        this.persistSalons();
+        
+        // Actualizar métricas del evento
+        const evGuests = updated.filter(g => g.eventId === targetEventId);
+        const confirmedCount = evGuests
+          .filter(g => g.status === 'CONFIRMED' || g.status === 'ATTENDED')
+          .reduce((sum, g) => sum + g.totalPasses, 0);
+        const totalCount = evGuests.reduce((sum, g) => sum + g.totalPasses, 0);
+        this.events.update(list => list.map(e => 
+          e.id === targetEventId ? { ...e, totalGuests: totalCount, confirmedGuests: confirmedCount } : e
+        ));
+        this.persistEvents();
+
+        if (isLive) {
+          this.notificationService.show('info', 'Invitado Eliminado (Remoto)', `"${name}" fue eliminado desde el panel del anfitrión.`);
         }
       }
       return;
