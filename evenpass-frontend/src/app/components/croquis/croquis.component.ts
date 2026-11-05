@@ -431,7 +431,7 @@ import jsPDF from 'jspdf';
                     <circle [attr.cx]="table.posX + 153" [attr.cy]="table.posY - 6" r="4.5" fill="#64748b" />
                     
                     <text [attr.x]="table.posX + 80" [attr.y]="table.posY + 16" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="800" font-size="10.5" [attr.fill]="getTableOccupiedSeats(table) > 0 ? '#ffffff' : '#0f172a'">
-                      HEAD TABLE (12 CHAIRS)
+                      {{ table.tableNumber === 1 ? 'HEAD TABLE (12 CHAIRS)' : ('MESA ' + table.tableNumber + ' (IMPERIAL)') }}
                     </text>
                     <text [attr.x]="table.posX + 80" [attr.y]="table.posY + 29" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="700" font-size="9" [attr.fill]="getTableOccupiedSeats(table) > 0 ? '#ffffff' : '#64748b'">
                       {{ getTableOccupiedSeats(table) }}/{{ table.capacity }}p Ocupados
@@ -552,7 +552,7 @@ import jsPDF from 'jspdf';
                     <circle [attr.cx]="table.posX - 28" [attr.cy]="table.posY + 130" r="5" fill="#64748b" />
 
                     <text [attr.x]="table.posX" [attr.y]="table.posY + 70" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="800" font-size="11" [attr.fill]="getTableOccupiedSeats(table) > 0 ? '#ffffff' : '#0f172a'" [attr.transform]="'rotate(90 ' + table.posX + ' ' + (table.posY + 70) + ')'">
-                      MESA DE HONOR (6p)
+                      {{ table.tableNumber === 1 ? 'MESA DE HONOR (6p)' : ('MESA ' + table.tableNumber) }}
                     </text>
                   </ng-container>
 
@@ -616,21 +616,65 @@ import jsPDF from 'jspdf';
                    [class.is-dragging]="isDragging() && draggedTable?.id === table.id"
                    style="cursor: grab; touch-action: none;"
                 >
-                  <circle *ngIf="selectedTable()?.id === table.id" [attr.cx]="table.posX" [attr.cy]="table.posY" r="38" fill="none" stroke="#0284c7" stroke-width="2.5" stroke-dasharray="4,4" />
-                  <circle 
-                    [attr.cx]="table.posX" 
-                    [attr.cy]="table.posY" 
-                    r="28" 
-                    [attr.fill]="getTableOccupiedSeats(table) >= table.capacity ? '#ef4444' : (getTableOccupiedSeats(table) > 0 ? '#10b981' : '#f8fafc')"
-                    [attr.stroke]="getTableOccupiedSeats(table) > 0 ? '#047857' : '#475569'"
-                    stroke-width="2"
-                  />
-                  <text [attr.x]="table.posX" [attr.y]="table.posY - 2" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="800" font-size="11" [attr.fill]="getTableOccupiedSeats(table) > 0 ? '#ffffff' : '#0f172a'">
-                    {{ table.tableNumber }}
-                  </text>
-                  <text [attr.x]="table.posX" [attr.y]="table.posY + 10" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="700" font-size="8.5" [attr.fill]="getTableOccupiedSeats(table) > 0 ? '#ffffff' : '#64748b'">
-                    {{ getTableOccupiedSeats(table) }}/{{ table.capacity }}p
-                  </text>
+                  <!-- Selection Halo -->
+                  <circle *ngIf="selectedTable()?.id === table.id && table.shape !== 'RECTANGULAR'" [attr.cx]="table.posX" [attr.cy]="table.posY" r="40" fill="none" stroke="#0284c7" stroke-width="2.5" stroke-dasharray="4,4" />
+                  <rect *ngIf="selectedTable()?.id === table.id && table.shape === 'RECTANGULAR'" [attr.x]="table.posX - 38" [attr.y]="table.posY - 30" width="76" height="60" rx="8" fill="none" stroke="#0284c7" stroke-width="2.5" stroke-dasharray="4,4" />
+
+                  <!-- Round Table -->
+                  <ng-container *ngIf="table.shape !== 'RECTANGULAR'">
+                    <circle 
+                      [attr.cx]="table.posX" 
+                      [attr.cy]="table.posY" 
+                      r="28" 
+                      [attr.fill]="getTableOccupiedSeats(table) >= table.capacity ? '#ef4444' : (getTableOccupiedSeats(table) > 0 ? '#10b981' : '#f8fafc')"
+                      [attr.stroke]="getTableOccupiedSeats(table) > 0 ? '#047857' : '#475569'"
+                      stroke-width="2"
+                    />
+                    <!-- Radial chairs -->
+                    <circle [attr.cx]="table.posX" [attr.cy]="table.posY - 36" r="4.5" fill="#64748b" />
+                    <circle [attr.cx]="table.posX" [attr.cy]="table.posY + 36" r="4.5" fill="#64748b" />
+                    <circle [attr.cx]="table.posX - 36" [attr.cy]="table.posY" r="4.5" fill="#64748b" />
+                    <circle [attr.cx]="table.posX + 36" [attr.cy]="table.posY" r="4.5" fill="#64748b" />
+                    <circle [attr.cx]="table.posX - 25" [attr.cy]="table.posY - 25" r="4.5" fill="#64748b" />
+                    <circle [attr.cx]="table.posX + 25" [attr.cy]="table.posY - 25" r="4.5" fill="#64748b" />
+                    <circle [attr.cx]="table.posX - 25" [attr.cy]="table.posY + 25" r="4.5" fill="#64748b" />
+                    <circle [attr.cx]="table.posX + 25" [attr.cy]="table.posY + 25" r="4.5" fill="#64748b" />
+
+                    <text [attr.x]="table.posX" [attr.y]="table.posY - 2" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="800" font-size="11" [attr.fill]="getTableOccupiedSeats(table) > 0 ? '#ffffff' : '#0f172a'">
+                      {{ table.tableNumber }}
+                    </text>
+                    <text [attr.x]="table.posX" [attr.y]="table.posY + 10" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="700" font-size="8.5" [attr.fill]="getTableOccupiedSeats(table) > 0 ? '#ffffff' : '#64748b'">
+                      {{ getTableOccupiedSeats(table) }}/{{ table.capacity }}p
+                    </text>
+                  </ng-container>
+
+                  <!-- Rectangular / Imperial Table -->
+                  <ng-container *ngIf="table.shape === 'RECTANGULAR'">
+                    <rect 
+                      [attr.x]="table.posX - 30" 
+                      [attr.y]="table.posY - 22" 
+                      width="60" 
+                      height="44" 
+                      rx="4"
+                      [attr.fill]="getTableOccupiedSeats(table) >= table.capacity ? '#ef4444' : (getTableOccupiedSeats(table) > 0 ? '#10b981' : '#f8fafc')"
+                      [attr.stroke]="getTableOccupiedSeats(table) > 0 ? '#047857' : '#475569'"
+                      stroke-width="2"
+                    />
+                    <!-- Top & Bottom Chairs -->
+                    <rect [attr.x]="table.posX - 25" [attr.y]="table.posY - 29" width="10" height="5" rx="1" fill="#64748b" />
+                    <rect [attr.x]="table.posX - 5" [attr.y]="table.posY - 29" width="10" height="5" rx="1" fill="#64748b" />
+                    <rect [attr.x]="table.posX + 15" [attr.y]="table.posY - 29" width="10" height="5" rx="1" fill="#64748b" />
+                    <rect [attr.x]="table.posX - 25" [attr.y]="table.posY + 24" width="10" height="5" rx="1" fill="#64748b" />
+                    <rect [attr.x]="table.posX - 5" [attr.y]="table.posY + 24" width="10" height="5" rx="1" fill="#64748b" />
+                    <rect [attr.x]="table.posX + 15" [attr.y]="table.posY + 24" width="10" height="5" rx="1" fill="#64748b" />
+                    
+                    <text [attr.x]="table.posX" [attr.y]="table.posY - 2" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="800" font-size="11" [attr.fill]="getTableOccupiedSeats(table) > 0 ? '#ffffff' : '#0f172a'">
+                      {{ table.tableNumber }}
+                    </text>
+                    <text [attr.x]="table.posX" [attr.y]="table.posY + 10" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="700" font-size="8.5" [attr.fill]="getTableOccupiedSeats(table) > 0 ? '#ffffff' : '#64748b'">
+                      {{ getTableOccupiedSeats(table) }}/{{ table.capacity }}p
+                    </text>
+                  </ng-container>
                 </g>
               </svg>
 

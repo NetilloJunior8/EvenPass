@@ -290,6 +290,7 @@ function initGuestPage() {
   }
 
   initCountdown();
+  startLiveCloudSyncListener();
 }
 
 function submitRsvp(e) {
@@ -463,10 +464,118 @@ function renderIssuedPass(name, passes, tableName, token, notes = '') {
 }
 
 // ============================================================================
-// 5. LÓGICA DEL PANEL DEL ANFITRIÓN (PANEL.HTML)
+// 5. LÓGICA DEL PANEL DEL ANFITRIÓN (PANEL.HTML) & SINCRONIZACIÓN EN TIEMPO REAL
 // ============================================================================
+function applyTableReassignment(data) {
+  if (!data) return;
+  const targetEvId = Number(data.eventId) || 6;
+  if (targetEvId !== getActiveEventId()) return;
+
+  const guests = getStoredGuests();
+  let modified = false;
+
+  guests.forEach(g => {
+    const matchToken = data.guestToken && g.token === data.guestToken;
+    const matchName = data.fullName && g.fullName && g.fullName.toLowerCase().trim() === data.fullName.toLowerCase().trim();
+    if (matchToken || matchName) {
+      const newTbl = data.newTableName === 'Sin asignar' ? 'Sin mesa (Reasignación)' : (data.newTableName || 'Sin asignar');
+      if (g.tableName !== newTbl) {
+        g.tableName = newTbl;
+        g.manualAssignmentTimestamp = data.timestamp || Date.now();
+        modified = true;
+      }
+    }
+  });
+
+  if (modified) {
+    const evId = getActiveEventId();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(guests));
+    localStorage.setItem(`evenpass_event_${evId}_guests_db`, JSON.stringify(guests));
+    localStorage.setItem('evenpass_luis_gerardo_guests_db', JSON.stringify(guests));
+    localStorage.setItem('evenpass_luis_gerardo_updated_tick', String(Date.now()));
+
+    // Si estamos en panel.html, refrescar tablero y tabla
+    if (typeof loadStoredGuests === 'function' && document.getElementById('panel-tables-grid')) {
+      loadStoredGuests();
+    }
+
+    // Si estamos en index.html con un pase abierto, actualizar número de mesa en pantalla
+    const pTable = document.getElementById('pass-table-name');
+    const pFolio = document.getElementById('pass-folio-code');
+    if (pTable && pFolio && (data.guestToken === pFolio.innerText.trim() || !pFolio.innerText)) {
+      pTable.innerText = `Mesa Asignada: ${data.newTableName}`;
+    }
+  }
+}
+
+let cloudListenerStarted = false;
+function startLiveCloudSyncListener() {
+  if (cloudListenerStarted) return;
+  cloudListenerStarted = true;
+
+  // 1. BroadcastChannel (mismo navegador / diferentes pestañas)
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      const bc = new BroadcastChannel('evenpass_invitations_channel');
+      bc.onmessage = (event) => {
+        if (event && event.data) {
+          if (event.data.type === 'TABLE_REASSIGNED') {
+            applyTableReassignment(event.data);
+          } else if (event.data.type === 'SYNC_ALL' && Array.isArray(event.data.guests)) {
+            if (event.data.eventId === getActiveEventId()) {
+              saveGuestsList(event.data.guests);
+              if (document.getElementById('panel-tables-grid')) loadStoredGuests();
+            }
+          }
+        }
+      };
+    }
+  } catch (e) {}
+
+  // 2. SSE Server-Sent Events desde ntfy Cloud Relay (Netlify <-> EvenPass)
+  try {
+    if (typeof EventSource !== 'undefined') {
+      const sse = new EventSource(`${CLOUD_SYNC_RELAY}/sse`);
+      sse.onmessage = (e) => {
+        try {
+          const raw = JSON.parse(e.data);
+          if (raw.message) {
+            const data = JSON.parse(raw.message);
+            if (data.type === 'TABLE_REASSIGNED') {
+              applyTableReassignment(data);
+            }
+          }
+        } catch (err) {}
+      };
+    }
+  } catch (e) {}
+
+  // 3. Polling de respaldo cada 3.5 segundos
+  setInterval(() => {
+    fetch(`${CLOUD_SYNC_RELAY}/json?poll=1&since=5m`, { method: 'GET', mode: 'cors' })
+      .then(res => res.ok ? res.text() : '')
+      .then(text => {
+        if (!text) return;
+        const lines = text.trim().split('\n');
+        for (const line of lines) {
+          try {
+            const parsed = JSON.parse(line);
+            if (parsed.message) {
+              const data = JSON.parse(parsed.message);
+              if (data.type === 'TABLE_REASSIGNED') {
+                applyTableReassignment(data);
+              }
+            }
+          } catch (e) {}
+        }
+      })
+      .catch(() => {});
+  }, 3500);
+}
+
 function initHostPanel() {
   loadStoredGuests();
+  startLiveCloudSyncListener();
 
   // Escuchar si un invitado confirma desde otra pestaña para actualizar inmediatamente
   window.addEventListener('storage', (e) => {
@@ -517,7 +626,20 @@ function renderPanelTablesGrid(guests) {
 
   const occ = getTableOccupancies();
 
-  EVENT_DATA.tables.forEach(table => {
+  // Tablas del evento + dinámicas asignadas en EvenPass
+  const allTables = [...EVENT_DATA.tables];
+  guests.forEach(g => {
+    if (g.tableName && !allTables.some(t => t.name.toLowerCase().trim() === g.tableName.toLowerCase().trim()) && 
+        !g.tableName.toLowerCase().includes('sin mesa') && !g.tableName.toLowerCase().includes('sin asignar')) {
+      allTables.push({
+        id: allTables.length + 1,
+        name: g.tableName,
+        capacity: 10
+      });
+    }
+  });
+
+  allTables.forEach(table => {
     const occupied = occ.get(table.name) || 0;
     const isFull = occupied >= table.capacity;
     const pct = Math.min(100, Math.round((occupied / table.capacity) * 100));

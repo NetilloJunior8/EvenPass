@@ -1385,17 +1385,20 @@ export class EventService {
       return;
     }
 
+    const now = Date.now();
     this.allGuests.update(list => list.map(g => {
       if (g.id === guestId) {
         return {
           ...g,
           assignedTableId: tableId,
-          assignedTableName: table.tableName
+          assignedTableName: table.tableName,
+          manualAssignmentTimestamp: now
         };
       }
       return g;
     }));
     this.refreshAllTableOccupancies();
+    this.broadcastTableReassignment(guestId, tableId, table.tableName);
     this.notificationService.show('success', 'Mesa Asignada', `"${guest.fullName}" asignado a ${table.tableName}`);
   }
 
@@ -1404,17 +1407,20 @@ export class EventService {
       this.notificationService.show('warning', 'Evento Concluido', 'Este evento ha finalizado. La asignación de mesas está bloqueada.');
       return;
     }
+    const now = Date.now();
     this.allGuests.update(list => list.map(g => {
       if (g.id === guestId) {
         return {
           ...g,
           assignedTableId: undefined,
-          assignedTableName: undefined
+          assignedTableName: undefined,
+          manualAssignmentTimestamp: now
         };
       }
       return g;
     }));
     this.refreshAllTableOccupancies();
+    this.broadcastTableReassignment(guestId, undefined, 'Sin asignar');
     this.notificationService.show('info', 'Invitado Liberado', 'El comensal quedó sin mesa asignada.');
   }
 
@@ -1453,18 +1459,21 @@ export class EventService {
       return false;
     }
 
+    const now = Date.now();
     this.allGuests.update(list => list.map(g => {
       if (g.id === guestId) {
         return {
           ...g,
           assignedTableId: targetTable.id,
-          assignedTableName: targetTable.tableName
+          assignedTableName: targetTable.tableName,
+          manualAssignmentTimestamp: now
         };
       }
       return g;
     }));
 
     this.refreshAllTableOccupancies();
+    this.broadcastTableReassignment(guestId, targetTable.id, targetTable.tableName);
 
     this.notificationService.show(
       'success',
@@ -1472,6 +1481,87 @@ export class EventService {
       `"${guest.fullName}" (${guest.totalPasses} pases) ahora está sentado en ${targetTable.tableName}.`
     );
     return true;
+  }
+
+  broadcastTableReassignment(guestId: number, newTableId?: number, newTableName?: string): void {
+    const guest = this.allGuests().find(g => g.id === guestId);
+    if (!guest) return;
+
+    const evId = guest.eventId || this.activeEventId();
+    const token = guest.qrCodeToken;
+    const fullName = guest.fullName;
+    const finalTableName = newTableName !== undefined ? newTableName : 
+      ((newTableId ? this.currentSalon()?.tables.find(t => t.id === newTableId)?.tableName : undefined) || 'Sin asignar');
+
+    const now = Date.now();
+
+    // 1. Broadcast via BroadcastChannel
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('evenpass_invitations_channel');
+        bc.postMessage({
+          type: 'TABLE_REASSIGNED',
+          eventId: evId,
+          guestId: guest.id,
+          guestToken: token,
+          fullName: fullName,
+          newTableName: finalTableName,
+          newTableId: newTableId,
+          timestamp: now
+        });
+      }
+    } catch (e) {}
+
+    // 2. Broadcast to Cloud Relay (Netlify / mobile / external host panel)
+    try {
+      fetch(this.CLOUD_SYNC_RELAY, {
+        method: 'POST',
+        headers: {
+          'Title': 'EvenPass Table Reassigned',
+          'Tags': 'chair,seating'
+        },
+        body: JSON.stringify({
+          type: 'TABLE_REASSIGNED',
+          eventId: evId,
+          guestId: guest.id,
+          guestToken: token,
+          fullName: fullName,
+          newTableName: finalTableName,
+          newTableId: newTableId,
+          timestamp: now
+        })
+      }).catch(() => {});
+    } catch (e) {}
+
+    // 3. Update localStorage copies for Netlify & host panel
+    try {
+      const storageKeys = [
+        `evenpass_event_${evId}_guests_db`,
+        evId === 6 ? 'evenpass_luis_gerardo_guests_db' : null
+      ].filter(Boolean) as string[];
+
+      storageKeys.forEach(key => {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            let matched = false;
+            list.forEach((item: any) => {
+              if ((token && item.token === token) || 
+                  (item.fullName && item.fullName.toLowerCase().trim() === fullName.toLowerCase().trim())) {
+                item.tableName = finalTableName;
+                item.manualAssignmentTimestamp = now;
+                matched = true;
+              }
+            });
+            if (matched) {
+              localStorage.setItem(key, JSON.stringify(list));
+              localStorage.setItem('evenpass_luis_gerardo_updated_tick', String(now));
+            }
+          }
+        }
+      });
+    } catch (e) {}
   }
 
   // Recalculates occupied seats for every table based on real assigned guests
@@ -2113,6 +2203,45 @@ export class EventService {
     if (!data) return;
     const targetEventId = Number(data.eventId) || 6;
 
+    if (data.type === 'TABLE_REASSIGNED') {
+      const token = data.guestToken;
+      const name = data.fullName;
+      const newTableName = data.newTableName;
+      const msgTimestamp = Number(data.timestamp || 0);
+
+      const curGuests = [...this.allGuests()];
+      const idx = curGuests.findIndex(g => 
+        (token && g.qrCodeToken === token) || 
+        (name && g.fullName.toLowerCase().trim() === name.toLowerCase().trim() && g.eventId === targetEventId)
+      );
+
+      if (idx >= 0) {
+        const curG = curGuests[idx];
+        if (!curG.manualAssignmentTimestamp || msgTimestamp >= curG.manualAssignmentTimestamp) {
+          const targetSalon = this.salons().find(s => s.id === (this.selectedEvent()?.salonId || 4));
+          let tableId = data.newTableId;
+          if (!tableId && targetSalon && targetSalon.tables) {
+            const found = targetSalon.tables.find(t => 
+              t.tableName.toLowerCase().trim() === (newTableName || '').toLowerCase().trim() ||
+              (newTableName && newTableName.toLowerCase().includes(`mesa 0${t.tableNumber}`)) ||
+              (newTableName && newTableName.toLowerCase().includes(`mesa ${t.tableNumber}`))
+            );
+            if (found) tableId = found.id;
+          }
+
+          curGuests[idx] = {
+            ...curG,
+            assignedTableName: (newTableName === 'Sin asignar' || !newTableName) ? undefined : newTableName,
+            assignedTableId: (newTableName === 'Sin asignar' || !newTableName) ? undefined : tableId,
+            manualAssignmentTimestamp: msgTimestamp || Date.now()
+          };
+          this.allGuests.set(curGuests);
+          this.refreshAllTableOccupancies();
+        }
+      }
+      return;
+    }
+
     if (data.type === 'NEW_GUEST' || data.type === 'NEW_INVITATION') {
       if (data.guest) {
         this.syncDigitalGuestsList(targetEventId, [data.guest], isLive);
@@ -2167,21 +2296,40 @@ export class EventService {
         // Actualizar invitado existente si cambió estado o pases
         const oldG = curGuests[existingIdx];
         const newStatus = isConfirmed ? 'CONFIRMED' : (item.status === 'DECLINED' || item.asistencia === 'No' ? 'DECLINED' : 'PENDING');
-        if (oldG.status !== newStatus || oldG.totalPasses !== passes || oldG.assignedTableName !== tableName) {
+        
+        // PROTECTION: If this guest has been manually assigned in EvenPass,
+        // and the incoming item's timestamp is older than oldG.manualAssignmentTimestamp,
+        // or if item does not have a newer explicit reassignment timestamp,
+        // KEEP oldG.assignedTableName and oldG.assignedTableId!
+        const incomingTimestamp = Number(item.manualAssignmentTimestamp || item.timestamp || 0);
+        const hasManualOverride = Boolean(
+          oldG.manualAssignmentTimestamp && 
+          (!incomingTimestamp || incomingTimestamp < oldG.manualAssignmentTimestamp)
+        );
+
+        const targetTableName = hasManualOverride ? (oldG.assignedTableName || tableName) : tableName;
+        const targetTableId = hasManualOverride ? (oldG.assignedTableId || tableId) : tableId;
+
+        const statusChanged = oldG.status !== newStatus;
+        const passesChanged = oldG.totalPasses !== passes;
+        const tableChanged = !hasManualOverride && (oldG.assignedTableName !== tableName);
+
+        if (statusChanged || passesChanged || tableChanged) {
           curGuests[existingIdx] = {
             ...oldG,
             status: newStatus,
             totalPasses: passes,
             numCompanions: Math.max(0, passes - 1),
-            assignedTableName: tableName,
-            assignedTableId: tableId,
+            assignedTableName: targetTableName,
+            assignedTableId: targetTableId,
             dietNotes: item.notes || oldG.dietNotes,
             source: 'DIGITAL_INVITATION',
-            confirmedAt: isConfirmed ? (oldG.confirmedAt || new Date().toLocaleString()) : undefined
+            confirmedAt: isConfirmed ? (oldG.confirmedAt || new Date().toLocaleString()) : undefined,
+            manualAssignmentTimestamp: oldG.manualAssignmentTimestamp
           };
           changesCount++;
 
-          if (notify && newStatus === 'CONFIRMED') {
+          if (notify && newStatus === 'CONFIRMED' && statusChanged) {
             this.notificationService.show(
               'success',
               'Confirmación en Vivo',

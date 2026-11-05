@@ -95,6 +95,7 @@ export interface Guest {
   checkedInAt?: string;
   source?: 'SUPABASE' | 'GOOGLE_SHEETS' | 'CANVA_QR' | 'WEBHOOK_API' | 'EMBED_WIDGET' | 'CSV_IMPORT' | 'MANUAL' | 'DIGITAL_INVITATION';
   externalSyncId?: string;
+  manualAssignmentTimestamp?: number;
 }
 
 export interface ExternalAuditEntry {
