@@ -274,35 +274,65 @@ function autoAssignTable(passes = 2, preferredName = 'AUTO') {
   const tables = getEventTables();
   const occ = getTableOccupancies();
 
+  // 1. Si se prefirió una mesa concreta, verificar que tiene cupo
   if (preferredName && preferredName !== 'AUTO') {
     const target = tables.find(t => t.name === preferredName);
     if (target) {
       const current = occ.get(target.name) || 0;
       if (current + passes <= target.capacity) {
-        return target.name;
+        return { tableName: target.name, autoCreated: false, venueFull: false };
       }
+      // Mesa preferida llena — continuar búsqueda automática
     }
   }
 
-  // Buscar mesa con cupo libre suficiente
+  // 2. Buscar cualquier mesa con cupo libre suficiente
   for (const table of tables) {
     const current = occ.get(table.name) || 0;
     if (table.capacity - current >= passes) {
-      return table.name;
+      return { tableName: table.name, autoCreated: false, venueFull: false };
     }
   }
 
-  // Si todas están llenas, asignar a la que tenga menor aforo
-  let minTable = tables[0]?.name || 'Mesa 01 - Familia Cercana';
-  let minCount = 999;
-  for (const table of tables) {
-    const current = occ.get(table.name) || 0;
-    if (current < minCount) {
-      minCount = current;
-      minTable = table.name;
-    }
+  // 3. Todas las mesas llenas — verificar aforo total del evento
+  const totalVenueCap = tables.reduce((sum, t) => sum + (t.capacity || 10), 0) || EVENT_DATA.totalCapacity || 50;
+  const totalOccupied = [...occ.values()].reduce((sum, v) => sum + v, 0);
+
+  if (totalOccupied + passes > totalVenueCap) {
+    // 🚫 Aforo del evento completo — no se puede admitir más invitados
+    return { tableName: null, autoCreated: false, venueFull: true };
   }
-  return minTable;
+
+  // 4. Hay capacidad de aforo global pero todas las mesas están llenas — AUTO-CREAR MESA
+  const evId = getActiveEventId();
+  const nextNum = tables.length + 1;
+  const newTableName = `Mesa ${nextNum < 10 ? '0' + nextNum : nextNum} - Auto`;
+  const newTable = {
+    id: Date.now(),
+    name: newTableName,
+    capacity: 10,
+    shape: 'ROUND',
+    tableNumber: nextNum
+  };
+
+  // Persistir la nueva mesa en localStorage para que EvenPass y el panel la lean
+  try {
+    const cachedTables = localStorage.getItem(`evenpass_event_${evId}_tables_db`);
+    const existing = cachedTables ? JSON.parse(cachedTables) : tables;
+    existing.push(newTable);
+    localStorage.setItem(`evenpass_event_${evId}_tables_db`, JSON.stringify(existing));
+  } catch (e) {}
+
+  // Avisar a EvenPass OS via BroadcastChannel + Cloud Relay
+  broadcastToCloud({ type: 'AUTO_TABLE_CREATED', eventId: evId, table: newTable, timestamp: Date.now() });
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      const bc = new BroadcastChannel('evenpass_invitations_channel');
+      bc.postMessage({ type: 'AUTO_TABLE_CREATED', eventId: evId, table: newTable });
+    }
+  } catch (e) {}
+
+  return { tableName: newTableName, autoCreated: true, venueFull: false };
 }
 
 function syncDirectWithEvenPass() {
@@ -695,6 +725,23 @@ function handleIncomingCloudMessage(data) {
     applyFullStateSync(data);
   } else if (data.type === 'TABLE_REASSIGNED') {
     applyTableReassignment(data);
+  } else if (data.type === 'AUTO_TABLE_CREATED') {
+    // EvenPass o el panel creó una mesa automáticamente — sincronizar al almacén local
+    if (data.table && (data.eventId === getActiveEventId() || !data.eventId)) {
+      try {
+        const evId = getActiveEventId();
+        const cachedTables = localStorage.getItem(`evenpass_event_${evId}_tables_db`);
+        const existing = cachedTables ? JSON.parse(cachedTables) : getEventTables();
+        const alreadyExists = existing.some(t => t.name === data.table.name || t.id === data.table.id);
+        if (!alreadyExists) {
+          existing.push(data.table);
+          localStorage.setItem(`evenpass_event_${evId}_tables_db`, JSON.stringify(existing));
+        }
+      } catch (e) {}
+      // Refrescar el select de despacho si estamos en el panel
+      if (typeof populateDispatchTablesSelect === 'function') populateDispatchTablesSelect();
+      if (typeof loadStoredGuests === 'function' && document.getElementById('panel-tables-grid')) loadStoredGuests();
+    }
   } else if (data.type === 'SYNC_ALL' && Array.isArray(data.guests)) {
     if (data.eventId === getActiveEventId()) {
       saveGuestsListSilently(data.guests);
@@ -848,12 +895,39 @@ function renderPanelKPIs(guests) {
   const kpiFam = document.getElementById('kpi-panel-families');
   const kpiPend = document.getElementById('kpi-panel-pending');
 
+  // Contar también pases PENDIENTES para saber el aforo real comprometido
+  let totalCommittedPasses = 0;
+  guests.forEach(g => {
+    if (g.status !== 'DECLINED') {
+      totalCommittedPasses += (g.passesGranted || g.passesConfirmed || 0);
+    }
+  });
+
   const occPct = Math.round((confirmedPasses / totalVenueCap) * 100);
+  const commitPct = Math.round((totalCommittedPasses / totalVenueCap) * 100);
+  const isVenueFull = totalCommittedPasses >= totalVenueCap;
 
   if (kpiConf) kpiConf.innerText = `${confirmedPasses} / ${totalVenueCap}`;
-  if (kpiOcc) kpiOcc.innerText = `${occPct}%`;
+  if (kpiOcc) kpiOcc.innerText = `${occPct}% (${commitPct}% comprometido)`;
   if (kpiFam) kpiFam.innerText = String(confirmedFamilies);
   if (kpiPend) kpiPend.innerText = String(pendingCount);
+
+  // Banner AFORO COMPLETO
+  let bannerEl = document.getElementById('panel-aforo-banner');
+  if (!bannerEl) {
+    bannerEl = document.createElement('div');
+    bannerEl.id = 'panel-aforo-banner';
+    bannerEl.style.cssText = 'display:none;background:#dc2626;color:#fff;text-align:center;padding:12px 20px;font-weight:700;font-size:1.1rem;border-radius:8px;margin:10px 0;letter-spacing:0.03em;';
+    const kpiSection = document.querySelector('.kpi-section, .panel-kpis, #panel-kpis, .stats-grid');
+    if (kpiSection) kpiSection.after(bannerEl);
+    else document.body.prepend(bannerEl);
+  }
+  if (isVenueFull) {
+    bannerEl.style.display = 'block';
+    bannerEl.innerHTML = `⛔ AFORO COMPLETO &mdash; ${totalCommittedPasses}/${totalVenueCap} pases comprometidos. No se pueden crear nuevas invitaciones hasta liberar espacio o agregar mesas.`;
+  } else {
+    bannerEl.style.display = 'none';
+  }
 }
 
 function renderPanelTablesGrid(guests) {
@@ -1039,13 +1113,36 @@ function dispatchInvitation(e) {
   const tableInput = document.getElementById('dispatch-table');
 
   const name = nameInput.value.trim();
-  const passes = parseInt(passesInput.value, 10);
-  const preferredTable = tableInput.value;
+  const passes = parseInt(passesInput.value, 10) || 1;
+  const preferredTable = tableInput ? tableInput.value : 'AUTO';
 
-  if (!name) return;
+  if (!name) {
+    alert('Por favor ingresa el nombre del invitado.');
+    return;
+  }
+
+  // --- CAPACITY ENFORCEMENT: Verificar aforo antes de crear la invitación ---
+  const assignResult = autoAssignTable(passes, preferredTable);
+
+  if (assignResult.venueFull) {
+    alert(
+      `⛔ AFORO COMPLETO\n\n` +
+      `No hay capacidad disponible para ${passes} pase(s) en este evento.\n` +
+      `Para agregar más invitados, primero crea mesas adicionales en EvenPass.`
+    );
+    return;
+  }
+
+  if (assignResult.autoCreated) {
+    alert(
+      `🪑 Mesa Creada Automáticamente\n\n` +
+      `Todas las mesas estaban llenas. Se creó automáticamente "${assignResult.tableName}" ` +
+      `para acomodar a ${name} (${passes} pase(s)).`
+    );
+  }
 
   const token = `LG10-VIP-${Math.floor(1000 + Math.random() * 9000)}`;
-  const assignedTable = autoAssignTable(passes, preferredTable);
+  const assignedTable = assignResult.tableName;
 
   const newGuest = {
     id: Date.now(),
@@ -1097,6 +1194,7 @@ function dispatchInvitation(e) {
   window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 
   nameInput.value = '';
+  populateDispatchTablesSelect();
   loadStoredGuests();
 }
 

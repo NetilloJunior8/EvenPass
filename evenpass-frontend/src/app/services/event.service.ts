@@ -1251,6 +1251,9 @@ export class EventService {
     let assignedCount = 0;
     let passesCount = 0;
     let unassigned = 0;
+    const totalVenueCapacity = tables.reduce((sum, t) => sum + t.capacity, 0);
+    const totalGuestPasses = sorted.reduce((sum, g) => sum + g.totalPasses, 0);
+    let autoCreatedTables: SalonTable[] = [];
 
     const allGuestsCopy = this.allGuests().map(g => ({ ...g }));
 
@@ -1283,8 +1286,48 @@ export class EventService {
         assignedCount++;
         passesCount += partySize;
       } else {
-        unassigned++;
+        // --- AUTO-TABLE CREATION: If venue has space for more tables, create one automatically ---
+        const currentTotalCap = tables.reduce((sum, t) => sum + t.capacity, 0) + autoCreatedTables.reduce((sum, t) => sum + t.capacity, 0);
+        const activeEv = this.selectedEvent();
+        const venueMaxGuests = activeEv?.maxCapacity || currentTotalCap;
+        const totalOccupied = [...occupiedSeatsMap.values()].reduce((s, v) => s + v, 0);
+
+        if (totalOccupied + g.totalPasses <= venueMaxGuests) {
+          // Auto-create a new table to accommodate this guest
+          const nextNum = Math.max(...[...tables, ...autoCreatedTables].map(t => t.tableNumber)) + 1;
+          const autoTable: SalonTable = {
+            id: Date.now() + nextNum,
+            salonId: salon.id,
+            tableNumber: nextNum,
+            tableName: `Mesa ${nextNum < 10 ? '0' + nextNum : nextNum} - Auto`,
+            shape: 'ROUND',
+            capacity: 10,
+            posX: 150 + (nextNum % 4) * 150,
+            posY: 150 + Math.floor(nextNum / 4) * 150,
+            occupiedSeats: 0
+          };
+          autoCreatedTables.push(autoTable);
+          occupiedSeatsMap.set(autoTable.id, g.totalPasses);
+          tableGuestsMap.set(autoTable.id, [`${g.fullName} (${g.totalPasses} pases)`]);
+
+          const guestInList = allGuestsCopy.find(item => item.id === g.id);
+          if (guestInList) {
+            guestInList.assignedTableId = autoTable.id;
+            guestInList.assignedTableName = autoTable.tableName;
+          }
+          assignedCount++;
+          passesCount += g.totalPasses;
+        } else {
+          // Venue is truly full
+          unassigned++;
+        }
       }
+    }
+
+    // Persist auto-created tables to the salon
+    if (autoCreatedTables.length > 0) {
+      autoCreatedTables.forEach(newT => tables.push(newT));
+      this.notificationService.show('info', '🪑 Mesas Creadas Automáticamente', `Se crearon ${autoCreatedTables.length} mesa(s) adicional(es) para acomodar a todos los invitados.`);
     }
 
     const updatedTables = tables.map(t => ({
@@ -1292,8 +1335,8 @@ export class EventService {
       occupiedSeats: occupiedSeatsMap.get(t.id) || 0
     }));
 
-    this.salons.update(list => list.map(s => 
-      s.id === salon.id ? { ...s, tables: updatedTables } : s
+    this.salons.update(list => list.map(s =>
+      s.id === salon.id ? { ...s, tables: updatedTables, totalCapacity: updatedTables.reduce((sum, t) => sum + t.capacity, 0) } : s
     ));
     this.allGuests.set(allGuestsCopy);
     this.persistSalons();
@@ -1306,7 +1349,9 @@ export class EventService {
       totalPassesAssigned: passesCount,
       tablesUtilized: updatedTables.filter(t => (t.occupiedSeats || 0) > 0).length,
       remainingUnassignedGuests: unassigned,
-      message: 'Asignación automática inteligente completada exitosamente.',
+      message: unassigned > 0 
+        ? `⚠️ ${unassigned} invitado(s) sin mesa — el aforo del evento ha sido alcanzado.` 
+        : 'Asignación automática inteligente completada exitosamente.',
       tables: updatedTables.map(t => ({
         tableId: t.id,
         tableNumber: t.tableNumber,
@@ -1317,7 +1362,11 @@ export class EventService {
       }))
     };
 
-    this.notificationService.show('success', 'Croquis Optimizado', `${passesCount} pases asignados sin separar acompañantes.`);
+    if (unassigned > 0) {
+      this.notificationService.show('warning', '⚠️ Aforo Completo', `${unassigned} invitado(s) sin mesa asignada. El límite del evento ha sido alcanzado.`);
+    } else {
+      this.notificationService.show('success', 'Croquis Optimizado', `${passesCount} pases asignados sin separar acompañantes.${autoCreatedTables.length > 0 ? ` (+${autoCreatedTables.length} mesa(s) auto-creada(s))` : ''}`);
+    }
     return result;
   }
 
@@ -1434,6 +1483,25 @@ export class EventService {
     }
     const activeEvId = this.activeEventId();
     const numCompanions = guest.numCompanions || 0;
+
+    // --- VENUE CAPACITY ENFORCEMENT: Check total venue capacity before adding ---
+    const salon = this.currentSalon();
+    const activeEv = this.selectedEvent();
+    const totalVenueCapacity = salon?.tables.reduce((sum, t) => sum + t.capacity, 0) || activeEv?.maxCapacity || 999;
+    const currentTotalPasses = this.eventGuests()
+      .filter(g => g.status !== 'DECLINED')
+      .reduce((sum, g) => sum + g.totalPasses, 0);
+    const incomingPasses = 1 + numCompanions;
+
+    if (currentTotalPasses + incomingPasses > totalVenueCapacity) {
+      this.notificationService.show(
+        'error',
+        '⛔ Aforo del Evento Completo',
+        `No hay espacio para ${incomingPasses} pase(s). Ocupado: ${currentTotalPasses}/${totalVenueCapacity}. Agrega más mesas o aumenta la capacidad del salón primero.`
+      );
+      return;
+    }
+
     const newGuest: Guest = {
       id: Date.now(),
       eventId: activeEvId,
@@ -1473,7 +1541,7 @@ export class EventService {
     this.notificationService.show('info', 'Invitado Eliminado', 'Registro removido.');
   }
 
-  assignTableToGuest(guestId: number, tableId: number): void {
+  assignTableToGuest(guestId: number, tableId: number, forceOverride: boolean = false): void {
     if (this.isEventLocked()) {
       this.notificationService.show('warning', 'Evento Concluido', 'Este evento ha finalizado. La asignación de mesas está bloqueada.');
       return;
@@ -1490,6 +1558,16 @@ export class EventService {
     );
     const occupiedSeats = seatedInTarget.reduce((sum, g) => sum + g.totalPasses, 0);
     const isOver = (occupiedSeats + guest.totalPasses) > table.capacity;
+
+    // --- CAPACITY ENFORCEMENT: Block overcapacity unless explicitly forced ---
+    if (isOver && !forceOverride) {
+      this.notificationService.show(
+        'error',
+        '⛔ Mesa al Límite de Aforo',
+        `"${table.tableName}" ya tiene ${occupiedSeats}/${table.capacity} lugares ocupados. "${guest.fullName}" (${guest.totalPasses} pases) no cabe. Crea otra mesa o libera espacio.`
+      );
+      return;
+    }
 
     const now = Date.now();
     this.allGuests.update(list => list.map(g => {
@@ -1511,8 +1589,8 @@ export class EventService {
     if (isOver) {
       this.notificationService.show(
         'warning',
-        'Mesa Asignada (Aviso de Aforo)',
-        `"${guest.fullName}" asignado a ${table.tableName}. La mesa supera su capacidad (${occupiedSeats + guest.totalPasses}/${table.capacity}p).`
+        '⚠️ Mesa Asignada (Forzado)',
+        `"${guest.fullName}" asignado a ${table.tableName}. Mesa en SOBRECUPO (${occupiedSeats + guest.totalPasses}/${table.capacity}p).`
       );
     } else {
       this.notificationService.show('success', 'Mesa Asignada', `"${guest.fullName}" asignado a ${table.tableName}`);
@@ -1544,7 +1622,7 @@ export class EventService {
   }
 
   // --- MANUAL REASSIGNMENT TO SPECIFIC TABLE (UPON GUEST REQUEST) ---
-  reassignGuestToTable(guestId: number, targetTableId: number): boolean {
+  reassignGuestToTable(guestId: number, targetTableId: number, forceOverride: boolean = false): boolean {
     if (this.isEventLocked()) {
       this.notificationService.show('warning', 'Evento Concluido', 'Este evento ha finalizado. La reasignación de mesas está deshabilitada.');
       return false;
@@ -1568,6 +1646,16 @@ export class EventService {
     const occupiedSeats = seatedInTarget.reduce((sum, g) => sum + g.totalPasses, 0);
     const isOver = (occupiedSeats + guest.totalPasses) > targetTable.capacity;
 
+    // --- CAPACITY ENFORCEMENT: Block overcapacity unless explicitly forced ---
+    if (isOver && !forceOverride) {
+      this.notificationService.show(
+        'error',
+        '⛔ Mesa al Límite de Aforo',
+        `"${targetTable.tableName}" ya tiene ${occupiedSeats}/${targetTable.capacity} lugares. No se puede agregar a "${guest.fullName}" (${guest.totalPasses} pases). Libera espacio o crea otra mesa.`
+      );
+      return false;
+    }
+
     const now = Date.now();
     this.allGuests.update(list => list.map(g => {
       if (g.id === guestId) {
@@ -1589,8 +1677,8 @@ export class EventService {
     if (isOver) {
       this.notificationService.show(
         'warning',
-        'Comensal Reubicado (Aviso de Aforo)',
-        `"${guest.fullName}" (${guest.totalPasses} pases) movido a ${targetTable.tableName}. La mesa supera su capacidad (${occupiedSeats + guest.totalPasses}/${targetTable.capacity}p).`
+        '⚠️ Comensal Reubicado (Forzado)',
+        `"${guest.fullName}" (${guest.totalPasses} pases) movido a ${targetTable.tableName}. Mesa en SOBRECUPO (${occupiedSeats + guest.totalPasses}/${targetTable.capacity}p).`
       );
     } else {
       this.notificationService.show(
@@ -2471,6 +2559,41 @@ export class EventService {
       }
     } else if (data.type === 'SYNC_ALL' && Array.isArray(data.guests)) {
       this.syncDigitalGuestsList(targetEventId, data.guests, false);
+    } else if (data.type === 'AUTO_TABLE_CREATED' && data.table) {
+      // Panel del anfitrión creó una mesa automáticamente — reflejarla en EvenPass
+      const rawTable = data.table;
+      const rawShape = String(rawTable.shape || 'ROUND').toUpperCase();
+      const normalizedShape: 'ROUND' | 'RECTANGULAR' = (rawShape.includes('RECT') || rawShape.includes('IMPERIAL')) ? 'RECTANGULAR' : 'ROUND';
+      const targetSalon = this.salons().find(s => s.id === (this.selectedEvent()?.salonId || 4));
+
+      if (targetSalon) {
+        const alreadyExists = targetSalon.tables.some(t =>
+          t.tableName.toLowerCase().trim() === (rawTable.name || '').toLowerCase().trim() ||
+          t.id === rawTable.id
+        );
+        if (!alreadyExists) {
+          const newT: SalonTable = {
+            id: rawTable.id || Date.now(),
+            salonId: targetSalon.id,
+            tableNumber: rawTable.tableNumber || (targetSalon.tables.length + 1),
+            tableName: rawTable.name || `Mesa ${targetSalon.tables.length + 1} - Auto`,
+            shape: normalizedShape,
+            capacity: rawTable.capacity || 10,
+            posX: rawTable.posX || (150 + ((targetSalon.tables.length) % 4) * 150),
+            posY: rawTable.posY || (150 + Math.floor((targetSalon.tables.length) / 4) * 150),
+            occupiedSeats: 0
+          };
+          const updatedTables = [...targetSalon.tables, newT];
+          this.salons.update(list => list.map(s =>
+            s.id === targetSalon.id
+              ? { ...s, tables: updatedTables, totalCapacity: s.totalCapacity + newT.capacity }
+              : s
+          ));
+          this.persistSalons();
+          this.notificationService.show('info', '🪑 Mesa Creada (Remota)', `Mesa "${newT.tableName}" agregada desde el panel del anfitrión.`);
+          this.broadcastFullStateToCloud(targetEventId);
+        }
+      }
     }
   }
 
