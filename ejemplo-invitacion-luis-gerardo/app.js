@@ -56,164 +56,10 @@ function broadcastToCloud(payload) {
 // ============================================================================
 // 2. BASE DE DATOS LOCAL Y SINCRONIZACIÓN
 // ============================================================================
-function getStoredGuests() {
-  const evId = getActiveEventId();
-
-  // 1. Si EvenPass tiene su base de datos local en este navegador, sincronizar con máxima fidelidad
-  try {
-    const epAll = localStorage.getItem('evenpass_all_guests_db');
-    if (epAll) {
-      const epGuests = JSON.parse(epAll);
-      if (Array.isArray(epGuests)) {
-        const evGuests = epGuests.filter(g => g.eventId === evId);
-        if (evGuests.length > 0) {
-          const mapped = evGuests.map(g => ({
-            id: g.id,
-            fullName: g.fullName,
-            phone: g.phone || 'WhatsApp Directo',
-            passesGranted: g.totalPasses,
-            passesConfirmed: (g.status === 'CONFIRMED' || g.status === 'ATTENDED') ? g.totalPasses : 0,
-            status: g.status,
-            tableName: g.assignedTableName || 'Sin asignar',
-            token: g.qrCodeToken,
-            notes: g.dietNotes || '',
-            updatedAt: g.confirmedAt || 'Hoy',
-            manualAssignmentTimestamp: g.manualAssignmentTimestamp || 0
-          }));
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(mapped));
-          localStorage.setItem(`evenpass_event_${evId}_guests_db`, JSON.stringify(mapped));
-          localStorage.setItem('evenpass_luis_gerardo_guests_db', JSON.stringify(mapped));
-          return mapped;
-        }
-      }
-    }
-  } catch (e) {}
-
-  // 2. Revisar almacenamiento local del panel
-  const cached = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('evenpass_luis_gerardo_guests_db');
-  if (cached) {
-    try {
-      const parsed = JSON.parse(cached);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        let changed = false;
-
-        // Auto-sanar sobrecupo heredado de Mesa 01 si Quiñónez y Mario siguen asignados a Mesa 01
-        parsed.forEach(g => {
-          const name = (g.fullName || '').toLowerCase().trim();
-          if ((name.includes('quiñónez') || name.includes('quinonez')) && (g.tableName || '').includes('Mesa 01')) {
-            g.tableName = 'Mesa 05 - Invitados Especiales';
-            changed = true;
-          }
-          if (name === 'mario' && (g.tableName || '').includes('Mesa 01')) {
-            g.tableName = 'Mesa 02 - Amigos de Colegio';
-            changed = true;
-          }
-        });
-
-        // Garantizar que Mario con 3 pases siempre esté disponible
-        if (!parsed.some(g => (g.fullName || '').toLowerCase().trim() === 'mario')) {
-          parsed.push({
-            id: 6,
-            fullName: 'Mario',
-            phone: '667-611-8835',
-            passesGranted: 3,
-            passesConfirmed: 0,
-            status: 'PENDING',
-            tableName: 'Mesa 02 - Amigos de Colegio',
-            token: 'LG10-VIP-8835',
-            notes: 'Invitación con 3 pases',
-            updatedAt: '12:45 PM'
-          });
-          changed = true;
-        }
-
-        // Auto-sanar sobrecupo en cualquier mesa (garantiza cero sobrecupo al cargar)
-        const tables = getEventTables();
-        const tableCapMap = new Map();
-        const occTracker = new Map();
-        tables.forEach(t => {
-          tableCapMap.set(t.name, t.capacity || 10);
-          occTracker.set(t.name, 0);
-        });
-
-        parsed.forEach(g => {
-          if (g.status !== 'DECLINED' && g.tableName && !g.tableName.toLowerCase().includes('sin asignar') && !g.tableName.toLowerCase().includes('sin mesa')) {
-            const passes = Number(g.passesGranted || g.passesConfirmed || 1);
-            const matched = tables.find(t => matchesTableName(g.tableName, t));
-            const tName = matched ? matched.name : g.tableName;
-            const current = occTracker.get(tName) || 0;
-            const cap = tableCapMap.get(tName) || 10;
-
-            if (current + passes > cap) {
-              // Sobrecupo detectado — mover a mesa con asientos libres
-              const alt = tables.find(t => {
-                if (t.name === tName) return false;
-                const altOcc = occTracker.get(t.name) || 0;
-                return (t.capacity - altOcc) >= passes;
-              });
-
-              if (alt) {
-                g.tableName = alt.name;
-                occTracker.set(alt.name, (occTracker.get(alt.name) || 0) + passes);
-                changed = true;
-              }
-            } else {
-              occTracker.set(tName, current + passes);
-            }
-          }
-        });
-
-        if (changed) {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-          localStorage.setItem(`evenpass_event_${evId}_guests_db`, JSON.stringify(parsed));
-          localStorage.setItem('evenpass_luis_gerardo_guests_db', JSON.stringify(parsed));
-        }
-        return parsed;
-      }
-    } catch (e) {}
-  }
-
-  // 3. Padrón inicial oficial sincronizado con EvenPass (distribución balanceada sin sobrecupo)
-  const initial = [
-    { id: 1, fullName: 'Familia Morales Valenzuela', phone: '667-112-3344', passesGranted: 4, passesConfirmed: 4, status: 'CONFIRMED', tableName: 'Mesa 01 - Familia Cercana', token: 'LG10-VIP-1102', notes: 'Abuelos y tíos', updatedAt: '09:30 AM' },
-    { id: 2, fullName: 'Mateo González & Padres', phone: '667-223-4455', passesGranted: 3, passesConfirmed: 3, status: 'CONFIRMED', tableName: 'Mesa 02 - Amigos de Colegio', token: 'LG10-VIP-2481', notes: 'Compañero de salón', updatedAt: '10:15 AM' },
-    { id: 3, fullName: 'Lic. Roberto Somoza & Fam.', phone: '667-334-5566', passesGranted: 3, passesConfirmed: 3, status: 'CONFIRMED', tableName: 'Mesa 03 - Padrinos & Tíos', token: 'LG10-VIP-3392', notes: 'Padrino', updatedAt: '11:00 AM' },
-    { id: 4, fullName: 'Santiago Beltrán & Papás', phone: '667-445-6677', passesGranted: 3, passesConfirmed: 3, status: 'CONFIRMED', tableName: 'Mesa 04 - Amigos Deportes & Laser', token: 'LG10-VIP-4819', notes: 'Fútbol', updatedAt: '11:45 AM' },
-    { id: 5, fullName: 'Familia Quiñónez Rivas', phone: '667-556-7788', passesGranted: 4, passesConfirmed: 0, status: 'PENDING', tableName: 'Mesa 05 - Invitados Especiales', token: 'LG10-VIP-5520', notes: 'Enviado por WhatsApp', updatedAt: '12:20 PM' },
-    { id: 6, fullName: 'Mario', phone: '667-611-8835', passesGranted: 3, passesConfirmed: 0, status: 'PENDING', tableName: 'Mesa 02 - Amigos de Colegio', token: 'LG10-VIP-8835', notes: 'Invitación con 3 pases', updatedAt: '12:45 PM' }
-  ];
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
-  localStorage.setItem('evenpass_luis_gerardo_guests_db', JSON.stringify(initial));
-  return initial;
-}
-
-function saveGuestsList(list) {
-  const evId = getActiveEventId();
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-  try {
-    localStorage.setItem(`evenpass_event_${evId}_guests_db`, JSON.stringify(list));
-    localStorage.setItem('evenpass_luis_gerardo_guests_db', JSON.stringify(list));
-    localStorage.setItem('evenpass_luis_gerardo_updated_tick', String(Date.now()));
-  } catch (e) {}
-
-  // 1. Sincronizar en la misma pestaña/navegador vía BroadcastChannel
-  try {
-    if (typeof BroadcastChannel !== 'undefined') {
-      const bc = new BroadcastChannel('evenpass_invitations_channel');
-      bc.postMessage({ type: 'SYNC_ALL', eventId: evId, guests: list });
-    }
-  } catch (e) {}
-
-  // 2. Sincronizar hacia la nube para EvenPass OS en tiempo real (Netlify <-> EvenPass)
-  broadcastToCloud({
-    type: 'SYNC_ALL',
-    eventId: evId,
-    guests: list,
-    timestamp: Date.now()
-  });
-}
-
-function getEventTables() {
+// ============================================================================
+// 2. BASE DE DATOS LOCAL, SALONES Y AUTO-BALANCEADOR DE AFORO
+// ============================================================================
+function getEventTablesRaw() {
   const evId = getActiveEventId();
   let baseTables = [...EVENT_DATA.tables];
 
@@ -246,21 +92,235 @@ function getEventTables() {
     }
   } catch (e) {}
 
-  // 3. Incluir cualquier mesa asignada a invitados que no esté en baseTables
-  const guests = getStoredGuests();
-  guests.forEach(g => {
-    if (g.tableName && !baseTables.some(t => t.name.toLowerCase().trim() === g.tableName.toLowerCase().trim()) && 
-        !g.tableName.toLowerCase().includes('sin mesa') && !g.tableName.toLowerCase().includes('sin asignar')) {
-      baseTables.push({
-        id: baseTables.length + 1,
-        name: g.tableName,
-        capacity: 10,
-        shape: 'ROUND'
-      });
+  return baseTables;
+}
+
+function getEventTables() {
+  const baseTables = getEventTablesRaw();
+  const evId = getActiveEventId();
+
+  // 3. Incluir cualquier mesa asignada a invitados que no esté en baseTables (sin llamada recursiva)
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(`evenpass_event_${evId}_guests_db`);
+    if (raw) {
+      const guests = JSON.parse(raw);
+      if (Array.isArray(guests)) {
+        guests.forEach(g => {
+          if (g.tableName && !baseTables.some(t => matchesTableName(g.tableName, t)) && 
+              !g.tableName.toLowerCase().includes('sin mesa') && !g.tableName.toLowerCase().includes('sin asignar')) {
+            baseTables.push({
+              id: baseTables.length + 1,
+              name: g.tableName,
+              capacity: 10,
+              shape: 'ROUND',
+              tableNumber: baseTables.length + 1
+            });
+          }
+        });
+      }
+    }
+  } catch (e) {}
+
+  return baseTables;
+}
+
+// MOTOR DE BALANCEO Y AUTOSANACIÓN DE AFORO (GARANTIZA CERO SOBRECUPO EN EL PANEL)
+function balanceGuestsAgainstCapacity(guestsList) {
+  if (!Array.isArray(guestsList) || guestsList.length === 0) {
+    return { guests: guestsList, changed: false };
+  }
+
+  const tables = getEventTablesRaw();
+  const tableCapMap = new Map();
+  const occTracker = new Map();
+  tables.forEach(t => {
+    tableCapMap.set(t.name, t.capacity || 10);
+    occTracker.set(t.name, 0);
+  });
+
+  let changed = false;
+
+  guestsList.forEach(g => {
+    if (g.status !== 'DECLINED' && g.tableName && 
+        !g.tableName.toLowerCase().includes('sin asignar') && 
+        !g.tableName.toLowerCase().includes('sin mesa')) {
+
+      const passes = Number(g.passesGranted || g.passesConfirmed || g.totalPasses || 1);
+      const matched = tables.find(t => matchesTableName(g.tableName, t));
+      const tName = matched ? matched.name : g.tableName;
+      const current = occTracker.get(tName) || 0;
+      const cap = matched ? (matched.capacity || 10) : (tableCapMap.get(tName) || 10);
+
+      if (current + passes > cap) {
+        // SOBRECUPO DETECTADO: Buscar mesa con espacio disponible
+        let alt = tables.find(t => {
+          if (t.name === tName) return false;
+          const altOcc = occTracker.get(t.name) || 0;
+          return ((t.capacity || 10) - altOcc) >= passes;
+        });
+
+        // Si todas las mesas existentes están llenas, auto-crear una nueva mesa
+        if (!alt) {
+          const nextNum = tables.length + 1;
+          const newTbl = {
+            id: Date.now() + nextNum,
+            name: `Mesa ${nextNum < 10 ? '0' + nextNum : nextNum} - Auto`,
+            capacity: 10,
+            shape: 'ROUND',
+            tableNumber: nextNum
+          };
+          tables.push(newTbl);
+          tableCapMap.set(newTbl.name, 10);
+          occTracker.set(newTbl.name, 0);
+          alt = newTbl;
+
+          try {
+            const evId = getActiveEventId();
+            localStorage.setItem(`evenpass_event_${evId}_tables_db`, JSON.stringify(tables));
+          } catch (e) {}
+
+          broadcastToCloud({ type: 'AUTO_TABLE_CREATED', eventId: getActiveEventId(), table: newTbl, timestamp: Date.now() });
+        }
+
+        g.tableName = alt.name;
+        occTracker.set(alt.name, (occTracker.get(alt.name) || 0) + passes);
+        changed = true;
+      } else {
+        occTracker.set(tName, current + passes);
+      }
     }
   });
 
-  return baseTables;
+  return { guests: guestsList, changed };
+}
+
+function getStoredGuests() {
+  const evId = getActiveEventId();
+
+  // 1. Si EvenPass tiene su base de datos local en este navegador, sincronizar con máxima fidelidad
+  try {
+    const epAll = localStorage.getItem('evenpass_all_guests_db');
+    if (epAll) {
+      const epGuests = JSON.parse(epAll);
+      if (Array.isArray(epGuests)) {
+        const evGuests = epGuests.filter(g => g.eventId === evId);
+        if (evGuests.length > 0) {
+          const mapped = evGuests.map(g => ({
+            id: g.id,
+            fullName: g.fullName,
+            phone: g.phone || 'WhatsApp Directo',
+            passesGranted: g.totalPasses,
+            passesConfirmed: (g.status === 'CONFIRMED' || g.status === 'ATTENDED') ? g.totalPasses : 0,
+            status: g.status,
+            tableName: g.assignedTableName || 'Sin asignar',
+            token: g.qrCodeToken,
+            notes: g.dietNotes || '',
+            updatedAt: g.confirmedAt || 'Hoy',
+            manualAssignmentTimestamp: g.manualAssignmentTimestamp || 0
+          }));
+
+          const balanceResult = balanceGuestsAgainstCapacity(mapped);
+          const finalMapped = balanceResult.guests;
+
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(finalMapped));
+          localStorage.setItem(`evenpass_event_${evId}_guests_db`, JSON.stringify(finalMapped));
+          localStorage.setItem('evenpass_luis_gerardo_guests_db', JSON.stringify(finalMapped));
+          return finalMapped;
+        }
+      }
+    }
+  } catch (e) {}
+
+  // 2. Revisar almacenamiento local del panel
+  const cached = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('evenpass_luis_gerardo_guests_db');
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        let changed = false;
+
+        // Auto-sanar sobrecupo heredado de Mesa 01 si Quiñónez y Mario siguen asignados a Mesa 01
+        parsed.forEach(g => {
+          const name = (g.fullName || '').toLowerCase().trim();
+          if ((name.includes('quiñónez') || name.includes('quinonez')) && (g.tableName || '').includes('Mesa 01')) {
+            g.tableName = 'Mesa 05 - Invitados Especiales';
+            changed = true;
+          }
+        });
+
+        // Garantizar que Mario con 3 pases siempre esté disponible
+        if (!parsed.some(g => (g.fullName || '').toLowerCase().trim() === 'mario')) {
+          parsed.push({
+            id: 6,
+            fullName: 'Mario',
+            phone: '667-611-8835',
+            passesGranted: 3,
+            passesConfirmed: 0,
+            status: 'PENDING',
+            tableName: 'Mesa 03 - Padrinos & Tíos',
+            token: 'LG10-VIP-8835',
+            notes: 'Invitación con 3 pases',
+            updatedAt: '12:45 PM'
+          });
+          changed = true;
+        }
+
+        // Auto-sanar y balancear sobrecupo en cualquier mesa
+        const balanceResult = balanceGuestsAgainstCapacity(parsed);
+        if (balanceResult.changed) {
+          changed = true;
+        }
+
+        const finalParsed = balanceResult.guests;
+
+        if (changed) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(finalParsed));
+          localStorage.setItem(`evenpass_event_${evId}_guests_db`, JSON.stringify(finalParsed));
+          localStorage.setItem('evenpass_luis_gerardo_guests_db', JSON.stringify(finalParsed));
+        }
+        return finalParsed;
+      }
+    } catch (e) {}
+  }
+
+  // 3. Padrón inicial oficial sincronizado con EvenPass (distribución balanceada sin sobrecupo)
+  const initial = [
+    { id: 1, fullName: 'Familia Morales Valenzuela', phone: '667-112-3344', passesGranted: 4, passesConfirmed: 4, status: 'CONFIRMED', tableName: 'Mesa 01 - Familia Cercana', token: 'LG10-VIP-1102', notes: 'Abuelos y tíos', updatedAt: '09:30 AM' },
+    { id: 2, fullName: 'Mateo González & Padres', phone: '667-223-4455', passesGranted: 3, passesConfirmed: 3, status: 'CONFIRMED', tableName: 'Mesa 02 - Amigos de Colegio', token: 'LG10-VIP-2481', notes: 'Compañero de salón', updatedAt: '10:15 AM' },
+    { id: 3, fullName: 'Lic. Roberto Somoza & Fam.', phone: '667-334-5566', passesGranted: 3, passesConfirmed: 3, status: 'CONFIRMED', tableName: 'Mesa 03 - Padrinos & Tíos', token: 'LG10-VIP-3392', notes: 'Padrino', updatedAt: '11:00 AM' },
+    { id: 4, fullName: 'Santiago Beltrán & Papás', phone: '667-445-6677', passesGranted: 3, passesConfirmed: 3, status: 'CONFIRMED', tableName: 'Mesa 04 - Amigos Deportes & Laser', token: 'LG10-VIP-4819', notes: 'Fútbol', updatedAt: '11:45 AM' },
+    { id: 5, fullName: 'Familia Quiñónez Rivas', phone: '667-556-7788', passesGranted: 4, passesConfirmed: 0, status: 'PENDING', tableName: 'Mesa 05 - Invitados Especiales', token: 'LG10-VIP-5520', notes: 'Enviado por WhatsApp', updatedAt: '12:20 PM' },
+    { id: 6, fullName: 'Mario', phone: '667-611-8835', passesGranted: 3, passesConfirmed: 0, status: 'PENDING', tableName: 'Mesa 03 - Padrinos & Tíos', token: 'LG10-VIP-8835', notes: 'Invitación con 3 pases', updatedAt: '12:45 PM' }
+  ];
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
+  localStorage.setItem('evenpass_luis_gerardo_guests_db', JSON.stringify(initial));
+  return initial;
+}
+
+function saveGuestsList(list) {
+  const evId = getActiveEventId();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  try {
+    localStorage.setItem(`evenpass_event_${evId}_guests_db`, JSON.stringify(list));
+    localStorage.setItem('evenpass_luis_gerardo_guests_db', JSON.stringify(list));
+    localStorage.setItem('evenpass_luis_gerardo_updated_tick', String(Date.now()));
+  } catch (e) {}
+
+  // 1. Sincronizar en la misma pestaña/navegador vía BroadcastChannel
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      const bc = new BroadcastChannel('evenpass_invitations_channel');
+      bc.postMessage({ type: 'SYNC_ALL', eventId: evId, guests: list });
+    }
+  } catch (e) {}
+
+  // 2. Sincronizar hacia la nube para EvenPass OS en tiempo real (Netlify <-> EvenPass)
+  broadcastToCloud({
+    type: 'SYNC_ALL',
+    eventId: evId,
+    guests: list,
+    timestamp: Date.now()
+  });
 }
 
 // Comparador robusto de mesas (tolera "Mesa 02", "Mesa 2", "Mesa 02 - Amigos de Colegio", etc.)
@@ -526,7 +586,10 @@ function submitRsvp(e) {
 
   if (userAttendance) {
     // Asignación de mesa automática e inteligente en Croquis
-    assignedTable = autoAssignTable(passesSelected);
+    const assignRes = autoAssignTable(passesSelected);
+    assignedTable = (assignRes && typeof assignRes === 'object' && assignRes.tableName) 
+      ? assignRes.tableName 
+      : (typeof assignRes === 'string' ? assignRes : 'Mesa 01 - Familia Cercana');
   }
 
   // Actualizar o crear invitado en el padrón
@@ -902,7 +965,12 @@ function populateDispatchTablesSelect() {
 }
 
 function loadStoredGuests() {
-  const guests = getStoredGuests();
+  let guests = getStoredGuests();
+  const balanceRes = balanceGuestsAgainstCapacity(guests);
+  if (balanceRes.changed) {
+    guests = balanceRes.guests;
+    saveGuestsList(guests);
+  }
   populateDispatchTablesSelect();
   renderPanelKPIs(guests);
   renderPanelTablesGrid(guests);
