@@ -127,6 +127,42 @@ function getStoredGuests() {
           changed = true;
         }
 
+        // Auto-sanar sobrecupo en cualquier mesa (garantiza cero sobrecupo al cargar)
+        const tables = getEventTables();
+        const tableCapMap = new Map();
+        const occTracker = new Map();
+        tables.forEach(t => {
+          tableCapMap.set(t.name, t.capacity || 10);
+          occTracker.set(t.name, 0);
+        });
+
+        parsed.forEach(g => {
+          if (g.status !== 'DECLINED' && g.tableName && !g.tableName.toLowerCase().includes('sin asignar') && !g.tableName.toLowerCase().includes('sin mesa')) {
+            const passes = Number(g.passesGranted || g.passesConfirmed || 1);
+            const matched = tables.find(t => matchesTableName(g.tableName, t));
+            const tName = matched ? matched.name : g.tableName;
+            const current = occTracker.get(tName) || 0;
+            const cap = tableCapMap.get(tName) || 10;
+
+            if (current + passes > cap) {
+              // Sobrecupo detectado — mover a mesa con asientos libres
+              const alt = tables.find(t => {
+                if (t.name === tName) return false;
+                const altOcc = occTracker.get(t.name) || 0;
+                return (t.capacity - altOcc) >= passes;
+              });
+
+              if (alt) {
+                g.tableName = alt.name;
+                occTracker.set(alt.name, (occTracker.get(alt.name) || 0) + passes);
+                changed = true;
+              }
+            } else {
+              occTracker.set(tName, current + passes);
+            }
+          }
+        });
+
         if (changed) {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
           localStorage.setItem(`evenpass_event_${evId}_guests_db`, JSON.stringify(parsed));
@@ -985,6 +1021,30 @@ function reassignGuestTableFromPanel(guestId, newTableName) {
   const guests = getStoredGuests();
   const guest = guests.find(g => g.id === guestId);
   if (!guest) return;
+
+  // Verificación de aforo antes de reasignar
+  if (newTableName && newTableName !== 'Sin asignar') {
+    const tables = getEventTables();
+    const targetTable = tables.find(t => matchesTableName(newTableName, t));
+    if (targetTable) {
+      const occ = getTableOccupancies();
+      // Si el comensal ya estaba en esta mesa, no sumar doble
+      const isAlreadyThere = matchesTableName(guest.tableName, targetTable);
+      const curOccupied = occ.get(targetTable.name) || 0;
+      const passes = Number(guest.passesGranted || guest.passesConfirmed || 1);
+      const prospectiveOcc = isAlreadyThere ? curOccupied : (curOccupied + passes);
+
+      if (prospectiveOcc > targetTable.capacity) {
+        alert(
+          `⛔ Mesa al Límite de Aforo\n\n` +
+          `"${targetTable.name}" ya tiene ${curOccupied}/${targetTable.capacity} lugares.\n` +
+          `"${guest.fullName}" (${passes} pases) supera el límite. Elige otra mesa.`
+        );
+        loadStoredGuests();
+        return;
+      }
+    }
+  }
 
   const evId = getActiveEventId();
   guest.tableName = newTableName === 'Sin asignar' ? 'Sin asignar' : newTableName;

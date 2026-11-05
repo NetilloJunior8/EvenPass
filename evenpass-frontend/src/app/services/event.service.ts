@@ -45,7 +45,25 @@ export class EventService {
 
   persistSalons(): void {
     try {
-      localStorage.setItem(this.STORAGE_SALONS, JSON.stringify(this.salons()));
+      const salonList = this.salons();
+      localStorage.setItem(this.STORAGE_SALONS, JSON.stringify(salonList));
+
+      // Also persist per-event tables database
+      this.events().forEach(ev => {
+        const targetSalonId = ev.salonId || 4;
+        const targetSalon = salonList.find(s => s.id === targetSalonId);
+        if (targetSalon && targetSalon.tables) {
+          const formatted = targetSalon.tables.map(t => ({
+            id: t.id,
+            name: t.tableName,
+            capacity: t.capacity || 10,
+            shape: t.shape || 'ROUND',
+            tableNumber: t.tableNumber,
+            occupiedSeats: t.occupiedSeats || 0
+          }));
+          localStorage.setItem(`evenpass_event_${ev.id}_tables_db`, JSON.stringify(formatted));
+        }
+      });
     } catch (e) {
       console.warn('Error guardando salones en localStorage:', e);
     }
@@ -53,7 +71,32 @@ export class EventService {
 
   persistGuests(): void {
     try {
-      localStorage.setItem(this.STORAGE_GUESTS, JSON.stringify(this.allGuests()));
+      const all = this.allGuests();
+      localStorage.setItem(this.STORAGE_GUESTS, JSON.stringify(all));
+
+      // Also persist per-event databases so local polling stays in 100% sync
+      const eventIds = new Set(all.map(g => g.eventId));
+      eventIds.forEach(evId => {
+        const evGuests = all.filter(g => g.eventId === evId);
+        const mapped = evGuests.map(g => ({
+          id: g.id,
+          fullName: g.fullName,
+          phone: g.phone || 'WhatsApp Directo',
+          passesGranted: g.totalPasses,
+          passesConfirmed: (g.status === 'CONFIRMED' || g.status === 'ATTENDED') ? g.totalPasses : 0,
+          status: g.status,
+          tableName: g.assignedTableName || 'Sin asignar',
+          token: g.qrCodeToken,
+          notes: g.dietNotes || '',
+          updatedAt: g.confirmedAt || 'Hoy',
+          manualAssignmentTimestamp: g.manualAssignmentTimestamp || Date.now()
+        }));
+        localStorage.setItem(`evenpass_event_${evId}_guests_db`, JSON.stringify(mapped));
+        if (evId === 6) {
+          localStorage.setItem('evenpass_luis_gerardo_guests_db', JSON.stringify(mapped));
+          localStorage.setItem('evenpass_luis_gerardo_updated_tick', String(Date.now()));
+        }
+      });
     } catch (e) {
       console.warn('Error guardando invitados en localStorage:', e);
     }
@@ -716,6 +759,40 @@ export class EventService {
     } catch (e) {}
 
     const finalSalons = loadedSalons || [salonImperial, salonWhitePoleTent, salonZafiro, salonNeonVip];
+
+    // Merge any tables persisted under evenpass_event_${evId}_tables_db so no user tables are ever lost on reload
+    try {
+      finalSalons.forEach(s => {
+        const evWithSalon = (loadedEvents || demoEvents).find(e => e.salonId === s.id);
+        const evId = evWithSalon?.id || (s.id === 4 ? 6 : s.id);
+        const cachedEvTables = localStorage.getItem(`evenpass_event_${evId}_tables_db`);
+        if (cachedEvTables) {
+          const parsedTables = JSON.parse(cachedEvTables);
+          if (Array.isArray(parsedTables) && parsedTables.length > 0) {
+            parsedTables.forEach((pt: any) => {
+              const ptName = pt.name || pt.tableName;
+              const exists = s.tables.some(t => t.id === pt.id || (ptName && t.tableName.toLowerCase().trim() === ptName.toLowerCase().trim()));
+              if (!exists) {
+                const nextNum = (s.tables.length > 0 ? Math.max(...s.tables.map(t => t.tableNumber)) : 0) + 1;
+                s.tables.push({
+                  id: pt.id || Date.now() + nextNum,
+                  salonId: s.id,
+                  tableNumber: pt.tableNumber || nextNum,
+                  tableName: ptName || `Mesa ${nextNum < 10 ? '0' + nextNum : nextNum}`,
+                  shape: (String(pt.shape || 'ROUND').toUpperCase().includes('RECT') || String(pt.shape || '').toUpperCase().includes('IMPERIAL')) ? 'RECTANGULAR' : 'ROUND',
+                  capacity: pt.capacity || 10,
+                  posX: pt.posX || (140 + ((s.tables.length) % 3) * 160),
+                  posY: pt.posY || (180 + Math.floor((s.tables.length) / 3) * 160),
+                  occupiedSeats: 0
+                });
+              }
+            });
+            s.totalCapacity = s.tables.reduce((sum, t) => sum + t.capacity, 0);
+          }
+        }
+      });
+    } catch (e) {}
+
     this.salons.set(finalSalons);
     this.persistSalons();
 
@@ -1040,6 +1117,10 @@ export class EventService {
         }
       }
     } catch (e) {}
+
+    // Self-healing: Enforce hard zero-overcapacity limits across all tables immediately
+    this.enforceSalonCapacityAndBalance(6);
+    this.enforceSalonCapacityAndBalance();
     this.broadcastFullStateToCloud(6);
 
     // 5. Initial Expanded Templates (6 Professional Templates)
@@ -1839,13 +1920,13 @@ export class EventService {
     } catch (e) {}
   }
 
-  // Recalculates occupied seats for every table based on real assigned guests
+  // Recalculates occupied seats for every table based on real assigned guests (all non-declined)
   refreshAllTableOccupancies(): void {
     const curSalon = this.currentSalon();
     if (!curSalon) return;
     const activeEvId = this.activeEventId();
     const activeGuests = this.allGuests().filter(
-      g => g.eventId === activeEvId && (g.status === 'CONFIRMED' || g.status === 'ATTENDED')
+      g => g.eventId === activeEvId && g.status !== 'DECLINED'
     );
 
     const counts = new Map<number, number>();
@@ -1857,12 +1938,132 @@ export class EventService {
 
     const updatedTables = curSalon.tables.map(t => ({
       ...t,
-      occupiedSeats: Math.min(t.capacity, counts.get(t.id) || 0)
+      occupiedSeats: counts.get(t.id) || 0
     }));
 
     this.salons.update(list => list.map(s => 
       s.id === curSalon.id ? { ...s, tables: updatedTables } : s
     ));
+    this.persistSalons();
+  }
+
+  // --- HARD CAPACITY ENFORCEMENT & SELF-HEALING BALANCER ---
+  // Guarantees zero overcapacity in any table. If any table has occupied > capacity,
+  // automatically moves overflow guests to tables with space, or auto-creates a table.
+  enforceSalonCapacityAndBalance(targetEventId?: number): boolean {
+    const evId = targetEventId || this.activeEventId();
+    const curEv = this.events().find(e => e.id === evId) || this.selectedEvent();
+    if (!curEv) return false;
+
+    const salonId = curEv.salonId || 4;
+    const curSalon = this.salons().find(s => s.id === salonId);
+    if (!curSalon || !curSalon.tables || curSalon.tables.length === 0) return false;
+
+    let tables = curSalon.tables.map(t => ({ ...t }));
+    let allGuestsCopy = this.allGuests().map(g => ({ ...g }));
+    const eventGuests = allGuestsCopy.filter(g => g.eventId === evId && g.status !== 'DECLINED');
+
+    let modified = false;
+    let tablesModified = false;
+
+    // Check every table for overcapacity
+    for (const table of tables) {
+      const seated = eventGuests.filter(g => 
+        (g.assignedTableId != null && Number(g.assignedTableId) === Number(table.id)) ||
+        (g.assignedTableName && g.assignedTableName.toLowerCase().trim() === table.tableName.toLowerCase().trim()) ||
+        (g.assignedTableName && new RegExp(`\\b(mesa|table)\\s*0*${table.tableNumber}\\b`, 'i').test(g.assignedTableName))
+      );
+
+      const totalOccupied = seated.reduce((sum, g) => sum + g.totalPasses, 0);
+
+      if (totalOccupied > table.capacity) {
+        let currentSeats = 0;
+        const overflowGuests: Guest[] = [];
+
+        // Prioritize confirmed guests and earlier assignments to stay in the table
+        const sorted = [...seated].sort((a, b) => {
+          if (a.status === 'CONFIRMED' && b.status !== 'CONFIRMED') return -1;
+          if (b.status === 'CONFIRMED' && a.status !== 'CONFIRMED') return 1;
+          return (a.manualAssignmentTimestamp || 0) - (b.manualAssignmentTimestamp || 0);
+        });
+
+        for (const g of sorted) {
+          if (currentSeats + g.totalPasses <= table.capacity) {
+            currentSeats += g.totalPasses;
+          } else {
+            overflowGuests.push(g);
+          }
+        }
+
+        // Reallocate each overflowing guest
+        for (const overG of overflowGuests) {
+          // Find an existing table with space
+          let candidate = tables.find(t => {
+            if (t.id === table.id) return false;
+            const tOccupied = allGuestsCopy
+              .filter(g => g.eventId === evId && g.status !== 'DECLINED' && (
+                (g.assignedTableId != null && Number(g.assignedTableId) === Number(t.id)) ||
+                (g.assignedTableName && g.assignedTableName.toLowerCase().trim() === t.tableName.toLowerCase().trim()) ||
+                (g.assignedTableName && new RegExp(`\\b(mesa|table)\\s*0*${t.tableNumber}\\b`, 'i').test(g.assignedTableName))
+              ))
+              .reduce((sum, g) => sum + g.totalPasses, 0);
+            return (t.capacity - tOccupied) >= overG.totalPasses;
+          });
+
+          // If no existing table has enough space, auto-create a new table!
+          if (!candidate) {
+            const nextNum = Math.max(...tables.map(t => t.tableNumber)) + 1;
+            const newTable: SalonTable = {
+              id: Date.now() + nextNum,
+              salonId: curSalon.id,
+              tableNumber: nextNum,
+              tableName: `Mesa ${nextNum < 10 ? '0' + nextNum : nextNum} - Auto`,
+              shape: 'ROUND',
+              capacity: 10,
+              posX: 140 + ((tables.length) % 3) * 160,
+              posY: 180 + Math.floor((tables.length) / 3) * 160,
+              occupiedSeats: 0
+            };
+            tables.push(newTable);
+            candidate = newTable;
+            tablesModified = true;
+          }
+
+          // Move guest to candidate table
+          const gIdx = allGuestsCopy.findIndex(item => item.id === overG.id);
+          if (gIdx >= 0) {
+            allGuestsCopy[gIdx] = {
+              ...allGuestsCopy[gIdx],
+              assignedTableId: candidate.id,
+              assignedTableName: candidate.tableName,
+              manualAssignmentTimestamp: Date.now()
+            };
+            modified = true;
+          }
+        }
+      }
+    }
+
+    if (tablesModified) {
+      this.salons.update(list => list.map(s => 
+        s.id === curSalon.id ? { ...s, tables, totalCapacity: tables.reduce((sum, t) => sum + t.capacity, 0) } : s
+      ));
+      this.persistSalons();
+    }
+
+    if (modified) {
+      this.allGuests.set(allGuestsCopy);
+      this.persistGuests();
+      this.refreshAllTableOccupancies();
+      this.broadcastFullStateToCloud(evId);
+      this.notificationService.show(
+        'info',
+        'Sobrecupo Despejado Automáticamente',
+        'Se redistribuyeron comensales excedentes para garantizar que ninguna mesa supere su capacidad.'
+      );
+    }
+
+    return modified || tablesModified;
   }
 
   // --- 5-DAY UPGRADE TO PRO / PREMIUM POLICY CHECK ---
@@ -2618,17 +2819,41 @@ export class EventService {
       const isConfirmed = item.status === 'CONFIRMED' || (item.passesConfirmed && item.passesConfirmed > 0) || item.asistencia === 'Sí';
       const tableName = item.tableName || item.assignedTableName || 'Mesa 01 - Familia Cercana';
 
-      // Encontrar tableId en el salón del evento
+      // Encontrar tableId en el salón del evento respetando aforo
       const targetSalon = this.salons().find(s => s.id === (targetEv?.salonId || 4));
-      let tableId = targetSalon?.tables?.[0]?.id || 401;
-      if (targetSalon && targetSalon.tables) {
-        const found = targetSalon.tables.find(t => 
-          t.tableName.toLowerCase().trim() === tableName.toLowerCase().trim() ||
-          tableName.toLowerCase().includes(`mesa 0${t.tableNumber}`) ||
-          tableName.toLowerCase().includes(`mesa ${t.tableNumber}`)
-        );
-        if (found) tableId = found.id;
+      let targetTable = targetSalon?.tables?.find(t => 
+        t.tableName.toLowerCase().trim() === tableName.toLowerCase().trim() ||
+        tableName.toLowerCase().includes(`mesa 0${t.tableNumber}`) ||
+        tableName.toLowerCase().includes(`mesa ${t.tableNumber}`)
+      );
+
+      // Verificación de aforo: si la mesa destino ya no tiene cupo, buscar otra con espacio
+      if (targetTable) {
+        const currentOcc = curGuests
+          .filter(g => g.eventId === eventId && g.status !== 'DECLINED' && g.qrCodeToken !== token && (
+            (g.assignedTableId != null && Number(g.assignedTableId) === Number(targetTable!.id)) ||
+            (g.assignedTableName && g.assignedTableName.toLowerCase().trim() === targetTable!.tableName.toLowerCase().trim())
+          ))
+          .reduce((sum, g) => sum + g.totalPasses, 0);
+
+        if (currentOcc + passes > targetTable.capacity) {
+          const alternativeTable = targetSalon?.tables.find(t => {
+            const occ = curGuests
+              .filter(g => g.eventId === eventId && g.status !== 'DECLINED' && g.qrCodeToken !== token && (
+                (g.assignedTableId != null && Number(g.assignedTableId) === Number(t.id)) ||
+                (g.assignedTableName && g.assignedTableName.toLowerCase().trim() === t.tableName.toLowerCase().trim())
+              ))
+              .reduce((sum, g) => sum + g.totalPasses, 0);
+            return (t.capacity - occ) >= passes;
+          });
+          if (alternativeTable) {
+            targetTable = alternativeTable;
+          }
+        }
       }
+
+      let tableId = targetTable?.id || targetSalon?.tables?.[0]?.id || 401;
+      const finalTableName = targetTable?.tableName || tableName;
 
       if (existingIdx >= 0) {
         // Actualizar invitado existente si cambió estado o pases
@@ -2645,12 +2870,12 @@ export class EventService {
           (!incomingTimestamp || incomingTimestamp < oldG.manualAssignmentTimestamp)
         );
 
-        const targetTableName = hasManualOverride ? (oldG.assignedTableName || tableName) : tableName;
+        const targetTableName = hasManualOverride ? (oldG.assignedTableName || finalTableName) : finalTableName;
         const targetTableId = hasManualOverride ? (oldG.assignedTableId || tableId) : tableId;
 
         const statusChanged = oldG.status !== newStatus;
         const passesChanged = oldG.totalPasses !== passes;
-        const tableChanged = !hasManualOverride && (oldG.assignedTableName !== tableName);
+        const tableChanged = !hasManualOverride && (oldG.assignedTableName !== targetTableName);
 
         if (statusChanged || passesChanged || tableChanged) {
           curGuests[existingIdx] = {
@@ -2688,7 +2913,7 @@ export class EventService {
           status: isConfirmed ? 'CONFIRMED' : 'PENDING',
           qrCodeToken: token || `LG10-VIP-${Math.floor(1000 + Math.random() * 9000)}`,
           assignedTableId: tableId,
-          assignedTableName: tableName,
+          assignedTableName: finalTableName,
           dietNotes: item.notes || 'Invitación enviada por WhatsApp',
           source: 'DIGITAL_INVITATION',
           confirmedAt: isConfirmed ? (item.updatedAt || new Date().toLocaleString()) : undefined
@@ -2723,6 +2948,7 @@ export class EventService {
         e.id === eventId ? { ...e, totalGuests: totalCount, confirmedGuests: confirmedCount } : e
       ));
       this.persistEvents();
+      this.enforceSalonCapacityAndBalance(eventId);
     }
     return changesCount;
   }

@@ -173,7 +173,7 @@ import jsPDF from 'jspdf';
             <div class="venue-badge-pill">
               <span class="bp-title">PLANO CAD OFICIAL</span>
               <span class="divider">|</span>
-              <small>{{ eventService.currentSalon()?.type === 'WHITE_POLE_TENT' ? 'Carpa 40x60 ft Pole Tent' : (eventService.currentSalon()?.type === 'ZAFIRO_ROOM' ? 'Salón Zafiro 6.19m × 8.625m' : 'Salón Real Imperial') }}</small>
+              <small>{{ eventService.currentSalon()?.name || 'Salón de Eventos' }}</small>
             </div>
 
             <!-- Zoom Controls -->
@@ -1156,6 +1156,14 @@ import jsPDF from 'jspdf';
                   <span>{{ t.id === guest.assignedTableId ? 'Mesa Actual' : 'Mover Aquí' }}</span>
                 </button>
               </div>
+            </div>
+
+            <div class="modal-reassign-actions" style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #e2e8f0; padding-top: 14px;">
+              <button type="button" class="btn-outline" (click)="createTableAndReassign(guest)" style="display: inline-flex; align-items: center; gap: 6px;">
+                <app-icon name="plus" [size]="14"></app-icon>
+                <span>Crear Nueva Mesa y Mover Aquí</span>
+              </button>
+              <button type="button" class="btn-outline" (click)="showReassignModal.set(false)">Cerrar</button>
             </div>
           </div>
         </div>
@@ -2963,45 +2971,16 @@ export class CroquisComponent {
   }
 
   resolveOvercapacity(table: SalonTable): void {
-    const guests = this.getGuestsForSelectedTable();
-    let currentCount = 0;
-    const toReassign: Guest[] = [];
-
-    for (const g of guests) {
-      if (currentCount + g.totalPasses <= table.capacity) {
-        currentCount += g.totalPasses;
-      } else {
-        toReassign.push(g);
-      }
+    const healed = this.eventService.enforceSalonCapacityAndBalance();
+    if (healed) {
+      this.notificationService.show(
+        'success',
+        'Sobrecupo Resuelto',
+        'Se reubicaron los comensales excedentes automáticamente a mesas con cupo disponible o nuevas mesas.'
+      );
+    } else {
+      this.notificationService.show('info', 'Aforo Correcto', 'La mesa ya respeta el aforo de comensales.');
     }
-
-    if (toReassign.length === 0) {
-      this.notificationService.show('info', 'Aforo Correcto', 'La mesa no excede su límite de sillas.');
-      return;
-    }
-
-    const salon = this.eventService.currentSalon();
-    if (!salon) return;
-
-    let reassignedCount = 0;
-    for (const g of toReassign) {
-      const target = salon.tables.find(t => {
-        if (t.id === table.id) return false;
-        const occ = (t.occupiedSeats || 0);
-        return (t.capacity - occ) >= g.totalPasses;
-      });
-
-      if (target) {
-        this.eventService.reassignGuestToTable(g.id, target.id);
-        reassignedCount++;
-      }
-    }
-
-    this.notificationService.show(
-      'success',
-      'Sobrecupo Resuelto',
-      `Se reubicaron ${reassignedCount} grupos excedentes a mesas con asientos disponibles.`
-    );
   }
 
   openReassignModal(guest: Guest): void {
@@ -3012,12 +2991,27 @@ export class CroquisComponent {
   confirmReassign(targetTableId: number): void {
     const g = this.guestToReassign();
     if (!g) return;
-    this.eventService.reassignGuestToTable(g.id, targetTableId);
-    this.showReassignModal.set(false);
-    this.guestToReassign.set(null);
-    const target = this.eventService.currentSalon()?.tables.find(t => t.id === targetTableId);
-    if (target) {
-      this.selectedTable.set(target);
+    const ok = this.eventService.reassignGuestToTable(g.id, targetTableId);
+    if (ok) {
+      this.showReassignModal.set(false);
+      this.guestToReassign.set(null);
+      const target = this.eventService.currentSalon()?.tables.find(t => t.id === targetTableId);
+      if (target) {
+        this.selectedTable.set(target);
+      }
+    }
+  }
+
+  createTableAndReassign(guest: Guest): void {
+    const cur = this.eventService.currentSalon();
+    const nextNum = (cur && cur.tables.length > 0) ? Math.max(...cur.tables.map(t => t.tableNumber)) + 1 : 1;
+    const newT = this.eventService.addTableToCurrentSalon({
+      tableName: `Mesa ${nextNum < 10 ? '0' + nextNum : nextNum} (Nueva)`,
+      shape: 'ROUND',
+      capacity: 10
+    });
+    if (newT) {
+      this.confirmReassign(newT.id);
     }
   }
 
