@@ -617,11 +617,11 @@ import jsPDF from 'jspdf';
                    style="cursor: grab; touch-action: none;"
                 >
                   <!-- Selection Halo -->
-                  <circle *ngIf="selectedTable()?.id === table.id && table.shape !== 'RECTANGULAR'" [attr.cx]="table.posX" [attr.cy]="table.posY" r="40" fill="none" stroke="#0284c7" stroke-width="2.5" stroke-dasharray="4,4" />
-                  <rect *ngIf="selectedTable()?.id === table.id && table.shape === 'RECTANGULAR'" [attr.x]="table.posX - 38" [attr.y]="table.posY - 30" width="76" height="60" rx="8" fill="none" stroke="#0284c7" stroke-width="2.5" stroke-dasharray="4,4" />
+                  <circle *ngIf="selectedTable()?.id === table.id && !isRectTable(table)" [attr.cx]="table.posX" [attr.cy]="table.posY" r="40" fill="none" stroke="#0284c7" stroke-width="2.5" stroke-dasharray="4,4" />
+                  <rect *ngIf="selectedTable()?.id === table.id && isRectTable(table)" [attr.x]="table.posX - 38" [attr.y]="table.posY - 30" width="76" height="60" rx="8" fill="none" stroke="#0284c7" stroke-width="2.5" stroke-dasharray="4,4" />
 
                   <!-- Round Table -->
-                  <ng-container *ngIf="table.shape !== 'RECTANGULAR'">
+                  <ng-container *ngIf="!isRectTable(table)">
                     <circle 
                       [attr.cx]="table.posX" 
                       [attr.cy]="table.posY" 
@@ -649,7 +649,7 @@ import jsPDF from 'jspdf';
                   </ng-container>
 
                   <!-- Rectangular / Imperial Table -->
-                  <ng-container *ngIf="table.shape === 'RECTANGULAR'">
+                  <ng-container *ngIf="isRectTable(table)">
                     <rect 
                       [attr.x]="table.posX - 30" 
                       [attr.y]="table.posY - 22" 
@@ -721,7 +721,7 @@ import jsPDF from 'jspdf';
               </div>
               <div class="stat-box">
                 <span class="stat-label">Geometría</span>
-                <strong class="stat-val">{{ activeSelectedTable()?.shape === 'ROUND' ? 'Redonda' : 'Imperial / Rectangular' }}</strong>
+                <strong class="stat-val">{{ isRectTable(activeSelectedTable()) ? 'Imperial / Rectangular' : 'Redonda' }}</strong>
               </div>
             </div>
 
@@ -2727,6 +2727,12 @@ export class CroquisComponent {
     this.selectedTable.set(table);
   }
 
+  isRectTable(t: SalonTable | null | undefined): boolean {
+    if (!t) return false;
+    const s = String(t.shape || '').toUpperCase();
+    return s.includes('RECT') || s.includes('IMPERIAL');
+  }
+
   // FIXED RELIABLE GUEST LOOKUP FOR SELECTED TABLE
   getGuestsForSelectedTable(): Guest[] {
     const t = this.activeSelectedTable();
@@ -3036,7 +3042,8 @@ export class CroquisComponent {
     const t = this.selectedTable();
     if (!t || !this.editTableForm.tableName) return;
     const newCap = Number(this.editTableForm.capacity) || 10;
-    const newShape = this.editTableForm.shape || 'ROUND';
+    const rawShape = String(this.editTableForm.shape || 'ROUND').toUpperCase();
+    const newShape: 'ROUND' | 'RECTANGULAR' = (rawShape.includes('RECT') || rawShape.includes('IMPERIAL')) ? 'RECTANGULAR' : 'ROUND';
     const newName = this.editTableForm.tableName;
 
     this.eventService.updateTableInCurrentSalon(t.id, {

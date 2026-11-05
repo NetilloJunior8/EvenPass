@@ -1040,6 +1040,7 @@ export class EventService {
         }
       }
     } catch (e) {}
+    this.broadcastFullStateToCloud(6);
 
     // 5. Initial Expanded Templates (6 Professional Templates)
     this.templates.set([
@@ -1680,6 +1681,74 @@ export class EventService {
         }
       });
     } catch (e) {}
+    this.broadcastFullStateToCloud(evId);
+  }
+
+  broadcastFullStateToCloud(targetEventId?: number): void {
+    const evId = targetEventId || this.activeEventId();
+    const curSalon = this.currentSalon();
+    const guests = this.allGuests().filter(g => g.eventId === evId);
+
+    const formattedGuests = guests.map(g => ({
+      id: g.id,
+      fullName: g.fullName,
+      phone: g.phone || 'WhatsApp Directo',
+      passesGranted: g.totalPasses,
+      passesConfirmed: (g.status === 'CONFIRMED' || g.status === 'ATTENDED') ? g.totalPasses : 0,
+      status: g.status,
+      tableName: g.assignedTableName || 'Sin asignar',
+      token: g.qrCodeToken,
+      notes: g.dietNotes || '',
+      updatedAt: g.confirmedAt || 'Hoy',
+      manualAssignmentTimestamp: g.manualAssignmentTimestamp || Date.now()
+    }));
+
+    const formattedTables = (curSalon?.tables || []).map(t => ({
+      id: t.id,
+      name: t.tableName,
+      capacity: t.capacity,
+      shape: t.shape,
+      tableNumber: t.tableNumber,
+      occupiedSeats: t.occupiedSeats || 0
+    }));
+
+    const payload = {
+      type: 'SYNC_FULL_STATE',
+      eventId: evId,
+      allGuests: formattedGuests,
+      allTables: formattedTables,
+      timestamp: Date.now()
+    };
+
+    // 1. BroadcastChannel
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('evenpass_invitations_channel');
+        bc.postMessage(payload);
+      }
+    } catch (e) {}
+
+    // 2. Cloud Relay (Netlify / mobile / external host panel)
+    try {
+      fetch(this.CLOUD_SYNC_RELAY, {
+        method: 'POST',
+        headers: {
+          'Title': 'EvenPass Full State Sync',
+          'Tags': 'chair,seating,full_sync'
+        },
+        body: JSON.stringify(payload)
+      }).catch(() => {});
+    } catch (e) {}
+
+    // 3. Update localStorage copies
+    try {
+      localStorage.setItem(`evenpass_event_${evId}_guests_db`, JSON.stringify(formattedGuests));
+      if (evId === 6) {
+        localStorage.setItem('evenpass_luis_gerardo_guests_db', JSON.stringify(formattedGuests));
+        localStorage.setItem('evenpass_luis_gerardo_updated_tick', String(Date.now()));
+      }
+      localStorage.setItem(`evenpass_event_${evId}_tables_db`, JSON.stringify(formattedTables));
+    } catch (e) {}
   }
 
   // Recalculates occupied seats for every table based on real assigned guests
@@ -1860,13 +1929,16 @@ export class EventService {
     const cur = this.currentSalon();
     if (!cur) return null;
 
+    const rawShape = String(table.shape || 'ROUND').toUpperCase();
+    const normalizedShape: 'ROUND' | 'RECTANGULAR' = (rawShape.includes('RECT') || rawShape.includes('IMPERIAL')) ? 'RECTANGULAR' : 'ROUND';
+
     const newTableNumber = (cur.tables.length > 0) ? Math.max(...cur.tables.map(t => t.tableNumber)) + 1 : 1;
     const newTable: SalonTable = {
       id: Date.now(),
       salonId: cur.id,
       tableNumber: newTableNumber,
       tableName: table.tableName || `Mesa ${newTableNumber < 10 ? '0' + newTableNumber : newTableNumber}`,
-      shape: table.shape || 'ROUND',
+      shape: normalizedShape,
       capacity: table.capacity || 10,
       posX: table.posX || 250,
       posY: table.posY || 300,
@@ -1878,7 +1950,8 @@ export class EventService {
       s.id === cur.id ? { ...s, tables: updatedTables, totalCapacity: s.totalCapacity + newTable.capacity } : s
     ));
     this.persistSalons();
-    this.notificationService.show('success', 'Mesa Creada', `Mesa ${newTable.tableNumber} añadida al salón actual.`);
+    this.broadcastFullStateToCloud();
+    this.notificationService.show('success', 'Mesa Creada', `Mesa ${newTable.tableNumber} (${normalizedShape === 'RECTANGULAR' ? 'Imperial / Rectangular' : 'Redonda'}) añadida al salón actual.`);
     return newTable;
   }
 
@@ -1892,14 +1965,21 @@ export class EventService {
     const cur = this.currentSalon();
     if (!cur) return;
 
+    const normalizedChanges: Partial<SalonTable> = { ...changes };
+    if (changes.shape) {
+      const rawShape = String(changes.shape).toUpperCase();
+      normalizedChanges.shape = (rawShape.includes('RECT') || rawShape.includes('IMPERIAL')) ? 'RECTANGULAR' : 'ROUND';
+    }
+
     const updatedTables = cur.tables.map(t => 
-      t.id === tableId ? { ...t, ...changes } : t
+      t.id === tableId ? { ...t, ...normalizedChanges } : t
     );
 
     this.salons.update(list => list.map(s => 
       s.id === cur.id ? { ...s, tables: updatedTables } : s
     ));
     this.persistSalons();
+    this.broadcastFullStateToCloud();
     if (!silent) {
       this.notificationService.show('info', 'Mesa Modificada', 'Cambios guardados en la mesa.');
     }
@@ -1928,6 +2008,7 @@ export class EventService {
     ));
     this.persistSalons();
     this.persistGuests();
+    this.broadcastFullStateToCloud();
     this.notificationService.show('info', 'Mesa Removida', 'Mesa eliminada del plano y comensales desasignados.');
   }
 
@@ -2363,8 +2444,16 @@ export class EventService {
           };
           this.allGuests.set(curGuests);
           this.refreshAllTableOccupancies();
+          this.persistGuests();
+          this.persistSalons();
+          this.broadcastFullStateToCloud(targetEventId);
         }
       }
+      return;
+    }
+
+    if (data.type === 'REQUEST_FULL_STATE') {
+      this.broadcastFullStateToCloud(targetEventId);
       return;
     }
 
