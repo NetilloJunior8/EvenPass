@@ -38,10 +38,20 @@ function getActiveEventId() {
 
 const CLOUD_SYNC_RELAY = 'https://ntfy.sh/evenpass_cloud_sync_relay';
 const STORAGE_KEY = `evenpass_event_${getActiveEventId()}_guests_db`;
+const processedCloudMsgIds = new Set();
+let isFirstAppPoll = true;
 
 // Emisor en tiempo real hacia la nube (CORS libre, funciona en Netlify, localhost y móviles)
 function broadcastToCloud(payload) {
   try {
+    if (!payload.msgId) {
+      payload.msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+    processedCloudMsgIds.add(payload.msgId);
+    if (processedCloudMsgIds.size > 500) {
+      const first = processedCloudMsgIds.values().next().value;
+      if (first) processedCloudMsgIds.delete(first);
+    }
     fetch(CLOUD_SYNC_RELAY, {
       method: 'POST',
       headers: {
@@ -307,17 +317,21 @@ function saveGuestsList(list) {
     localStorage.setItem('evenpass_luis_gerardo_updated_tick', String(Date.now()));
   } catch (e) {}
 
+  const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  processedCloudMsgIds.add(msgId);
+
   // 1. Sincronizar en la misma pestaña/navegador vía BroadcastChannel
   try {
     if (typeof BroadcastChannel !== 'undefined') {
       const bc = new BroadcastChannel('evenpass_invitations_channel');
-      bc.postMessage({ type: 'SYNC_ALL', eventId: evId, guests: list });
+      bc.postMessage({ type: 'SYNC_ALL', msgId: msgId, eventId: evId, guests: list });
     }
   } catch (e) {}
 
   // 2. Sincronizar hacia la nube para EvenPass OS en tiempo real (Netlify <-> EvenPass)
   broadcastToCloud({
     type: 'SYNC_ALL',
+    msgId: msgId,
     eventId: evId,
     guests: list,
     timestamp: Date.now()
@@ -421,11 +435,13 @@ function autoAssignTable(passes = 2, preferredName = 'AUTO') {
   } catch (e) {}
 
   // Avisar a EvenPass OS via BroadcastChannel + Cloud Relay
-  broadcastToCloud({ type: 'AUTO_TABLE_CREATED', eventId: evId, table: newTable, timestamp: Date.now() });
+  const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  processedCloudMsgIds.add(msgId);
+  broadcastToCloud({ type: 'AUTO_TABLE_CREATED', msgId, eventId: evId, table: newTable, timestamp: Date.now() });
   try {
     if (typeof BroadcastChannel !== 'undefined') {
       const bc = new BroadcastChannel('evenpass_invitations_channel');
-      bc.postMessage({ type: 'AUTO_TABLE_CREATED', eventId: evId, table: newTable });
+      bc.postMessage({ type: 'AUTO_TABLE_CREATED', msgId, eventId: evId, table: newTable });
     }
   } catch (e) {}
 
@@ -619,12 +635,16 @@ function submitRsvp(e) {
     });
   }
 
-  saveGuestsList(guests);
+  saveGuestsListSilently(guests);
 
   // Sincronizar inmediatamente con EvenPass OS en tiempo real (para reflejar en Croquis central y Escáner)
   const evId = getActiveEventId();
   try {
+    const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    processedCloudMsgIds.add(msgId);
+
     const rsvpPayload = {
+      msgId: msgId,
       eventId: evId,
       fullName: name,
       phone: phone || 'WhatsApp Directo',
@@ -641,6 +661,7 @@ function submitRsvp(e) {
       const bc = new BroadcastChannel('evenpass_invitations_channel');
       bc.postMessage({
         type: 'RSVP_CONFIRMED',
+        msgId: msgId,
         eventId: evId,
         guest: {
           fullName: name,
@@ -658,6 +679,7 @@ function submitRsvp(e) {
 
     broadcastToCloud({
       type: 'RSVP_CONFIRMED',
+      msgId: msgId,
       eventId: evId,
       guest: {
         fullName: name,
@@ -741,8 +763,6 @@ function renderIssuedPass(name, passes, tableName, token, notes = '') {
 // ============================================================================
 // 5. LÓGICA DEL PANEL DEL ANFITRIÓN (PANEL.HTML) & SINCRONIZACIÓN EN TIEMPO REAL
 // ============================================================================
-const processedCloudMsgIds = new Set();
-let isFirstAppPoll = true;
 
 function applyTableReassignment(data) {
   if (!data) return;
@@ -781,9 +801,7 @@ function applyTableReassignment(data) {
     saveGuestsListSilently(guests);
 
     // Si estamos en panel.html, refrescar tablero y tabla EN VIVO SIN REFRESCAR PÁGINA
-    if (typeof loadStoredGuests === 'function' && document.getElementById('panel-tables-grid')) {
-      loadStoredGuests();
-    }
+    schedulePanelRender();
 
     // Si estamos en index.html con un pase abierto, actualizar número de mesa en pantalla
     const pTable = document.getElementById('pass-table-name');
@@ -857,19 +875,27 @@ function applyFullStateSync(data) {
     } catch (e) {}
   }
 
-  if (changed && typeof loadStoredGuests === 'function' && document.getElementById('panel-tables-grid')) {
-    loadStoredGuests();
+  if (changed) {
+    schedulePanelRender();
   }
 }
 
-function saveGuestsListSilently(list) {
-  const evId = getActiveEventId();
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-  try {
-    localStorage.setItem(`evenpass_event_${evId}_guests_db`, JSON.stringify(list));
-    localStorage.setItem('evenpass_luis_gerardo_guests_db', JSON.stringify(list));
-    localStorage.setItem('evenpass_luis_gerardo_updated_tick', String(Date.now()));
-  } catch (e) {}
+let panelRenderScheduled = false;
+function schedulePanelRender() {
+  if (panelRenderScheduled) return;
+  panelRenderScheduled = true;
+  const doRender = () => {
+    panelRenderScheduled = false;
+    if (typeof loadStoredGuests === 'function' && 
+        (document.getElementById('panel-tables-grid') || document.getElementById('panel-guest-list') || document.getElementById('table-host-guests'))) {
+      loadStoredGuests();
+    }
+  };
+  if (typeof requestAnimationFrame !== 'undefined') {
+    requestAnimationFrame(doRender);
+  } else {
+    setTimeout(doRender, 16);
+  }
 }
 
 function handleIncomingCloudMessage(data) {
@@ -889,7 +915,7 @@ function handleIncomingCloudMessage(data) {
       );
       if (filtered.length !== guests.length) {
         saveGuestsListSilently(filtered);
-        if (document.getElementById('panel-tables-grid')) loadStoredGuests();
+        schedulePanelRender();
       }
     }
   } else if (data.type === 'AUTO_TABLE_CREATED') {
@@ -905,25 +931,35 @@ function handleIncomingCloudMessage(data) {
         }
       } catch (e) {}
       if (typeof populateDispatchTablesSelect === 'function') populateDispatchTablesSelect();
-      if (typeof loadStoredGuests === 'function' && document.getElementById('panel-tables-grid')) loadStoredGuests();
+      schedulePanelRender();
     }
   } else if (data.type === 'SYNC_ALL' && Array.isArray(data.guests)) {
     if (data.eventId === getActiveEventId()) {
       saveGuestsListSilently(data.guests);
-      if (document.getElementById('panel-tables-grid')) loadStoredGuests();
+      schedulePanelRender();
     }
   } else if (data.type === 'NEW_GUEST' || data.type === 'NEW_INVITATION') {
-    if (data.guest && data.eventId === getActiveEventId()) {
+    if (data.guest && (data.eventId === getActiveEventId() || !data.eventId)) {
       const guests = getStoredGuests();
-      const existing = guests.find(g => (data.guest.token && g.token === data.guest.token) || (g.fullName && data.guest.fullName && g.fullName.toLowerCase().trim() === data.guest.fullName.toLowerCase().trim()));
-      if (!existing) {
+      const existingIdx = guests.findIndex(g => 
+        (data.guest.token && g.token === data.guest.token) || 
+        (data.guest.id && g.id === data.guest.id) ||
+        (g.fullName && data.guest.fullName && g.fullName.toLowerCase().trim() === data.guest.fullName.toLowerCase().trim())
+      );
+      if (existingIdx < 0) {
         guests.unshift(data.guest);
         saveGuestsListSilently(guests);
-        if (document.getElementById('panel-tables-grid')) loadStoredGuests();
+        schedulePanelRender();
+      } else {
+        guests[existingIdx] = { ...guests[existingIdx], ...data.guest };
+        saveGuestsListSilently(guests);
+        schedulePanelRender();
       }
+    } else if (Array.isArray(data.allGuests) && data.allGuests.length > 0) {
+      applyFullStateSync(data);
     }
   } else if (data.type === 'RSVP_CONFIRMED') {
-    if (data.guest && data.eventId === getActiveEventId()) {
+    if (data.guest && (data.eventId === getActiveEventId() || !data.eventId)) {
       const guests = getStoredGuests();
       const idx = guests.findIndex(g => (data.guest.token && g.token === data.guest.token) || (g.fullName && data.guest.fullName && g.fullName.toLowerCase().trim() === data.guest.fullName.toLowerCase().trim()));
       if (idx >= 0) {
@@ -931,7 +967,7 @@ function handleIncomingCloudMessage(data) {
         guests[idx].passesConfirmed = data.guest.passesConfirmed;
         if (data.guest.tableName) guests[idx].tableName = data.guest.tableName;
         saveGuestsListSilently(guests);
-        if (document.getElementById('panel-tables-grid')) loadStoredGuests();
+        schedulePanelRender();
       }
     }
   }
@@ -1034,7 +1070,7 @@ function initHostPanel() {
   // Escuchar si un invitado confirma desde otra pestaña para actualizar inmediatamente
   window.addEventListener('storage', (e) => {
     if (e.key === STORAGE_KEY || e.key === 'evenpass_luis_gerardo_updated_tick' || e.key === `evenpass_event_${getActiveEventId()}_tables_db`) {
-      loadStoredGuests();
+      schedulePanelRender();
     }
   });
 }
@@ -1062,7 +1098,7 @@ function loadStoredGuests() {
   const balanceRes = balanceGuestsAgainstCapacity(guests);
   if (balanceRes.changed) {
     guests = balanceRes.guests;
-    saveGuestsList(guests);
+    saveGuestsListSilently(guests);
   }
   populateDispatchTablesSelect();
   renderPanelKPIs(guests);
@@ -1211,9 +1247,7 @@ function reassignGuestTableFromPanel(guestId, newTableName) {
   const evId = getActiveEventId();
   guest.tableName = newTableName === 'Sin asignar' ? 'Sin asignar' : (targetTable ? targetTable.name : newTableName);
   guest.manualAssignmentTimestamp = Date.now();
-  guest.updatedAt = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
-
-  saveGuestsList(guests);
+  saveGuestsListSilently(guests);
 
   const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
   processedCloudMsgIds.add(msgId);
@@ -1238,7 +1272,7 @@ function reassignGuestTableFromPanel(guestId, newTableName) {
   } catch (e) {}
 
   broadcastToCloud(payload);
-  loadStoredGuests();
+  schedulePanelRender();
 }
 
 function renderPanelTable() {
@@ -1386,20 +1420,23 @@ function dispatchInvitation(e) {
 
   const guests = getStoredGuests();
   guests.unshift(newGuest);
-  saveGuestsList(guests);
+  saveGuestsListSilently(guests);
 
   const evId = getActiveEventId();
+  const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  processedCloudMsgIds.add(msgId);
 
   // Emitir evento explícito de nuevo invitado para EvenPass OS (Local + Nube)
   try {
     if (typeof BroadcastChannel !== 'undefined') {
       const bc = new BroadcastChannel('evenpass_invitations_channel');
-      bc.postMessage({ type: 'NEW_INVITATION', eventId: evId, guest: newGuest, allGuests: guests });
+      bc.postMessage({ type: 'NEW_INVITATION', msgId: msgId, eventId: evId, guest: newGuest, allGuests: guests });
     }
   } catch (e) {}
 
   broadcastToCloud({
     type: 'NEW_GUEST',
+    msgId: msgId,
     eventId: evId,
     guest: newGuest,
     allGuests: guests,
@@ -1422,7 +1459,7 @@ function dispatchInvitation(e) {
 
   nameInput.value = '';
   populateDispatchTablesSelect();
-  loadStoredGuests();
+  schedulePanelRender();
 }
 
 function copyGuestInviteLink(name, passes, token) {
@@ -1445,8 +1482,8 @@ function deleteHostGuest(id) {
 
   const list = guests.filter(g => g.id !== id);
   const evId = getActiveEventId();
-  saveGuestsList(list);
-  loadStoredGuests();
+  saveGuestsListSilently(list);
+  schedulePanelRender();
 
   const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
   processedCloudMsgIds.add(msgId);

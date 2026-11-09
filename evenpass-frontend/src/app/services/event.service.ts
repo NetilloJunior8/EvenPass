@@ -1597,6 +1597,18 @@ export class EventService {
       return;
     }
 
+    // Resolve assigned table name if ID given or vice-versa
+    let assignedTableId = guest.assignedTableId;
+    let assignedTableName = guest.assignedTableName;
+    if (assignedTableId && !assignedTableName && salon) {
+      const tbl = salon.tables.find(t => t.id === assignedTableId);
+      if (tbl) assignedTableName = tbl.tableName;
+    } else if (assignedTableName && !assignedTableId && salon) {
+      const tbl = salon.tables.find(t => t.tableName.toLowerCase().trim() === assignedTableName!.toLowerCase().trim());
+      if (tbl) assignedTableId = tbl.id;
+    }
+
+    const now = Date.now();
     const newGuest: Guest = {
       id: Date.now(),
       eventId: activeEvId,
@@ -1607,17 +1619,104 @@ export class EventService {
       totalPasses: 1 + numCompanions,
       status: guest.status || 'PENDING',
       qrCodeToken: 'EP-' + Math.floor(1000 + Math.random() * 9000),
-      assignedTableId: guest.assignedTableId,
-      assignedTableName: guest.assignedTableName,
-      dietNotes: guest.dietNotes
+      assignedTableId: assignedTableId,
+      assignedTableName: assignedTableName,
+      dietNotes: guest.dietNotes,
+      manualAssignmentTimestamp: now
     };
 
     this.allGuests.update(list => [...list, newGuest]);
     this.events.update(list => list.map(ev => 
       ev.id === activeEvId ? { ...ev, totalGuests: ev.totalGuests + 1 } : ev
     ));
+    this.refreshAllTableOccupancies();
     this.persistGuests();
     this.persistEvents();
+    this.persistSalons();
+
+    // Broadcast NEW_GUEST / NEW_INVITATION to panel and cloud
+    const formattedGuest = {
+      id: newGuest.id,
+      fullName: newGuest.fullName,
+      phone: newGuest.phone || 'WhatsApp Directo',
+      passesGranted: newGuest.totalPasses,
+      passesConfirmed: (newGuest.status === 'CONFIRMED' || newGuest.status === 'ATTENDED') ? newGuest.totalPasses : 0,
+      status: newGuest.status,
+      tableName: newGuest.assignedTableName || 'Sin asignar',
+      token: newGuest.qrCodeToken,
+      notes: newGuest.dietNotes || '',
+      updatedAt: 'Hoy',
+      manualAssignmentTimestamp: now
+    };
+
+    // Update localStorage for Host Panel
+    try {
+      const keys = [`evenpass_event_${activeEvId}_guests_db`, activeEvId === 6 ? 'evenpass_luis_gerardo_guests_db' : null].filter(Boolean) as string[];
+      keys.forEach(k => {
+        const raw = localStorage.getItem(k);
+        const list = raw ? JSON.parse(raw) : [];
+        if (Array.isArray(list)) {
+          const exists = list.some((item: any) => 
+            (newGuest.qrCodeToken && item.token === newGuest.qrCodeToken) ||
+            (newGuest.fullName && item.fullName && item.fullName.toLowerCase().trim() === newGuest.fullName.toLowerCase().trim())
+          );
+          if (!exists) {
+            list.unshift(formattedGuest);
+            localStorage.setItem(k, JSON.stringify(list));
+          }
+        }
+      });
+      localStorage.setItem('evenpass_luis_gerardo_updated_tick', String(now));
+    } catch (e) {}
+
+    const msgId = 'msg_' + now + '_' + Math.random().toString(36).substr(2, 9);
+    this.processedCloudMsgIds.add(msgId);
+
+    const payload = {
+      type: 'NEW_GUEST',
+      msgId: msgId,
+      eventId: activeEvId,
+      guest: formattedGuest,
+      allGuests: this.allGuests().filter(g => g.eventId === activeEvId).map(g => ({
+        id: g.id,
+        fullName: g.fullName,
+        phone: g.phone || 'WhatsApp Directo',
+        passesGranted: g.totalPasses,
+        passesConfirmed: (g.status === 'CONFIRMED' || g.status === 'ATTENDED') ? g.totalPasses : 0,
+        status: g.status,
+        tableName: g.assignedTableName || 'Sin asignar',
+        token: g.qrCodeToken,
+        notes: g.dietNotes || '',
+        updatedAt: 'Hoy',
+        manualAssignmentTimestamp: g.manualAssignmentTimestamp || now
+      })),
+      timestamp: now
+    };
+
+    // 1. BroadcastChannel
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('evenpass_invitations_channel');
+        bc.postMessage(payload);
+        bc.postMessage({ ...payload, type: 'NEW_INVITATION' });
+      }
+    } catch (e) {}
+
+    // 2. Cloud Relay
+    try {
+      fetch(this.CLOUD_SYNC_RELAY, {
+        method: 'POST',
+        headers: {
+          'Title': 'EvenPass Guest Created',
+          'Tags': 'guest,new'
+        },
+        body: JSON.stringify(payload)
+      }).catch(() => {});
+    } catch (e) {}
+
+    // 3. Guarantee full state synchronization
+    this.broadcastFullStateToCloud(activeEvId);
+
     this.notificationService.show('success', 'Invitado Registrado', `${newGuest.fullName} añadido a este evento.`);
   }
 
