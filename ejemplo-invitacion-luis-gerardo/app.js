@@ -42,13 +42,17 @@ function getActiveEventId() {
   return 6;
 }
 
-const CLOUD_SYNC_RELAY = 'https://ntfy.sh/evenpass_cloud_sync_relay';
+const CLOUD_SYNC_RELAY = 'https://ntfy.sh/ep_v3_global';
+const MQTT_BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt'];
 const STORAGE_KEY = `evenpass_event_${getActiveEventId()}_guests_db`;
 const processedCloudMsgIds = new Set();
 let isFirstAppPoll = true;
 let cloudSseSource = null;
 let cloudSseReconnectTimer = null;
 let lastRenderedPassToken = null;
+let mqttRelayClient = null;
+let mqttRelayConnected = false;
+let sseRelayConnected = false;
 
 function trackProcessedMsgId(id) {
   if (!id) return;
@@ -213,23 +217,260 @@ function updateDynamicEventUI() {
   }
 }
 
+function recordDeletedGuestLocal(eventId, token, fullName, timestamp = Date.now()) {
+  try {
+    const key = `evenpass_deleted_guests_${eventId}`;
+    const raw = localStorage.getItem(key);
+    const list = raw ? JSON.parse(raw) : [];
+    list.unshift({ token, fullName, timestamp });
+    localStorage.setItem(key, JSON.stringify(list.slice(0, 40)));
+  } catch (e) {}
+}
+
+function getDeletedGuestsLocal(eventId) {
+  try {
+    const raw = localStorage.getItem(`evenpass_deleted_guests_${eventId}`);
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function createMqttCloudRelay(onMessage, onStatus) {
+  const enc = new TextEncoder();
+  const dec = new TextDecoder();
+  let ws = null;
+  let ready = false;
+  let brokerIdx = 0;
+  let keepaliveTimer = null;
+  let reconnectTimer = null;
+  let topics = [];
+  const outbox = [];
+
+  function concat(parts) {
+    const len = parts.reduce((s, p) => s + p.length, 0);
+    const out = new Uint8Array(len);
+    let pos = 0;
+    parts.forEach(p => { out.set(p, pos); pos += p.length; });
+    return out;
+  }
+
+  function encStr(s) {
+    const b = enc.encode(String(s));
+    const out = new Uint8Array(2 + b.length);
+    out[0] = (b.length >> 8) & 0xff;
+    out[1] = b.length & 0xff;
+    out.set(b, 2);
+    return out;
+  }
+
+  function encRemLen(n) {
+    const bytes = [];
+    do {
+      let d = n % 128;
+      n = Math.floor(n / 128);
+      if (n > 0) d |= 0x80;
+      bytes.push(d);
+    } while (n > 0);
+    return new Uint8Array(bytes);
+  }
+
+  function encConnect(id) {
+    const vh = concat([encStr('MQTT'), new Uint8Array([4, 2, 0, 60])]);
+    const body = concat([vh, encStr(id)]);
+    return concat([new Uint8Array([0x10]), encRemLen(body.length), body]);
+  }
+
+  function encSubscribe(tList) {
+    const pid = Math.floor(1 + Math.random() * 60000);
+    const parts = [new Uint8Array([(pid >> 8) & 0xff, pid & 0xff])];
+    tList.forEach(t => { parts.push(encStr(t)); parts.push(new Uint8Array([0])); });
+    const body = concat(parts);
+    return concat([new Uint8Array([0x82]), encRemLen(body.length), body]);
+  }
+
+  function encPublish(topic, text, retain) {
+    const body = concat([encStr(topic), enc.encode(text)]);
+    return concat([new Uint8Array([retain ? 0x31 : 0x30]), encRemLen(body.length), body]);
+  }
+
+  function clearTimers() {
+    if (keepaliveTimer) { clearInterval(keepaliveTimer); keepaliveTimer = null; }
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  }
+
+  function markReady() {
+    ready = true;
+    if (onStatus) onStatus(true);
+    if (keepaliveTimer) clearInterval(keepaliveTimer);
+    keepaliveTimer = setInterval(() => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        try { ws.send(new Uint8Array([0xc0, 0x00])); } catch (e) {}
+      }
+    }, 25000);
+    while (outbox.length > 0 && ws && ws.readyState === WebSocket.OPEN) {
+      const next = outbox.shift();
+      try { ws.send(encPublish(next.topic, next.payload, next.retain)); } catch (e) {}
+    }
+  }
+
+  function connect() {
+    if (typeof WebSocket === 'undefined') return;
+    clearTimers();
+    ready = false;
+    const url = MQTT_BROKERS[brokerIdx % MQTT_BROKERS.length];
+    try {
+      ws = new WebSocket(url, 'mqtt');
+      ws.binaryType = 'arraybuffer';
+      const currentWs = ws;
+      const watchdog = setTimeout(() => {
+        if (!ready && ws === currentWs) { try { ws.close(); } catch (e) {} }
+      }, 6500);
+
+      ws.onopen = () => {
+        ws.send(encConnect('ep_web_' + Math.random().toString(36).slice(2, 10)));
+      };
+
+      ws.onmessage = (evt) => {
+        const rawData = evt.data;
+        const buf = rawData instanceof Uint8Array
+          ? rawData
+          : ArrayBuffer.isView(rawData)
+            ? new Uint8Array(rawData.buffer, rawData.byteOffset, rawData.byteLength)
+            : (rawData && typeof rawData.byteLength === 'number')
+              ? new Uint8Array(rawData)
+              : null;
+        if (!buf) return;
+        let offset = 0;
+        while (offset < buf.length) {
+          const hdr = buf[offset];
+          const pktType = (hdr >> 4) & 0x0f;
+          const flags = hdr & 0x0f;
+          let pos = offset + 1;
+          let remLen = 0;
+          let mult = 1;
+          let bad = false;
+          while (pos < buf.length) {
+            const b = buf[pos++];
+            remLen += (b & 0x7f) * mult;
+            mult *= 128;
+            if ((b & 0x80) === 0) break;
+            if (mult > 2097152) { bad = true; break; }
+          }
+          const pktEnd = pos + remLen;
+          if (bad || pktEnd > buf.length) break;
+
+          if (pktType === 2) {
+            clearTimeout(watchdog);
+            if (topics.length > 0) ws.send(encSubscribe(topics));
+            else markReady();
+          } else if (pktType === 9) {
+            markReady();
+          } else if (pktType === 3) {
+            if (pos + 2 <= pktEnd) {
+              const tLen = (buf[pos] << 8) | buf[pos + 1];
+              let pStart = pos + 2 + tLen;
+              const topic = dec.decode(buf.subarray(pos + 2, pos + 2 + tLen));
+              if ((flags & 0x06) !== 0) pStart += 2;
+              if (pStart <= pktEnd) {
+                try {
+                  const data = JSON.parse(dec.decode(buf.subarray(pStart, pktEnd)));
+                  if (onMessage) onMessage(topic, data);
+                } catch (e) {}
+              }
+            }
+          }
+          offset = pktEnd;
+        }
+      };
+
+      ws.onerror = () => { clearTimeout(watchdog); if (onStatus) onStatus(false); };
+      ws.onclose = () => {
+        clearTimeout(watchdog);
+        ready = false;
+        ws = null;
+        clearTimers();
+        if (onStatus) onStatus(false);
+        brokerIdx = (brokerIdx + 1) % MQTT_BROKERS.length;
+        reconnectTimer = setTimeout(connect, 2500);
+      };
+    } catch (e) {
+      if (onStatus) onStatus(false);
+      brokerIdx = (brokerIdx + 1) % MQTT_BROKERS.length;
+      reconnectTimer = setTimeout(connect, 3000);
+    }
+  }
+
+  return {
+    start(tList) {
+      topics = tList.slice();
+      connect();
+    },
+    publish(topic, obj, retain = false) {
+      const payload = typeof obj === 'string' ? obj : JSON.stringify(obj);
+      if (ws && ws.readyState === WebSocket.OPEN && ready) {
+        try { ws.send(encPublish(topic, payload, retain)); return; } catch (e) {}
+      }
+      outbox.push({ topic, payload, retain });
+      if (outbox.length > 40) outbox.shift();
+    }
+  };
+}
+
+let retainedSnapshotTimer = null;
+function scheduleRetainedRemoteActionSnapshot(evId) {
+  if (retainedSnapshotTimer) clearTimeout(retainedSnapshotTimer);
+  retainedSnapshotTimer = setTimeout(() => {
+    retainedSnapshotTimer = null;
+    if (!mqttRelayClient) return;
+    const now = Date.now();
+    const snapId = 'msg_snap_' + now + '_' + Math.random().toString(36).substr(2, 6);
+    trackProcessedMsgId(snapId);
+    const snapPayload = {
+      type: 'SYNC_FULL_STATE',
+      msgId: snapId,
+      eventId: evId,
+      eventMeta: getEventMeta(),
+      allGuests: getStoredGuests(),
+      allTables: getEventTablesRaw(),
+      deletedGuests: getDeletedGuestsLocal(evId),
+      timestamp: now
+    };
+    mqttRelayClient.publish(`evenpass/cloud/v2/remote-action/${evId}`, snapPayload, true);
+  }, 150);
+}
+
 // ============================================================================
-// 2. EMISOR Y DESEMPAQUETADOR CLOUD (SOPORTA PAYLOADS >4KB VÍA ATTACHMENT URL)
+// 2. EMISOR Y DESEMPAQUETADOR CLOUD (WSS MQTT PRIMARIO + SSE RESPALDO)
 // ============================================================================
 function broadcastToCloud(payload) {
   try {
+    const evId = Number(payload?.eventId || getActiveEventId() || 6);
     if (!payload.msgId) {
       payload.msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     }
     trackProcessedMsgId(payload.msgId);
-    fetch(CLOUD_SYNC_RELAY, {
-      method: 'POST',
-      headers: {
-        'Title': 'EvenPass Cloud Sync',
-        'Tags': 'ticket,cloud'
-      },
-      body: JSON.stringify(payload)
-    }).catch(err => console.warn('Cloud sync relay warn:', err));
+
+    if (mqttRelayClient) {
+      mqttRelayClient.publish(`evenpass/cloud/v2/ev/${evId}`, payload, false);
+      const isMutation = payload.type !== 'REQUEST_FULL_STATE';
+      if (isMutation) {
+        scheduleRetainedRemoteActionSnapshot(evId);
+      }
+    }
+
+    const serialized = JSON.stringify(payload);
+    if (payload.type !== 'REQUEST_FULL_STATE' && (serialized.length < 3800 || !mqttRelayConnected)) {
+      fetch(CLOUD_SYNC_RELAY, {
+        method: 'POST',
+        headers: {
+          'Title': 'EvenPass Cloud Sync',
+          'Tags': 'ticket,cloud'
+        },
+        body: serialized
+      }).catch(err => console.warn('Cloud sync relay warn:', err));
+    }
   } catch (e) {}
 }
 
@@ -953,9 +1194,29 @@ function applyFullStateSync(data) {
   if (Array.isArray(data.allGuests)) {
     try {
       const localGuests = getStoredGuests();
-      const mergedGuests = [...localGuests];
+      const deletedLocal = getDeletedGuestsLocal(targetEvId);
+      const remoteDeleted = Array.isArray(data.deletedGuests) ? data.deletedGuests : [];
+
+      let mergedGuests = localGuests.filter(g => {
+        const delMatch = remoteDeleted.find(d =>
+          (d.token && g.token && d.token === g.token) ||
+          (d.fullName && g.fullName && d.fullName.toLowerCase().trim() === g.fullName.toLowerCase().trim())
+        );
+        if (!delMatch) return true;
+        if (Number(g.manualAssignmentTimestamp || 0) > Number(delMatch.timestamp || 0)) return true;
+        changed = true;
+        return false;
+      });
 
       data.allGuests.forEach(incomingG => {
+        const delMatch = deletedLocal.find(d =>
+          (d.token && incomingG.token && d.token === incomingG.token) ||
+          (d.fullName && incomingG.fullName && d.fullName.toLowerCase().trim() === incomingG.fullName.toLowerCase().trim())
+        );
+        if (delMatch && Number(incomingG.manualAssignmentTimestamp || data.timestamp || 0) <= Number(delMatch.timestamp || 0)) {
+          return;
+        }
+
         const idx = mergedGuests.findIndex(g =>
           (incomingG.token && g.token === incomingG.token) ||
           (incomingG.id && g.id === incomingG.id) ||
@@ -1061,6 +1322,8 @@ function handleIncomingCloudMessage(data) {
   }
 
   if (data.type === 'GUEST_DELETED') {
+    const evId = getActiveEventId();
+    recordDeletedGuestLocal(evId, data.guestToken, data.fullName, Number(data.timestamp || Date.now()));
     const guests = getStoredGuests();
     const filtered = guests.filter(g =>
       !(
@@ -1144,6 +1407,9 @@ function connectCloudSse() {
       try { cloudSseSource.close(); } catch (e) {}
     }
     cloudSseSource = new EventSource(`${CLOUD_SYNC_RELAY}/sse`);
+    cloudSseSource.onopen = () => {
+      sseRelayConnected = true;
+    };
     cloudSseSource.onmessage = async (e) => {
       try {
         const raw = JSON.parse(e.data);
@@ -1161,13 +1427,14 @@ function connectCloudSse() {
       } catch (err) {}
     };
     cloudSseSource.onerror = () => {
+      sseRelayConnected = false;
       try { cloudSseSource.close(); } catch (e) {}
       cloudSseSource = null;
       if (!cloudSseReconnectTimer) {
         cloudSseReconnectTimer = setTimeout(() => {
           cloudSseReconnectTimer = null;
           connectCloudSse();
-        }, 3500);
+        }, 8000);
       }
     };
   } catch (e) {}
@@ -1223,9 +1490,32 @@ function startLiveCloudSyncListener() {
     }
   } catch (e) {}
 
+  const evId = getActiveEventId();
+  mqttRelayClient = createMqttCloudRelay(
+    (_topic, data) => {
+      if (!data || typeof data !== 'object') return;
+      if (data.msgId) {
+        if (processedCloudMsgIds.has(data.msgId)) return;
+        trackProcessedMsgId(data.msgId);
+      }
+      handleIncomingCloudMessage(data);
+    },
+    (connected) => {
+      mqttRelayConnected = !!connected;
+    }
+  );
+  mqttRelayClient.start([
+    `evenpass/cloud/v2/ev/${evId}`,
+    `evenpass/cloud/v2/ep-state/${evId}`
+  ]);
+
   connectCloudSse();
-  pollCloudRelay();
-  setInterval(pollCloudRelay, 3500);
+  setTimeout(pollCloudRelay, 900);
+  setInterval(() => {
+    if (!mqttRelayConnected && !sseRelayConnected) {
+      pollCloudRelay();
+    }
+  }, 30000);
 }
 
 // ============================================================================
@@ -1800,6 +2090,7 @@ function deleteHostGuest(id) {
 
   const list = guests.filter(g => g.id !== id);
   const evId = getActiveEventId();
+  recordDeletedGuestLocal(evId, guestToDelete.token, guestToDelete.fullName, Date.now());
   saveGuestsListSilently(list);
   schedulePanelRender();
 
@@ -1914,7 +2205,9 @@ function initCountdown() {
 
   function update() {
     const now = new Date().getTime();
-    const distance = DEFAULT_EVENT_6.targetDate.getTime() - now;
+    const meta = getEventMeta();
+    const targetMs = new Date(meta.eventDate || DEFAULT_EVENT_6.eventDate).getTime() || new Date('2026-11-14T16:00:00').getTime();
+    const distance = targetMs - now;
     if (distance < 0) {
       if (dEl) dEl.innerText = '00';
       if (hEl) hEl.innerText = '00';

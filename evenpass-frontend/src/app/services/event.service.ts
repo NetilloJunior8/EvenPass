@@ -5,6 +5,7 @@ import {
   ExternalAuditEntry, SupabaseConfig 
 } from '../models/models';
 import { NotificationService } from './notification.service';
+import { MqttCloudRelay } from './mqtt-relay';
 
 @Injectable({
   providedIn: 'root'
@@ -1902,6 +1903,7 @@ export class EventService {
     this.persistSalons();
 
     const now = Date.now();
+    this.recordDeletedGuest(activeEvId, guest.qrCodeToken, guest.fullName, now);
     const msgId = 'msg_' + now + '_' + Math.random().toString(36).substr(2, 9);
     this.processedCloudMsgIds.add(msgId);
 
@@ -2106,7 +2108,28 @@ export class EventService {
     };
   }
 
-  private dispatchCloudMessage(title: string, tags: string, payload: any): void {
+  private recordDeletedGuest(eventId: number, token?: string, fullName?: string, timestamp: number = Date.now()): void {
+    try {
+      const key = `evenpass_deleted_guests_${eventId}`;
+      const raw = localStorage.getItem(key);
+      const list: Array<{ token?: string; fullName?: string; timestamp: number }> = raw ? JSON.parse(raw) : [];
+      list.unshift({ token, fullName, timestamp });
+      localStorage.setItem(key, JSON.stringify(list.slice(0, 40)));
+    } catch (e) {}
+  }
+
+  private getDeletedGuestsRecord(eventId: number): Array<{ token?: string; fullName?: string; timestamp: number }> {
+    try {
+      const raw = localStorage.getItem(`evenpass_deleted_guests_${eventId}`);
+      const list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  private dispatchCloudMessage(title: string, tags: string, payload: any, retainSnapshot: boolean = false): void {
+    const evId = Number(payload?.eventId || this.activeEventId() || 6);
     try {
       if (typeof BroadcastChannel !== 'undefined') {
         const bc = new BroadcastChannel('evenpass_invitations_channel');
@@ -2118,14 +2141,29 @@ export class EventService {
     } catch (e) {}
 
     try {
-      fetch(this.CLOUD_SYNC_RELAY, {
-        method: 'POST',
-        headers: {
-          'Title': title,
-          'Tags': tags
-        },
-        body: JSON.stringify(payload)
-      }).catch(() => {});
+      if (this.mqttRelay) {
+        this.mqttRelay.publish(`evenpass/cloud/v2/ev/${evId}`, payload, false);
+        if (payload.type === 'SYNC_FULL_STATE' && retainSnapshot) {
+          this.mqttRelay.publish(`evenpass/cloud/v2/ep-state/${evId}`, payload, true);
+        }
+      }
+    } catch (e) {}
+
+    // Redundant ntfy HTTP publish only for compact deltas or when MQTT is not connected (prevents 429 rate-limits)
+    try {
+      const serialized = JSON.stringify(payload);
+      const shouldSendNtfy = payload.type !== 'REQUEST_FULL_STATE' &&
+        (serialized.length < 3800 || !this.mqttConnected);
+      if (shouldSendNtfy) {
+        fetch(this.CLOUD_SYNC_RELAY, {
+          method: 'POST',
+          headers: {
+            'Title': title,
+            'Tags': tags
+          },
+          body: serialized
+        }).catch(() => {});
+      }
     } catch (e) {}
   }
 
@@ -2338,6 +2376,7 @@ export class EventService {
       eventMeta,
       allGuests: formattedGuests,
       allTables: formattedTables,
+      deletedGuests: this.getDeletedGuestsRecord(evId),
       timestamp: now
     };
 
@@ -2353,7 +2392,7 @@ export class EventService {
       }
     } catch (e) {}
 
-    this.dispatchCloudMessage('EvenPass Full State Sync', 'chair,seating,full_sync', payload);
+    this.dispatchCloudMessage('EvenPass Full State Sync', 'chair,seating,full_sync', payload, true);
   }
 
   requestCloudFullState(eventId?: number): void {
@@ -3187,8 +3226,11 @@ export class EventService {
   }
 
   // --- CANAL DE SINCRONIZACIÓN EN LA NUBE EN TIEMPO REAL (Universal para todos los eventos) ---
-  readonly CLOUD_SYNC_RELAY = 'https://ntfy.sh/evenpass_cloud_sync_relay';
+  readonly CLOUD_SYNC_RELAY = 'https://ntfy.sh/ep_v3_global';
   cloudSyncConnected = signal<boolean>(false);
+  private mqttRelay: MqttCloudRelay | null = null;
+  private mqttConnected = false;
+  private sseConnected = false;
   private processedCloudMsgIds = new Set<string>();
   private isFirstCloudPoll = true;
   private lastStorageTick: string | null = null;
@@ -3216,25 +3258,46 @@ export class EventService {
       }
     } catch (e) {}
 
-    // 2. Flujo SSE en tiempo real hacia la nube (Netlify <-> EvenPass OS) con auto-reconciliación
+    // 2. WebSocket MQTT TLS en tiempo real (<150ms, sin límites 429) para TODOS los eventos
+    this.mqttRelay = new MqttCloudRelay(
+      ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt'],
+      'ep_os',
+      (topic, data) => {
+        if (topic.includes('/ep-state/')) return; // Ignorar copia retenida propia
+        if (!data || typeof data !== 'object') return;
+        if (data.msgId) {
+          if (this.processedCloudMsgIds.has(data.msgId)) return;
+          this.trackProcessedMsgId(data.msgId);
+        }
+        this.ngZone.run(() => {
+          this.processSyncMessage(data, true);
+        });
+      },
+      (connected) => {
+        this.ngZone.run(() => {
+          this.mqttConnected = connected;
+          this.cloudSyncConnected.set(this.mqttConnected || this.sseConnected);
+        });
+      }
+    );
+    this.mqttRelay.start(['evenpass/cloud/v2/#']);
+
+    // 3. Flujo SSE secundario de respaldo (sin polling agresivo cada 3s)
     this.connectCloudRealtimeStream();
 
-    // 3. Auto-sincronización periódica de respaldo cada 3 segundos
+    // 4. Vigilancia local instantánea (cero costo de red) + respaldo remoto solo si caen WebSocket y SSE
     setInterval(() => {
-      this.pollCloudSyncUpdates();
       this.pollLocalStorageAllEvents();
-    }, 3000);
+    }, 2500);
 
-    // 4. Consulta inicial inmediata + solicitud de cambios recientes
-    this.pollCloudSyncUpdates();
-    this.pollLocalStorageAllEvents();
-
-    setTimeout(() => {
-      const evId = this.activeEventId();
-      if (evId) {
-        this.broadcastFullStateToCloud(evId);
+    setInterval(() => {
+      if (!this.mqttConnected && !this.sseConnected) {
+        this.pollCloudSyncUpdates();
       }
-    }, 450);
+    }, 30000);
+
+    this.pollLocalStorageAllEvents();
+    setTimeout(() => this.pollCloudSyncUpdates(), 900);
   }
 
   private trackProcessedMsgId(id: string): void {
@@ -3284,7 +3347,8 @@ export class EventService {
       this.sseSource = sse;
 
       sse.onopen = () => {
-        this.cloudSyncConnected.set(true);
+        this.sseConnected = true;
+        this.cloudSyncConnected.set(this.mqttConnected || this.sseConnected);
       };
 
       sse.onmessage = (event) => {
@@ -3309,27 +3373,31 @@ export class EventService {
       };
 
       sse.onerror = () => {
-        this.cloudSyncConnected.set(false);
+        this.sseConnected = false;
+        this.cloudSyncConnected.set(this.mqttConnected || this.sseConnected);
         try { sse.close(); } catch (e) {}
         this.sseSource = null;
         if (!this.sseReconnectTimer) {
           this.sseReconnectTimer = setTimeout(() => {
             this.sseReconnectTimer = null;
             this.connectCloudRealtimeStream();
-          }, 4000);
+          }, 8000);
         }
       };
     } catch (e) {}
   }
 
   private pollCloudSyncUpdates(): void {
-    const timeParam = this.isFirstCloudPoll ? 'since=6h' : 'since=45s';
+    const timeParam = this.isFirstCloudPoll ? 'since=6h' : 'since=60s';
     const isInitial = this.isFirstCloudPoll;
     this.isFirstCloudPoll = false;
 
     fetch(`${this.CLOUD_SYNC_RELAY}/json?poll=1&${timeParam}`, { method: 'GET', mode: 'cors', cache: 'no-store' })
       .then(res => {
-        if (res.ok) this.cloudSyncConnected.set(true);
+        if (res.ok) {
+          this.sseConnected = true;
+          this.cloudSyncConnected.set(true);
+        }
         return res.ok ? res.text() : '';
       })
       .then(async text => {
@@ -3519,6 +3587,8 @@ export class EventService {
     if (data.type === 'GUEST_DELETED') {
       const token = data.guestToken;
       const name = data.fullName || '';
+      const delTs = Number(data.timestamp || Date.now());
+      this.recordDeletedGuest(targetEventId, token, name, delTs);
       const curGuests = this.allGuests();
       const updated = curGuests.filter(g =>
         !(g.eventId === targetEventId && (
@@ -3572,17 +3642,57 @@ export class EventService {
       if (Array.isArray(data.allTables)) {
         this.mergeRemoteTablesIntoSalon(targetEventId, data.allTables, false);
       }
+      if (Array.isArray(data.deletedGuests) && data.deletedGuests.length > 0) {
+        const curGuests = this.allGuests();
+        const afterDel = curGuests.filter(g => {
+          if (g.eventId !== targetEventId) return true;
+          const delMatch = data.deletedGuests.find((d: any) =>
+            (d.token && d.token === g.qrCodeToken) ||
+            (d.fullName && this.normalizeName(d.fullName) === this.normalizeName(g.fullName))
+          );
+          if (!delMatch) return true;
+          return Number(g.manualAssignmentTimestamp || 0) > Number(delMatch.timestamp || 0);
+        });
+        if (afterDel.length !== curGuests.length) {
+          this.allGuests.set(afterDel);
+          this.refreshAllTableOccupancies(targetEventId);
+          this.persistGuests();
+          this.persistSalons();
+        }
+      }
       if (Array.isArray(data.allGuests)) {
-        this.syncDigitalGuestsList(targetEventId, data.allGuests, false);
+        const deletedList = this.getDeletedGuestsRecord(targetEventId);
+        const filteredRemote = data.allGuests.filter((rg: any) => {
+          const rTok = rg.token || rg.qrCodeToken;
+          const rName = rg.fullName || rg.nombre || rg.name;
+          const delMatch = deletedList.find(d =>
+            (d.token && rTok && d.token === rTok) ||
+            (d.fullName && rName && this.normalizeName(d.fullName) === this.normalizeName(rName))
+          );
+          if (!delMatch) return true;
+          return Number(rg.manualAssignmentTimestamp || data.timestamp || 0) > Number(delMatch.timestamp || 0);
+        });
+        this.syncDigitalGuestsList(targetEventId, filteredRemote, false);
       }
       return;
     }
 
     if (data.type === 'NEW_GUEST' || data.type === 'NEW_INVITATION' || data.type === 'RSVP_CONFIRMED' || data.type === 'GUEST_UPDATED') {
+      const eventTs = Number(data.timestamp || Date.now());
       if (data.guest) {
-        this.syncDigitalGuestsList(targetEventId, [data.guest], isLive);
+        const enrichedGuest = {
+          ...data.guest,
+          timestamp: data.guest.timestamp || eventTs,
+          manualAssignmentTimestamp: data.guest.manualAssignmentTimestamp || eventTs
+        };
+        this.syncDigitalGuestsList(targetEventId, [enrichedGuest], isLive);
       } else if (Array.isArray(data.allGuests)) {
-        this.syncDigitalGuestsList(targetEventId, data.allGuests, isLive);
+        const enrichedList = data.allGuests.map((g: any) => ({
+          ...g,
+          timestamp: g.timestamp || eventTs,
+          manualAssignmentTimestamp: g.manualAssignmentTimestamp || eventTs
+        }));
+        this.syncDigitalGuestsList(targetEventId, enrichedList, isLive);
       }
       return;
     }
@@ -3596,11 +3706,9 @@ export class EventService {
     }
 
     if ((data.type === 'AUTO_TABLE_CREATED' || data.type === 'TABLE_CREATED') && data.table) {
-      if (targetSalon) {
+      const resolvedSalon = targetSalon || this.findSalonForEvent(targetEventId);
+      if (resolvedSalon) {
         this.mergeRemoteTablesIntoSalon(targetEventId, [data.table], isLive);
-        if (!this.incomingRemoteTableSync) {
-          this.broadcastTablesSync(targetEventId);
-        }
       }
     }
   }
