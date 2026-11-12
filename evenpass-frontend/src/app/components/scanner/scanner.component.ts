@@ -105,10 +105,10 @@ import jsQR from 'jsqr';
         <div class="offline-status-col">
           <span class="status-indicator-badge" [class.badge-offline]="isOfflineMode()" [class.badge-online]="!isOfflineMode()">
             <span class="pulse-dot"></span>
-            {{ isOfflineMode() ? '⚡ MODO OFFLINE ACTIVO (EN PUERTA SIN INTERNET)' : '● MODO EN LÍNEA (CONECTADO A LA RED)' }}
+            {{ isOfflineMode() ? 'MODO OFFLINE ACTIVO (EN PUERTA SIN INTERNET)' : 'MODO EN LÍNEA (CONECTADO A LA RED)' }}
           </span>
           <small class="offline-meta">
-            {{ isOfflineMode() ? 'Validando pases contra la memoria local del dispositivo. No requiere Wi-Fi ni datos.' : 'Validación instantánea en milisegundos con anti-duplicados en tiempo real.' }}
+            {{ isOfflineMode() ? 'Validando pases contra la memoria local del dispositivo. Se enviarán automáticamente al volver en línea.' : 'Validación instantánea en milisegundos con anti-duplicados en tiempo real.' }}
           </small>
         </div>
 
@@ -130,10 +130,10 @@ import jsQR from 'jsqr';
             <span>{{ isOfflineMode() ? 'Volver a En Línea' : 'Activar Modo Offline' }}</span>
           </button>
 
-          <button *ngIf="offlineQueue().length > 0" class="btn-sync-action" (click)="syncOfflineQueue()" title="Sincronizar pases validados con el servidor central">
-            <app-icon name="sparkles" [size]="14"></app-icon>
-            <span>Sincronizar ({{ offlineQueue().length }} pases)</span>
-          </button>
+          <span *ngIf="offlineQueue().length > 0" class="btn-sync-action" style="cursor: default;" title="Estos pases se integrarán automáticamente al volver en línea">
+            <app-icon name="clock" [size]="14"></app-icon>
+            <span>{{ offlineQueue().length }} pendiente(s) de auto-envío</span>
+          </span>
         </div>
       </div>
 
@@ -146,7 +146,7 @@ import jsQR from 'jsqr';
             <div class="viewfinder-title-row">
               <span class="event-name-pill">{{ eventService.selectedEvent()?.name }}</span>
               <span class="live-dot" [class.dot-offline]="isOfflineMode()" [class.dot-active]="isCameraActive()">
-                {{ isCameraActive() ? '● Cámara Transmitiendo' : '○ Cámara en Pausa' }}
+                {{ isCameraActive() ? 'Cámara Transmitiendo' : 'Cámara en Pausa' }}
               </span>
             </div>
 
@@ -1110,21 +1110,7 @@ export class ScannerComponent implements OnDestroy {
   upgradeCurrentEventToStandard(): void {
     const ev = this.eventService.selectedEvent();
     if (!ev) return;
-    this.eventService.events.update(list => list.map(item => {
-      if (item.id === ev.id) {
-        return {
-          ...item,
-          tierPlan: 'STANDARD',
-          hasScanner: true
-        };
-      }
-      return item;
-    }));
-    this.notificationService.show(
-      'success',
-      '¡Plan Actualizado a Estándar!',
-      `El evento "${ev.name}" ahora cuenta con Escáner QR de puerta y control de acceso en vivo.`
-    );
+    this.eventService.upgradeEventPlan(ev.id, 'STANDARD');
   }
 
   constructor(
@@ -1136,6 +1122,9 @@ export class ScannerComponent implements OnDestroy {
 
   ngOnDestroy(): void {
     this.stopCamera();
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('online', this.onlineFlushHandler);
+    }
   }
 
   // Camera Management
@@ -1321,6 +1310,12 @@ export class ScannerComponent implements OnDestroy {
     return 'evenpass_offline_queue_' + (this.eventService.selectedEvent()?.id || 1);
   }
 
+  private onlineFlushHandler = () => {
+    if (this.offlineQueue().length > 0 && !this.isOfflineMode()) {
+      this.syncOfflineQueue();
+    }
+  };
+
   private initOfflineState(): void {
     const cached = localStorage.getItem(this.getCacheKey());
     if (cached) {
@@ -1336,6 +1331,13 @@ export class ScannerComponent implements OnDestroy {
       try {
         this.offlineQueue.set(JSON.parse(queued));
       } catch (e) {}
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', this.onlineFlushHandler);
+      if (navigator.onLine && this.offlineQueue().length > 0 && !this.isOfflineMode()) {
+        setTimeout(() => this.syncOfflineQueue(), 500);
+      }
     }
   }
 
@@ -1408,7 +1410,8 @@ export class ScannerComponent implements OnDestroy {
       }
       this.notificationService.show('warning', 'Modo Offline Activado', 'Las validaciones se ejecutan de manera 100% autónoma en este equipo.');
     } else {
-      this.notificationService.show('info', 'Modo En Línea Activado', 'Validaciones conectadas a la base central.');
+      this.syncOfflineQueue();
+      this.notificationService.show('info', 'Modo En Línea Activado', 'Validaciones conectadas en vivo con sincronización automática.');
     }
   }
 
@@ -1489,17 +1492,30 @@ export class ScannerComponent implements OnDestroy {
     const queue = this.offlineQueue();
     if (queue.length === 0) return;
 
+    const syncedGuestIds: number[] = [];
     queue.forEach(log => {
       this.eventService.allLogs.update(logs => [log, ...logs]);
       this.eventService.allGuests.update(guests => guests.map(g => 
-        g.id === log.guestId ? { ...g, status: 'ATTENDED' } : g
+        g.id === log.guestId ? { ...g, status: 'ATTENDED' as const } : g
       ));
+      if (log.guestId != null) {
+        syncedGuestIds.push(log.guestId);
+      }
     });
+
+    this.eventService.persistLogs();
+    this.eventService.persistGuests();
+    this.eventService.persistEvents();
+    this.eventService.refreshAllTableOccupancies();
+    const activeEv = this.eventService.selectedEvent();
+    if (activeEv) {
+      this.eventService.broadcastFullStateToCloud(activeEv.id);
+    }
 
     const count = queue.length;
     this.offlineQueue.set([]);
     localStorage.removeItem(this.getQueueKey());
-    this.notificationService.show('success', 'Sincronización Exitosa', `Se sincronizaron ${count} pases con la base central.`);
+    this.notificationService.show('success', 'Cola Offline Procesada', `Se integraron automáticamente ${count} pase(s) a la nube en vivo.`);
   }
 
   getCombinedLogs(): CheckInLog[] {

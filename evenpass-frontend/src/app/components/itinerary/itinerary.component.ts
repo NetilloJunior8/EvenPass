@@ -35,7 +35,7 @@ import { IconComponent } from '../icon.component';
             <span class="live-pulse-dot" [class.is-simulated]="eventService.simulatedTime() !== null"></span>
             <strong class="clock-display">Reloj del Sistema: {{ eventService.currentEffectiveTime() }} hrs</strong>
             <span class="clock-badge-tag" [class.badge-simulated]="eventService.simulatedTime() !== null">
-              {{ eventService.simulatedTime() ? '⚡ SIMULACIÓN ACTIVA' : '● HORA REAL' }}
+              {{ eventService.simulatedTime() ? 'SIMULACIÓN ACTIVA' : 'HORA REAL' }}
             </span>
           </div>
           <p class="clock-desc">
@@ -158,7 +158,7 @@ import { IconComponent } from '../icon.component';
             <div *ngFor="let item of inProgressItems()" class="active-spotlight-card">
               <div class="spotlight-top">
                 <span class="spotlight-time">{{ item.time }} hrs</span>
-                <span class="live-pill">● EN VIVO</span>
+                <span class="live-pill">EN VIVO</span>
               </div>
               <h4 class="spotlight-title">{{ item.title }}</h4>
               <p class="spotlight-desc">{{ item.description }}</p>
@@ -244,7 +244,7 @@ import { IconComponent } from '../icon.component';
             <div *ngFor="let item of completedItems()" class="milestone-row-card completed-card">
               <div class="card-time-col">
                 <span class="time-text text-muted">{{ item.time }}</span>
-                <span class="done-tag">✓ Concluido</span>
+                <span class="done-tag">Concluido</span>
               </div>
 
               <div class="card-details-col">
@@ -267,7 +267,9 @@ import { IconComponent } from '../icon.component';
         <div class="modal-box">
           <div class="modal-header">
             <h3>Nuevo Hito en el Cronograma</h3>
-            <button class="close-btn" (click)="showAddModal.set(false)">✕</button>
+            <button class="close-btn" (click)="showAddModal.set(false)">
+              <app-icon name="x" [size]="16"></app-icon>
+            </button>
           </div>
 
           <form (ngSubmit)="handleAddMilestone()">

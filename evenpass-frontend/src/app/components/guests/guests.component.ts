@@ -46,32 +46,34 @@ import jsPDF from 'jspdf';
         </div>
 
         <div class="header-actions-row">
-          <!-- Botón directo al Panel del Anfitrión (Papás) -->
-          <button 
-            *ngIf="eventService.selectedEvent()?.templateSlug" 
-            class="btn-outline" 
-            style="border-color: #1d4ed8; color: #1d4ed8; background: rgba(29, 78, 216, 0.06);" 
+          <button
+            class="btn-outline"
+            style="border-color: #1d4ed8; color: #1d4ed8; background: rgba(29, 78, 216, 0.06);"
             (click)="openHostPanel()"
-            title="Abrir el panel privado del anfitrión donde los papás envían las invitaciones por WhatsApp"
+            title="Abrir el panel privado del anfitrión (sincronización automática en vivo)"
           >
             <app-icon name="user" [size]="15"></app-icon>
             <span>Panel del Anfitrión</span>
           </button>
 
-          <!-- 1-Click Sync Button -->
-          <button class="btn-outline" [disabled]="eventService.isEventLocked()" (click)="syncSupabaseNow()" title="Consultar confirmaciones más recientes">
-            <app-icon name="refresh" [size]="15"></app-icon>
-            <span>Sincronizar Ahora</span>
-          </button>
-          <button 
-            *ngIf="eventService.selectedEvent()?.templateSlug" 
-            class="btn-outline" 
-            style="border-color: #059669; color: #059669; background: rgba(5, 150, 105, 0.08);" 
-            (click)="syncDigitalPanelDirectly()"
-            title="Sincronizar en tiempo real con el Panel del Anfitrión (digital)"
+          <button
+            class="btn-outline"
+            style="border-color: #059669; color: #059669; background: rgba(5, 150, 105, 0.08);"
+            (click)="openPublicInvite()"
+            title="Abrir invitación digital interactiva con RSVP y mesa en vivo"
           >
-            <app-icon name="sparkles" [size]="15"></app-icon>
-            <span>Sincronizar Panel de Anfitriones</span>
+            <app-icon name="external-link" [size]="15"></app-icon>
+            <span>Invitación Pública</span>
+          </button>
+
+          <button
+            *ngIf="eventService.selectedEvent()?.externalInvitationUrl"
+            class="btn-outline"
+            (click)="openExternalHostPanel()"
+            title="Abrir versión externa alojada en Netlify"
+          >
+            <app-icon name="external-link" [size]="15"></app-icon>
+            <span>Panel Externo</span>
           </button>
 
           <!-- Hidden native file input browsing local PC or mobile files -->
@@ -166,23 +168,41 @@ import jsPDF from 'jspdf';
                 </span>
               </td>
               <td>
-                <span class="table-tag" [class.unassigned]="!guest.assignedTableName">
-                  <app-icon *ngIf="!guest.assignedTableName" name="alert-triangle" [size]="12"></app-icon>
-                  {{ guest.assignedTableName || 'Sin mesa' }}
-                </span>
+                <ng-container *ngIf="eventService.selectedEvent()?.hasCroquis && eventService.currentSalon()?.tables?.length; else planNoCroquisCell">
+                  <select
+                    class="inline-table-select"
+                    [class.unassigned]="!guest.assignedTableId"
+                    [disabled]="eventService.isEventLocked()"
+                    [ngModel]="guest.assignedTableId || 'UNASSIGNED'"
+                    (ngModelChange)="onInlineTableChange(guest, $event)"
+                  >
+                    <option value="UNASSIGNED">Sin mesa asignada</option>
+                    <option *ngFor="let tbl of eventService.currentSalon()!.tables" [value]="tbl.id">
+                      {{ tbl.tableName }} ({{ tbl.occupiedSeats }}/{{ tbl.capacity }}p)
+                    </option>
+                  </select>
+                </ng-container>
+                <ng-template #planNoCroquisCell>
+                  <span class="table-tag unassigned">Acceso General</span>
+                </ng-template>
               </td>
               <td>
                 <code class="qr-code-token">{{ guest.qrCodeToken }}</code>
               </td>
               <td style="text-align: right;">
                 <div class="table-actions">
+                  <!-- Edit Guest -->
+                  <button class="action-btn-circle" [disabled]="eventService.isEventLocked()" (click)="startEditGuest(guest)" title="Editar Invitado">
+                    <app-icon name="edit" [size]="15"></app-icon>
+                  </button>
+
                   <!-- View QR Pass -->
                   <button class="action-btn-circle" (click)="viewQrPass(guest)" title="Ver Pase Digital">
                     <app-icon name="ticket" [size]="15"></app-icon>
                   </button>
 
                   <!-- View Table on Croquis -->
-                  <button class="action-btn-circle" (click)="openGuestCroquisModal(guest)" title="Ver Mi Mesa en el Croquis CAD">
+                  <button *ngIf="eventService.selectedEvent()?.hasCroquis" class="action-btn-circle" (click)="openGuestCroquisModal(guest)" title="Ver Mi Mesa en el Croquis CAD">
                     <app-icon name="croquis" [size]="15"></app-icon>
                   </button>
 
@@ -207,7 +227,9 @@ import jsPDF from 'jspdf';
         <div class="modal-box pass-modal">
           <div class="modal-header">
             <h3>Pase Digital EvenPass</h3>
-            <button class="close-btn" (click)="activeQrGuest.set(null)">✕</button>
+            <button class="close-btn" (click)="activeQrGuest.set(null)">
+              <app-icon name="x" [size]="16"></app-icon>
+            </button>
           </div>
 
           <div class="ticket-view-card">
@@ -266,7 +288,9 @@ import jsPDF from 'jspdf';
                 <small class="modal-subtitle">Plano del salón con señalamiento exacto de asiento para el invitado</small>
               </div>
             </div>
-            <button class="close-btn" (click)="activeCroquisGuest.set(null)">✕</button>
+            <button class="close-btn" (click)="activeCroquisGuest.set(null)">
+              <app-icon name="x" [size]="16"></app-icon>
+            </button>
           </div>
 
           <div class="guest-croquis-body" *ngIf="activeCroquisGuest() as guest">
@@ -282,7 +306,7 @@ import jsPDF from 'jspdf';
                   <app-icon name="map-pin" [size]="18"></app-icon>
                   <div>
                     <small>MESA ASIGNADA</small>
-                    <strong>{{ guest.assignedTableName || 'Mesa 1 (VIP)' }}</strong>
+                    <strong>{{ guest.assignedTableName || 'Mesa por asignar' }}</strong>
                   </div>
                 </div>
               </div>
@@ -292,11 +316,21 @@ import jsPDF from 'jspdf';
             <div class="croquis-svg-viewer-box">
               <div class="viewer-top-meta">
                 <span>RECINTO: <b>{{ eventService.currentSalon()?.name }}</b></span>
-                <span class="pulse-beacon">📍 Destacada: <b>{{ guest.assignedTableName || 'Tu Mesa' }}</b></span>
+                <span class="pulse-beacon"><app-icon name="map-pin" [size]="13"></app-icon> Destacada: <b>{{ guest.assignedTableName || 'Tu Mesa' }}</b></span>
               </div>
 
               <div class="salon-preview-svg-canvas">
                 <svg viewBox="0 0 600 860" class="mini-cad-svg" xmlns="http://www.w3.org/2000/svg">
+                  <image
+                    *ngIf="eventService.currentSalon()?.customCroquisUrl"
+                    [attr.href]="eventService.currentSalon()?.customCroquisUrl"
+                    x="20"
+                    y="20"
+                    width="560"
+                    height="820"
+                    preserveAspectRatio="xMidYMid meet"
+                    opacity="0.35"
+                  />
                   <!-- Outer Walls -->
                   <rect x="20" y="20" width="560" height="820" fill="none" stroke="currentColor" stroke-width="2.5" />
                   
@@ -356,7 +390,7 @@ import jsPDF from 'jspdf';
                       <!-- Pointer Badge -->
                       <rect [attr.x]="table.posX - 55" [attr.y]="table.posY - 48" width="110" height="20" rx="4" fill="#0284c7" />
                       <text [attr.x]="table.posX" [attr.y]="table.posY - 34" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="800" font-size="8.5" fill="#ffffff">
-                        📍 TÚ ESTÁS AQUÍ
+                        TÚ ESTÁS AQUÍ
                       </text>
                     </g>
                   </g>
@@ -426,7 +460,63 @@ import jsPDF from 'jspdf';
         </div>
       </div>
 
+      <!-- Edit Guest Modal -->
+      <div *ngIf="editingGuest() as g" class="modal-backdrop">
+        <div class="modal-box">
+          <div class="modal-header">
+            <h3>Editar Invitado</h3>
+            <button class="close-btn" (click)="editingGuest.set(null)">
+              <app-icon name="x" [size]="16"></app-icon>
+            </button>
+          </div>
 
+          <form (ngSubmit)="handleSaveEditGuest()">
+            <div class="form-field">
+              <label>Nombre Completo</label>
+              <input type="text" [(ngModel)]="editGuestForm.fullName" name="editFullName" required>
+            </div>
+
+            <div class="form-row">
+              <div class="form-field">
+                <label>Teléfono (WhatsApp)</label>
+                <input type="text" [(ngModel)]="editGuestForm.phone" name="editPhone">
+              </div>
+
+              <div class="form-field">
+                <label>Acompañantes Extras</label>
+                <input type="number" [(ngModel)]="editGuestForm.numCompanions" name="editNumCompanions" min="0" max="15">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-field">
+                <label>Correo Electrónico</label>
+                <input type="email" [(ngModel)]="editGuestForm.email" name="editEmail">
+              </div>
+
+              <div class="form-field">
+                <label>Estado RSVP</label>
+                <select [(ngModel)]="editGuestForm.status" name="editStatus">
+                  <option value="CONFIRMED">Confirmado</option>
+                  <option value="PENDING">Pendiente</option>
+                  <option value="DECLINED">No Asistirá</option>
+                  <option value="ATTENDED">Ingresado en Puerta</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-field">
+              <label>Notas / Preferencias</label>
+              <input type="text" [(ngModel)]="editGuestForm.dietNotes" name="editDietNotes" placeholder="Alergias, silla infantil, etc.">
+            </div>
+
+            <div class="modal-footer">
+              <button type="button" class="btn-outline" (click)="editingGuest.set(null)">Cancelar</button>
+              <button type="submit" class="btn-action">Guardar Cambios</button>
+            </div>
+          </form>
+        </div>
+      </div>
 
     </div>
   `,
@@ -661,6 +751,25 @@ import jsPDF from 'jspdf';
     .table-tag.unassigned {
       background: var(--color-warning-light);
       color: #b45309;
+    }
+
+    .inline-table-select {
+      background: var(--brand-blue-light);
+      color: var(--brand-blue);
+      border: 1px solid color-mix(in srgb, var(--brand-blue) 28%, transparent);
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      max-width: 210px;
+      font-family: inherit;
+    }
+
+    .inline-table-select.unassigned {
+      background: var(--color-warning-light);
+      color: #b45309;
+      border-color: rgba(180, 83, 9, 0.28);
     }
 
     .qr-code-token {
@@ -1407,6 +1516,7 @@ export class GuestsComponent {
   activeQrGuest = signal<Guest | null>(null);
   activeCroquisGuest = signal<Guest | null>(null);
   showAddModal = signal(false);
+  editingGuest = signal<Guest | null>(null);
   showLinkAuditModal = signal(false);
   tabLinkAudit = signal<'CONNECT' | 'AUDIT'>('CONNECT');
   auditSearchQuery = '';
@@ -1418,6 +1528,15 @@ export class GuestsComponent {
     email: '',
     numCompanions: 0,
     status: 'CONFIRMED'
+  };
+
+  editGuestForm: Partial<Guest> = {
+    fullName: '',
+    phone: '',
+    email: '',
+    numCompanions: 0,
+    status: 'CONFIRMED',
+    dietNotes: ''
   };
 
   constructor(
@@ -1461,25 +1580,55 @@ export class GuestsComponent {
     return `-- Esquema oficial para tabla de invitados en Supabase (PostgreSQL)\nCREATE TABLE IF NOT EXISTS public.guests (\n  id BIGSERIAL PRIMARY KEY,\n  event_id BIGINT NOT NULL,\n  full_name TEXT NOT NULL,\n  total_passes INT NOT NULL DEFAULT 1,\n  phone TEXT,\n  status TEXT NOT NULL DEFAULT 'CONFIRMED',\n  assigned_table TEXT,\n  qr_code TEXT,\n  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()\n);\n\n-- Índice para consultas en tiempo real filtradas por evento\nCREATE INDEX IF NOT EXISTS idx_guests_event_id ON public.guests(event_id);`;
   }
 
-  syncSupabaseNow(): void {
+  openHostPanel(): void {
     const ev = this.eventService.selectedEvent();
-    if (ev) {
-      this.eventService.syncWithSupabase(ev.id);
-      this.tabLinkAudit.set('AUDIT');
+    if (ev) this.eventService.broadcastFullStateToCloud(ev.id);
+    window.open(this.eventService.getHostPanelUrl(ev), '_blank');
+  }
+
+  openExternalHostPanel(): void {
+    const ev = this.eventService.selectedEvent();
+    if (ev) this.eventService.broadcastFullStateToCloud(ev.id);
+    window.open(this.eventService.getExternalHostPanelUrl(ev), '_blank');
+  }
+
+  openPublicInvite(): void {
+    const ev = this.eventService.selectedEvent();
+    if (ev) this.eventService.broadcastFullStateToCloud(ev.id);
+    window.open(this.eventService.getPublicInviteUrl(ev), '_blank');
+  }
+
+  onInlineTableChange(guest: Guest, tableIdStr: string): void {
+    if (this.eventService.isEventLocked()) return;
+    if (!tableIdStr || tableIdStr === 'UNASSIGNED') {
+      this.eventService.unassignGuestTable(guest.id);
+      return;
+    }
+    const targetId = Number(tableIdStr);
+    if (!isNaN(targetId)) {
+      this.eventService.assignTableToGuest(guest.id, targetId);
     }
   }
 
-  syncDigitalPanelDirectly(): void {
-    const ev = this.eventService.selectedEvent();
-    if (!ev) return;
-    this.eventService.syncWithSupabase(ev.id);
+  startEditGuest(guest: Guest): void {
+    this.editingGuest.set(guest);
+    this.editGuestForm = {
+      fullName: guest.fullName,
+      phone: guest.phone || '',
+      email: guest.email || '',
+      numCompanions: guest.numCompanions,
+      status: guest.status,
+      dietNotes: guest.dietNotes || ''
+    };
   }
 
-  openHostPanel(): void {
-    const ev = this.eventService.selectedEvent();
-    const evId = ev?.id || 6;
-    const url = `https://ejemplo-invitacion-luis-gerardo.netlify.app/panel.html?eventId=${evId}`;
-    window.open(url, '_blank');
+  handleSaveEditGuest(): void {
+    const g = this.editingGuest();
+    if (!g) return;
+    const ok = this.eventService.updateGuest(g.id, this.editGuestForm);
+    if (ok) {
+      this.editingGuest.set(null);
+    }
   }
 
   async syncGoogleSheetNow(): Promise<void> {
@@ -1701,16 +1850,20 @@ export class GuestsComponent {
   }
 
   shareWhatsApp(guest: Guest): void {
+    const ev = this.eventService.selectedEvent();
+    const passUrl = this.eventService.getPublicInviteUrl(ev, guest);
     const text = encodeURIComponent(
-      `¡Hola ${guest.fullName}! Te compartimos tu pase digital para el evento: Folio ${guest.qrCodeToken}. ` +
-      `Mesa asignada: ${guest.assignedTableName || 'Mesa principal'}. Accede aquí: https://evenpass.io/p/${guest.qrCodeToken}`
+      `Hola ${guest.fullName}. Te compartimos tu pase digital para ${ev?.name || 'el evento'}: Folio ${guest.qrCodeToken}. ` +
+      `Mesa asignada: ${guest.assignedTableName || 'Por asignar'}. Accede aquí: ${passUrl}`
     );
     window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
     this.notificationService.show('success', 'Enlace Compartido', `Enlace de pase enviado a WhatsApp para ${guest.fullName}`);
   }
 
   copyPassLink(guest: Guest): void {
-    navigator.clipboard?.writeText(`https://evenpass.io/p/${guest.qrCodeToken}`);
+    const ev = this.eventService.selectedEvent();
+    const passUrl = this.eventService.getPublicInviteUrl(ev, guest);
+    navigator.clipboard?.writeText(passUrl);
     this.notificationService.show('info', 'Enlace Copiado', 'Enlace del pase copiado al portapapeles.');
   }
 

@@ -43,15 +43,43 @@ export class EventService {
   readonly STORAGE_GUESTS = 'evenpass_all_guests_db';
   readonly STORAGE_LOGS = 'evenpass_all_logs_db';
 
+  // --- TEXT & TABLE MATCHING HELPERS ---
+  private normalizeName(name?: string | null): string {
+    return String(name || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private isGuestAtTable(g: Guest, table: SalonTable): boolean {
+    if (g.assignedTableId != null && Number(g.assignedTableId) === Number(table.id)) {
+      return true;
+    }
+    if (g.assignedTableName) {
+      const gName = this.normalizeName(g.assignedTableName);
+      const tName = this.normalizeName(table.tableName);
+      if (gName === tName) return true;
+      const gPrefix = gName.split(' - ')[0].trim();
+      const tPrefix = tName.split(' - ')[0].trim();
+      if (gPrefix && tPrefix && gPrefix === tPrefix && gPrefix.includes('mesa')) return true;
+      if (new RegExp(`\\b(mesa|table)\\s*0*${table.tableNumber}\\b`, 'i').test(g.assignedTableName)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   persistSalons(): void {
     try {
       const salonList = this.salons();
       localStorage.setItem(this.STORAGE_SALONS, JSON.stringify(salonList));
 
-      // Also persist per-event tables database
+      // Also persist per-event tables database only for events with an assigned salon
       this.events().forEach(ev => {
-        const targetSalonId = ev.salonId || 4;
-        const targetSalon = salonList.find(s => s.id === targetSalonId);
+        if (!ev.hasCroquis || !ev.salonId) return;
+        const targetSalon = salonList.find(s => s.id === ev.salonId);
         if (targetSalon && targetSalon.tables) {
           const formatted = targetSalon.tables.map(t => ({
             id: t.id,
@@ -59,6 +87,8 @@ export class EventService {
             capacity: t.capacity || 10,
             shape: t.shape || 'ROUND',
             tableNumber: t.tableNumber,
+            posX: t.posX,
+            posY: t.posY,
             occupiedSeats: t.occupiedSeats || 0
           }));
           localStorage.setItem(`evenpass_event_${ev.id}_tables_db`, JSON.stringify(formatted));
@@ -74,14 +104,17 @@ export class EventService {
       const all = this.allGuests();
       localStorage.setItem(this.STORAGE_GUESTS, JSON.stringify(all));
 
-      // Also persist per-event databases so local polling stays in 100% sync
-      const eventIds = new Set(all.map(g => g.eventId));
+      // Persist per-event databases including empty lists so deletions propagate cleanly
+      const eventIds = new Set<number>(this.events().map(e => e.id));
+      all.forEach(g => eventIds.add(g.eventId));
+
       eventIds.forEach(evId => {
         const evGuests = all.filter(g => g.eventId === evId);
         const mapped = evGuests.map(g => ({
           id: g.id,
           fullName: g.fullName,
           phone: g.phone || 'WhatsApp Directo',
+          email: g.email || '',
           passesGranted: g.totalPasses,
           passesConfirmed: (g.status === 'CONFIRMED' || g.status === 'ATTENDED') ? g.totalPasses : 0,
           status: g.status,
@@ -89,7 +122,7 @@ export class EventService {
           token: g.qrCodeToken,
           notes: g.dietNotes || '',
           updatedAt: g.confirmedAt || 'Hoy',
-          manualAssignmentTimestamp: g.manualAssignmentTimestamp || Date.now()
+          manualAssignmentTimestamp: g.manualAssignmentTimestamp || 0
         }));
         localStorage.setItem(`evenpass_event_${evId}_guests_db`, JSON.stringify(mapped));
         if (evId === 6) {
@@ -110,20 +143,25 @@ export class EventService {
     }
   }
 
+  persistLogs(): void {
+    try {
+      localStorage.setItem(this.STORAGE_LOGS, JSON.stringify(this.allLogs()));
+    } catch (e) {
+      console.warn('Error guardando registros de check-in en localStorage:', e);
+    }
+  }
+
   currentSalon = computed<Salon | null>(() => {
     const activeEv = this.selectedEvent();
+    if (activeEv && !activeEv.hasCroquis) return null;
     const targetId = activeEv?.salonId || this.activeSalonId();
-    const baseSalon = this.salons().find(s => s.id === targetId) || this.salons()[0] || null;
+    const baseSalon = this.salons().find(s => s.id === targetId) || null;
     if (!baseSalon) return null;
 
     // Dynamically calculate assigned guests and occupied seats in real time
     const evGuests = this.eventGuests();
     const updatedTables = baseSalon.tables.map(table => {
-      const seated = evGuests.filter(g => 
-        (g.assignedTableId != null && Number(g.assignedTableId) === Number(table.id)) ||
-        (g.assignedTableName && g.assignedTableName.toLowerCase().trim() === table.tableName.toLowerCase().trim()) ||
-        (g.assignedTableName && new RegExp(`\\b(mesa|table)\\s*0*${table.tableNumber}\\b`, 'i').test(g.assignedTableName))
-      );
+      const seated = evGuests.filter(g => g.status !== 'DECLINED' && this.isGuestAtTable(g, table));
       const totalOccupied = seated.reduce((sum, g) => sum + g.totalPasses, 0);
       return {
         ...table,
@@ -138,13 +176,22 @@ export class EventService {
     };
   });
 
-  supabaseConfig = signal<SupabaseConfig>({
-    url: 'https://wxvueavcyylgnbpksplr.supabase.co',
-    anonKey: 'sb_anon_live_ep889214kldsf90234u1209384kjhsdkfh293847',
-    tableName: 'guests',
-    connected: true,
-    autoSync: true
-  });
+  supabaseConfig = signal<SupabaseConfig>((() => {
+    try {
+      const saved = localStorage.getItem('evenpass_supabase_config');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.url) return parsed;
+      }
+    } catch {}
+    return {
+      url: '',
+      anonKey: '',
+      tableName: 'guests',
+      connected: false,
+      autoSync: true
+    };
+  })());
 
   templates = signal<InvitationTemplate[]>([]);
   supportTickets = signal<SupportTicket[]>([]);
@@ -592,6 +639,7 @@ export class EventService {
         status: 'PENDIENTE',
         templateSlug: 'luis-gerardo-10',
         invitationMode: 'TEMPLATE',
+        externalInvitationUrl: 'https://ejemplo-invitacion-luis-gerardo.netlify.app',
         tierPlan: 'PREMIUM',
         hasCroquis: true,
         hasScanner: true,
@@ -1422,7 +1470,7 @@ export class EventService {
     // Persist auto-created tables to the salon
     if (autoCreatedTables.length > 0) {
       autoCreatedTables.forEach(newT => tables.push(newT));
-      this.notificationService.show('info', '🪑 Mesas Creadas Automáticamente', `Se crearon ${autoCreatedTables.length} mesa(s) adicional(es) para acomodar a todos los invitados.`);
+      this.notificationService.show('info', 'Mesas Creadas Automáticamente', `Se crearon ${autoCreatedTables.length} mesa(s) adicional(es) para acomodar a todos los invitados.`);
     }
 
     const updatedTables = tables.map(t => ({
@@ -1436,6 +1484,8 @@ export class EventService {
     this.allGuests.set(allGuestsCopy);
     this.persistSalons();
     this.persistGuests();
+    this.broadcastTablesSync(this.activeEventId());
+    this.broadcastFullStateToCloud(this.activeEventId());
 
     const result: AutoAssignResult = {
       salonId: salon.id,
@@ -1445,7 +1495,7 @@ export class EventService {
       tablesUtilized: updatedTables.filter(t => (t.occupiedSeats || 0) > 0).length,
       remainingUnassignedGuests: unassigned,
       message: unassigned > 0 
-        ? `⚠️ ${unassigned} invitado(s) sin mesa — el aforo del evento ha sido alcanzado.` 
+        ? `${unassigned} invitado(s) sin mesa: el aforo del evento ha sido alcanzado.` 
         : 'Asignación automática inteligente completada exitosamente.',
       tables: updatedTables.map(t => ({
         tableId: t.id,
@@ -1458,7 +1508,7 @@ export class EventService {
     };
 
     if (unassigned > 0) {
-      this.notificationService.show('warning', '⚠️ Aforo Completo', `${unassigned} invitado(s) sin mesa asignada. El límite del evento ha sido alcanzado.`);
+      this.notificationService.show('warning', 'Aforo Completo', `${unassigned} invitado(s) sin mesa asignada. El límite del evento ha sido alcanzado.`);
     } else {
       this.notificationService.show('success', 'Croquis Optimizado', `${passesCount} pases asignados sin separar acompañantes.${autoCreatedTables.length > 0 ? ` (+${autoCreatedTables.length} mesa(s) auto-creada(s))` : ''}`);
     }
@@ -1535,10 +1585,13 @@ export class EventService {
 
     // Valid Entry
     const nowTime = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) + ' hrs';
-    guest.status = 'ATTENDED';
-    guest.checkedInAt = nowTime;
+    const updatedGuest: Guest = {
+      ...guest,
+      status: 'ATTENDED',
+      checkedInAt: nowTime
+    };
 
-    this.allGuests.update(list => list.map(g => g.id === guest.id ? guest : g));
+    this.allGuests.update(list => list.map(g => g.id === guest.id ? updatedGuest : g));
 
     const log: CheckInLog = {
       id: Date.now(),
@@ -1561,163 +1614,273 @@ export class EventService {
       ));
     }
 
-    this.notificationService.show('success', '¡Acceso Autorizado!', `${guest.fullName} · ${guest.assignedTableName || 'Mesa por asignar'}`);
+    this.persistGuests();
+    this.persistEvents();
+    this.broadcastGuestUpdate(updatedGuest);
+    this.broadcastFullStateToCloud(guest.eventId);
+
+    this.notificationService.show('success', 'Acceso Autorizado', `${guest.fullName} · ${guest.assignedTableName || 'Acceso General'}`);
     return {
       success: true,
       type: 'AUTHORIZED',
-      message: '¡Acceso Autorizado! Bienvenido.',
-      guest
+      message: 'Acceso Autorizado. Bienvenido.',
+      guest: updatedGuest
     };
   }
 
   // --- GUEST MANAGEMENT ---
+  private findSalonForEvent(eventId: number): Salon | undefined {
+    const ev = this.events().find(e => e.id === eventId);
+    if (!ev || !ev.hasCroquis || !ev.salonId) return undefined;
+    return this.salons().find(s => s.id === ev.salonId);
+  }
+
+  private getGuestOccupiedSeatsForTable(
+    guestsList: Guest[],
+    eventId: number,
+    table: SalonTable,
+    excludeGuestId?: number
+  ): number {
+    return guestsList
+      .filter(g =>
+        g.eventId === eventId &&
+        g.status !== 'DECLINED' &&
+        (excludeGuestId === undefined || g.id !== excludeGuestId) &&
+        this.isGuestAtTable(g, table)
+      )
+      .reduce((sum, g) => sum + g.totalPasses, 0);
+  }
+
   addGuest(guest: Partial<Guest>): void {
     if (this.isEventLocked()) {
       this.notificationService.show('warning', 'Evento Concluido', 'Este evento ha finalizado y está en modo histórico. No se pueden agregar nuevos invitados.');
       return;
     }
-    const activeEvId = this.activeEventId();
-    const numCompanions = guest.numCompanions || 0;
-
-    // --- VENUE CAPACITY ENFORCEMENT: Check total venue capacity before adding ---
-    const salon = this.currentSalon();
-    const activeEv = this.selectedEvent();
-    const totalVenueCapacity = salon?.tables.reduce((sum, t) => sum + t.capacity, 0) || activeEv?.maxCapacity || 999;
-    const currentTotalPasses = this.eventGuests()
-      .filter(g => g.status !== 'DECLINED')
-      .reduce((sum, g) => sum + g.totalPasses, 0);
+    const activeEvId = guest.eventId || this.activeEventId();
+    const activeEv = this.events().find(e => e.id === activeEvId) || this.selectedEvent();
+    const salon = this.findSalonForEvent(activeEvId);
+    const numCompanions = Math.max(0, Number(guest.numCompanions || 0));
     const incomingPasses = 1 + numCompanions;
 
-    if (currentTotalPasses + incomingPasses > totalVenueCapacity) {
+    // --- VENUE CAPACITY ENFORCEMENT ---
+    const eventLimit = activeEv?.maxCapacity || (salon?.tables.reduce((sum, t) => sum + t.capacity, 0)) || 999;
+    const currentTotalPasses = this.allGuests()
+      .filter(g => g.eventId === activeEvId && g.status !== 'DECLINED')
+      .reduce((sum, g) => sum + g.totalPasses, 0);
+
+    if (currentTotalPasses + incomingPasses > eventLimit) {
       this.notificationService.show(
         'error',
-        '⛔ Aforo del Evento Completo',
-        `No hay espacio para ${incomingPasses} pase(s). Ocupado: ${currentTotalPasses}/${totalVenueCapacity}. Agrega más mesas o aumenta la capacidad del salón primero.`
+        'Aforo del Evento Completo',
+        `Se alcanzó el límite de ${eventLimit} pases (${currentTotalPasses} ocupados). No hay espacio para ${incomingPasses} pase(s) adicional(es). Aumenta el límite del evento si deseas recibir más personas.`
       );
       return;
     }
 
-    // Resolve assigned table name if ID given or vice-versa
+    // Resolve or auto-assign table when the event uses Croquis
     let assignedTableId = guest.assignedTableId;
     let assignedTableName = guest.assignedTableName;
-    if (assignedTableId && !assignedTableName && salon) {
-      const tbl = salon.tables.find(t => t.id === assignedTableId);
-      if (tbl) assignedTableName = tbl.tableName;
-    } else if (assignedTableName && !assignedTableId && salon) {
-      const tbl = salon.tables.find(t => t.tableName.toLowerCase().trim() === assignedTableName!.toLowerCase().trim());
-      if (tbl) assignedTableId = tbl.id;
+    let tablesChanged = false;
+    const allGuestsSnapshot = this.allGuests();
+
+    if (salon && activeEv?.hasCroquis) {
+      let resolvedTable: SalonTable | undefined;
+      if (assignedTableId) {
+        resolvedTable = salon.tables.find(t => t.id === assignedTableId);
+      } else if (assignedTableName && assignedTableName.toLowerCase().trim() !== 'sin asignar') {
+        resolvedTable = salon.tables.find(
+          t => this.normalizeName(t.tableName) === this.normalizeName(assignedTableName)
+        );
+      }
+
+      if (resolvedTable) {
+        const occ = this.getGuestOccupiedSeatsForTable(allGuestsSnapshot, activeEvId, resolvedTable);
+        if (occ + incomingPasses > resolvedTable.capacity) {
+          this.notificationService.show(
+            'error',
+            'Mesa al Límite de Aforo',
+            `"${resolvedTable.tableName}" ya tiene ${occ}/${resolvedTable.capacity} lugares ocupados. Libera espacio, elige otra mesa o crea una mesa nueva.`
+          );
+          return;
+        }
+        assignedTableId = resolvedTable.id;
+        assignedTableName = resolvedTable.tableName;
+      } else {
+        // Auto-seat in first table with space, or auto-create a new table if under event maxCapacity
+        const candidate = salon.tables.find(t => {
+          const occ = this.getGuestOccupiedSeatsForTable(allGuestsSnapshot, activeEvId, t);
+          return (t.capacity - occ) >= incomingPasses;
+        });
+
+        if (candidate) {
+          assignedTableId = candidate.id;
+          assignedTableName = candidate.tableName;
+        } else {
+          const currentNums = salon.tables.map(t => t.tableNumber || 0);
+          const nextNum = (currentNums.length > 0 ? Math.max(...currentNums) : 0) + 1;
+          const idx = salon.tables.length;
+          const newTableCap = Math.max(10, incomingPasses);
+          const autoTable: SalonTable = {
+            id: Date.now() + nextNum,
+            salonId: salon.id,
+            tableNumber: nextNum,
+            tableName: `Mesa ${nextNum < 10 ? '0' + nextNum : nextNum} - Auto`,
+            shape: 'ROUND',
+            capacity: newTableCap,
+            posX: 160 + (idx % 4) * 185,
+            posY: 200 + Math.floor(idx / 4) * 185,
+            occupiedSeats: 0
+          };
+          this.salons.update(list => list.map(s =>
+            s.id === salon.id
+              ? { ...s, tables: [...s.tables, autoTable], totalCapacity: s.totalCapacity + autoTable.capacity }
+              : s
+          ));
+          assignedTableId = autoTable.id;
+          assignedTableName = autoTable.tableName;
+          tablesChanged = true;
+        }
+      }
+    } else {
+      assignedTableId = undefined;
+      assignedTableName = undefined;
     }
 
     const now = Date.now();
     const newGuest: Guest = {
-      id: Date.now(),
+      id: now,
       eventId: activeEvId,
-      fullName: guest.fullName || 'Nuevo Invitado',
+      fullName: (guest.fullName || 'Nuevo Invitado').trim(),
       email: guest.email,
       phone: guest.phone,
       numCompanions,
-      totalPasses: 1 + numCompanions,
+      totalPasses: incomingPasses,
       status: guest.status || 'PENDING',
-      qrCodeToken: 'EP-' + Math.floor(1000 + Math.random() * 9000),
-      assignedTableId: assignedTableId,
-      assignedTableName: assignedTableName,
+      qrCodeToken: guest.qrCodeToken || ('EP-' + Math.floor(1000 + Math.random() * 9000)),
+      assignedTableId,
+      assignedTableName,
       dietNotes: guest.dietNotes,
-      manualAssignmentTimestamp: now
+      manualAssignmentTimestamp: assignedTableId ? now : 0
     };
 
     this.allGuests.update(list => [...list, newGuest]);
-    this.events.update(list => list.map(ev => 
+    this.events.update(list => list.map(ev =>
       ev.id === activeEvId ? { ...ev, totalGuests: ev.totalGuests + 1 } : ev
     ));
-    this.refreshAllTableOccupancies();
+    this.refreshAllTableOccupancies(activeEvId);
     this.persistGuests();
     this.persistEvents();
     this.persistSalons();
 
-    // Broadcast NEW_GUEST / NEW_INVITATION to panel and cloud
-    const formattedGuest = {
-      id: newGuest.id,
-      fullName: newGuest.fullName,
-      phone: newGuest.phone || 'WhatsApp Directo',
-      passesGranted: newGuest.totalPasses,
-      passesConfirmed: (newGuest.status === 'CONFIRMED' || newGuest.status === 'ATTENDED') ? newGuest.totalPasses : 0,
-      status: newGuest.status,
-      tableName: newGuest.assignedTableName || 'Sin asignar',
-      token: newGuest.qrCodeToken,
-      notes: newGuest.dietNotes || '',
-      updatedAt: 'Hoy',
-      manualAssignmentTimestamp: now
-    };
-
-    // Update localStorage for Host Panel
-    try {
-      const keys = [`evenpass_event_${activeEvId}_guests_db`, activeEvId === 6 ? 'evenpass_luis_gerardo_guests_db' : null].filter(Boolean) as string[];
-      keys.forEach(k => {
-        const raw = localStorage.getItem(k);
-        const list = raw ? JSON.parse(raw) : [];
-        if (Array.isArray(list)) {
-          const exists = list.some((item: any) => 
-            (newGuest.qrCodeToken && item.token === newGuest.qrCodeToken) ||
-            (newGuest.fullName && item.fullName && item.fullName.toLowerCase().trim() === newGuest.fullName.toLowerCase().trim())
-          );
-          if (!exists) {
-            list.unshift(formattedGuest);
-            localStorage.setItem(k, JSON.stringify(list));
-          }
-        }
-      });
-      localStorage.setItem('evenpass_luis_gerardo_updated_tick', String(now));
-    } catch (e) {}
+    // Compact inline NEW_GUEST broadcast (<4KB so ntfy delivers immediately without attachment indirection)
+    const formattedGuest = this.formatGuestForSync(newGuest);
+    this.upsertGuestInHostPanelStorage(activeEvId, formattedGuest, now);
 
     const msgId = 'msg_' + now + '_' + Math.random().toString(36).substr(2, 9);
     this.processedCloudMsgIds.add(msgId);
 
     const payload = {
       type: 'NEW_GUEST',
-      msgId: msgId,
+      msgId,
       eventId: activeEvId,
       guest: formattedGuest,
-      allGuests: this.allGuests().filter(g => g.eventId === activeEvId).map(g => ({
-        id: g.id,
-        fullName: g.fullName,
-        phone: g.phone || 'WhatsApp Directo',
-        passesGranted: g.totalPasses,
-        passesConfirmed: (g.status === 'CONFIRMED' || g.status === 'ATTENDED') ? g.totalPasses : 0,
-        status: g.status,
-        tableName: g.assignedTableName || 'Sin asignar',
-        token: g.qrCodeToken,
-        notes: g.dietNotes || '',
-        updatedAt: 'Hoy',
-        manualAssignmentTimestamp: g.manualAssignmentTimestamp || now
-      })),
       timestamp: now
     };
 
-    // 1. BroadcastChannel
-    try {
-      if (typeof BroadcastChannel !== 'undefined') {
-        const bc = new BroadcastChannel('evenpass_invitations_channel');
-        bc.postMessage(payload);
-        bc.postMessage({ ...payload, type: 'NEW_INVITATION' });
-      }
-    } catch (e) {}
-
-    // 2. Cloud Relay
-    try {
-      fetch(this.CLOUD_SYNC_RELAY, {
-        method: 'POST',
-        headers: {
-          'Title': 'EvenPass Guest Created',
-          'Tags': 'guest,new'
-        },
-        body: JSON.stringify(payload)
-      }).catch(() => {});
-    } catch (e) {}
-
-    // 3. Guarantee full state synchronization
+    this.dispatchCloudMessage('EvenPass Guest Created', 'guest,new', payload);
+    if (tablesChanged) {
+      this.broadcastTablesSync(activeEvId);
+    }
     this.broadcastFullStateToCloud(activeEvId);
 
-    this.notificationService.show('success', 'Invitado Registrado', `${newGuest.fullName} añadido a este evento.`);
+    this.notificationService.show(
+      'success',
+      'Invitado Registrado',
+      tablesChanged
+        ? `${newGuest.fullName} añadido y acomodado en ${assignedTableName} (mesa creada automáticamente).`
+        : `${newGuest.fullName} añadido a este evento.`
+    );
+  }
+
+  updateGuest(guestId: number, patch: Partial<Guest>): boolean {
+    if (this.isEventLocked()) {
+      this.notificationService.show('warning', 'Evento Concluido', 'Este evento ha finalizado y está en modo histórico.');
+      return false;
+    }
+    const existing = this.allGuests().find(g => g.id === guestId);
+    if (!existing) return false;
+
+    const evId = existing.eventId || this.activeEventId();
+    const ev = this.events().find(e => e.id === evId);
+    const salon = this.findSalonForEvent(evId);
+
+    const nextCompanions = patch.numCompanions !== undefined
+      ? Math.max(0, Number(patch.numCompanions))
+      : existing.numCompanions;
+    const nextPasses = 1 + nextCompanions;
+    const nextStatus = patch.status || existing.status;
+
+    // Validate overall event capacity when passes increase or guest un-declines
+    if (nextStatus !== 'DECLINED') {
+      const eventLimit = ev?.maxCapacity || (salon?.tables.reduce((sum, t) => sum + t.capacity, 0)) || 999;
+      const otherPasses = this.allGuests()
+        .filter(g => g.eventId === evId && g.id !== guestId && g.status !== 'DECLINED')
+        .reduce((sum, g) => sum + g.totalPasses, 0);
+      if (otherPasses + nextPasses > eventLimit) {
+        this.notificationService.show(
+          'error',
+          'Aforo del Evento Completo',
+          `Los ${nextPasses} pases exceden el límite del evento (${otherPasses}/${eventLimit} ocupados).`
+        );
+        return false;
+      }
+    }
+
+    let nextTableId = patch.assignedTableId !== undefined ? patch.assignedTableId : existing.assignedTableId;
+    let nextTableName = patch.assignedTableName !== undefined ? patch.assignedTableName : existing.assignedTableName;
+
+    if (salon && ev?.hasCroquis && nextTableId && nextStatus !== 'DECLINED') {
+      const targetTable = salon.tables.find(t => t.id === nextTableId);
+      if (targetTable) {
+        const occ = this.getGuestOccupiedSeatsForTable(this.allGuests(), evId, targetTable, guestId);
+        if (occ + nextPasses > targetTable.capacity) {
+          this.notificationService.show(
+            'error',
+            'Mesa al Límite de Aforo',
+            `"${targetTable.tableName}" ya tiene ${occ}/${targetTable.capacity} lugares ocupados y no admite ${nextPasses} pase(s).`
+          );
+          return false;
+        }
+        nextTableName = targetTable.tableName;
+      }
+    } else if (!ev?.hasCroquis) {
+      nextTableId = undefined;
+      nextTableName = undefined;
+    }
+
+    const now = Date.now();
+    const tableChanged = nextTableId !== existing.assignedTableId || nextTableName !== existing.assignedTableName;
+    const updatedGuest: Guest = {
+      ...existing,
+      ...patch,
+      fullName: (patch.fullName !== undefined ? patch.fullName : existing.fullName).trim(),
+      numCompanions: nextCompanions,
+      totalPasses: nextPasses,
+      status: nextStatus,
+      assignedTableId: nextTableId,
+      assignedTableName: nextTableName,
+      manualAssignmentTimestamp: tableChanged ? now : (existing.manualAssignmentTimestamp || now)
+    };
+
+    this.allGuests.update(list => list.map(g => g.id === guestId ? updatedGuest : g));
+    this.refreshAllTableOccupancies(evId);
+    this.persistGuests();
+    this.persistSalons();
+    this.broadcastGuestUpdate(updatedGuest, now);
+    this.broadcastFullStateToCloud(evId);
+
+    this.notificationService.show('success', 'Invitado Actualizado', `Cambios de "${updatedGuest.fullName}" guardados y sincronizados.`);
+    return true;
   }
 
   deleteGuest(id: number): void {
@@ -1730,42 +1893,30 @@ export class EventService {
 
     const activeEvId = guest.eventId || this.activeEventId();
     this.allGuests.update(list => list.filter(g => g.id !== id));
-    this.events.update(list => list.map(ev => 
+    this.events.update(list => list.map(ev =>
       ev.id === activeEvId ? { ...ev, totalGuests: Math.max(0, ev.totalGuests - 1) } : ev
     ));
-    this.refreshAllTableOccupancies();
+    this.refreshAllTableOccupancies(activeEvId);
     this.persistGuests();
     this.persistEvents();
     this.persistSalons();
 
-    const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    const now = Date.now();
+    const msgId = 'msg_' + now + '_' + Math.random().toString(36).substr(2, 9);
     this.processedCloudMsgIds.add(msgId);
 
     const payload = {
       type: 'GUEST_DELETED',
-      msgId: msgId,
+      msgId,
       eventId: activeEvId,
       guestId: guest.id,
       guestToken: guest.qrCodeToken,
       fullName: guest.fullName,
       tableName: guest.assignedTableName,
-      timestamp: Date.now()
+      timestamp: now
     };
 
-    try {
-      if (typeof BroadcastChannel !== 'undefined') {
-        const bc = new BroadcastChannel('evenpass_invitations_channel');
-        bc.postMessage(payload);
-      }
-    } catch (e) {}
-
-    try {
-      fetch(this.CLOUD_SYNC_RELAY, {
-        method: 'POST',
-        headers: { 'Title': 'EvenPass Guest Deleted', 'Tags': 'guest,delete' },
-        body: JSON.stringify(payload)
-      }).catch(() => {});
-    } catch (e) {}
+    this.dispatchCloudMessage('EvenPass Guest Deleted', 'guest,delete', payload);
 
     try {
       const keys = [`evenpass_event_${activeEvId}_guests_db`, activeEvId === 6 ? 'evenpass_luis_gerardo_guests_db' : null].filter(Boolean) as string[];
@@ -1774,17 +1925,18 @@ export class EventService {
         if (raw) {
           const list = JSON.parse(raw);
           if (Array.isArray(list)) {
-            const filtered = list.filter((item: any) => 
-              !( (guest.qrCodeToken && item.token === guest.qrCodeToken) ||
-                 (guest.fullName && item.fullName && item.fullName.toLowerCase().trim() === guest.fullName.toLowerCase().trim()) )
+            const filtered = list.filter((item: any) =>
+              !((guest.qrCodeToken && item.token === guest.qrCodeToken) ||
+                (guest.fullName && item.fullName && this.normalizeName(item.fullName) === this.normalizeName(guest.fullName)))
             );
             localStorage.setItem(k, JSON.stringify(filtered));
           }
         }
       });
-      localStorage.setItem('evenpass_luis_gerardo_updated_tick', String(Date.now()));
+      localStorage.setItem('evenpass_luis_gerardo_updated_tick', String(now));
     } catch (e) {}
 
+    this.broadcastFullStateToCloud(activeEvId);
     this.notificationService.show('info', 'Invitado Eliminado', `"${guest.fullName}" removido y lugar liberado.`);
   }
 
@@ -1793,24 +1945,21 @@ export class EventService {
       this.notificationService.show('warning', 'Evento Concluido', 'Este evento ha finalizado. La asignación de mesas está bloqueada.');
       return;
     }
-    const curSalon = this.currentSalon();
-    const table = curSalon?.tables.find(t => t.id === tableId);
-    if (!table) return;
-
     const guest = this.allGuests().find(g => g.id === guestId);
     if (!guest) return;
 
-    const seatedInTarget = this.allGuests().filter(
-      g => g.eventId === this.activeEventId() && g.assignedTableId === tableId && g.id !== guestId && g.status !== 'DECLINED'
-    );
-    const occupiedSeats = seatedInTarget.reduce((sum, g) => sum + g.totalPasses, 0);
+    const evId = guest.eventId || this.activeEventId();
+    const curSalon = this.findSalonForEvent(evId);
+    const table = curSalon?.tables.find(t => t.id === tableId);
+    if (!table) return;
+
+    const occupiedSeats = this.getGuestOccupiedSeatsForTable(this.allGuests(), evId, table, guestId);
     const isOver = (occupiedSeats + guest.totalPasses) > table.capacity;
 
-    // --- CAPACITY ENFORCEMENT: Block overcapacity unless explicitly forced ---
     if (isOver && !forceOverride) {
       this.notificationService.show(
         'error',
-        '⛔ Mesa al Límite de Aforo',
+        'Mesa al Límite de Aforo',
         `"${table.tableName}" ya tiene ${occupiedSeats}/${table.capacity} lugares ocupados. "${guest.fullName}" (${guest.totalPasses} pases) no cabe. Crea otra mesa o libera espacio.`
       );
       return;
@@ -1828,15 +1977,16 @@ export class EventService {
       }
       return g;
     }));
-    this.refreshAllTableOccupancies();
-    this.broadcastTableReassignment(guestId, tableId, table.tableName);
+    this.refreshAllTableOccupancies(evId);
     this.persistGuests();
     this.persistSalons();
+    this.broadcastTableReassignment(guestId, tableId, table.tableName, now);
+    this.broadcastFullStateToCloud(evId);
 
     if (isOver) {
       this.notificationService.show(
         'warning',
-        '⚠️ Mesa Asignada (Forzado)',
+        'Mesa Asignada (Forzado)',
         `"${guest.fullName}" asignado a ${table.tableName}. Mesa en SOBRECUPO (${occupiedSeats + guest.totalPasses}/${table.capacity}p).`
       );
     } else {
@@ -1849,6 +1999,10 @@ export class EventService {
       this.notificationService.show('warning', 'Evento Concluido', 'Este evento ha finalizado. La asignación de mesas está bloqueada.');
       return;
     }
+    const guest = this.allGuests().find(g => g.id === guestId);
+    if (!guest) return;
+    const evId = guest.eventId || this.activeEventId();
+
     const now = Date.now();
     this.allGuests.update(list => list.map(g => {
       if (g.id === guestId) {
@@ -1861,14 +2015,15 @@ export class EventService {
       }
       return g;
     }));
-    this.refreshAllTableOccupancies();
-    this.broadcastTableReassignment(guestId, undefined, 'Sin asignar');
+    this.refreshAllTableOccupancies(evId);
     this.persistGuests();
     this.persistSalons();
+    this.broadcastTableReassignment(guestId, undefined, 'Sin asignar', now);
+    this.broadcastFullStateToCloud(evId);
     this.notificationService.show('info', 'Invitado Liberado', 'El comensal quedó sin mesa asignada.');
   }
 
-  // --- MANUAL REASSIGNMENT TO SPECIFIC TABLE (UPON GUEST REQUEST) ---
+  // --- MANUAL REASSIGNMENT TO SPECIFIC TABLE ---
   reassignGuestToTable(guestId: number, targetTableId: number, forceOverride: boolean = false): boolean {
     if (this.isEventLocked()) {
       this.notificationService.show('warning', 'Evento Concluido', 'Este evento ha finalizado. La reasignación de mesas está deshabilitada.');
@@ -1880,24 +2035,21 @@ export class EventService {
       return false;
     }
 
-    const curSalon = this.currentSalon();
+    const evId = guest.eventId || this.activeEventId();
+    const curSalon = this.findSalonForEvent(evId);
     const targetTable = curSalon?.tables.find(t => t.id === targetTableId);
     if (!targetTable) {
       this.notificationService.show('error', 'Error', 'Mesa de destino no encontrada.');
       return false;
     }
 
-    const seatedInTarget = this.allGuests().filter(g => 
-      g.eventId === this.activeEventId() && g.assignedTableId === targetTableId && g.id !== guestId && g.status !== 'DECLINED'
-    );
-    const occupiedSeats = seatedInTarget.reduce((sum, g) => sum + g.totalPasses, 0);
+    const occupiedSeats = this.getGuestOccupiedSeatsForTable(this.allGuests(), evId, targetTable, guestId);
     const isOver = (occupiedSeats + guest.totalPasses) > targetTable.capacity;
 
-    // --- CAPACITY ENFORCEMENT: Block overcapacity unless explicitly forced ---
     if (isOver && !forceOverride) {
       this.notificationService.show(
         'error',
-        '⛔ Mesa al Límite de Aforo',
+        'Mesa al Límite de Aforo',
         `"${targetTable.tableName}" ya tiene ${occupiedSeats}/${targetTable.capacity} lugares. No se puede agregar a "${guest.fullName}" (${guest.totalPasses} pases). Libera espacio o crea otra mesa.`
       );
       return false;
@@ -1916,15 +2068,16 @@ export class EventService {
       return g;
     }));
 
-    this.refreshAllTableOccupancies();
-    this.broadcastTableReassignment(guestId, targetTable.id, targetTable.tableName);
+    this.refreshAllTableOccupancies(evId);
     this.persistGuests();
     this.persistSalons();
+    this.broadcastTableReassignment(guestId, targetTable.id, targetTable.tableName, now);
+    this.broadcastFullStateToCloud(evId);
 
     if (isOver) {
       this.notificationService.show(
         'warning',
-        '⚠️ Comensal Reubicado (Forzado)',
+        'Comensal Reubicado (Forzado)',
         `"${guest.fullName}" (${guest.totalPasses} pases) movido a ${targetTable.tableName}. Mesa en SOBRECUPO (${occupiedSeats + guest.totalPasses}/${targetTable.capacity}p).`
       );
     } else {
@@ -1937,53 +2090,176 @@ export class EventService {
     return true;
   }
 
-  broadcastTableReassignment(guestId: number, newTableId?: number, newTableName?: string): void {
+  private formatGuestForSync(g: Guest): any {
+    return {
+      id: g.id,
+      fullName: g.fullName,
+      phone: g.phone || 'WhatsApp Directo',
+      passesGranted: g.totalPasses,
+      passesConfirmed: (g.status === 'CONFIRMED' || g.status === 'ATTENDED') ? g.totalPasses : 0,
+      status: g.status,
+      tableName: g.assignedTableName || 'Sin asignar',
+      token: g.qrCodeToken,
+      notes: g.dietNotes || '',
+      updatedAt: g.confirmedAt || 'Hoy',
+      manualAssignmentTimestamp: g.manualAssignmentTimestamp || 0
+    };
+  }
+
+  private dispatchCloudMessage(title: string, tags: string, payload: any): void {
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('evenpass_invitations_channel');
+        bc.postMessage(payload);
+        if (payload.type === 'NEW_GUEST') {
+          bc.postMessage({ ...payload, type: 'NEW_INVITATION' });
+        }
+      }
+    } catch (e) {}
+
+    try {
+      fetch(this.CLOUD_SYNC_RELAY, {
+        method: 'POST',
+        headers: {
+          'Title': title,
+          'Tags': tags
+        },
+        body: JSON.stringify(payload)
+      }).catch(() => {});
+    } catch (e) {}
+  }
+
+  private upsertGuestInHostPanelStorage(eventId: number, formattedGuest: any, tick: number): void {
+    try {
+      const keys = [`evenpass_event_${eventId}_guests_db`, eventId === 6 ? 'evenpass_luis_gerardo_guests_db' : null].filter(Boolean) as string[];
+      keys.forEach(k => {
+        const raw = localStorage.getItem(k);
+        const list = raw ? JSON.parse(raw) : [];
+        if (Array.isArray(list)) {
+          const idx = list.findIndex((item: any) =>
+            (formattedGuest.token && item.token === formattedGuest.token) ||
+            (formattedGuest.fullName && item.fullName && this.normalizeName(item.fullName) === this.normalizeName(formattedGuest.fullName))
+          );
+          if (idx >= 0) {
+            list[idx] = { ...list[idx], ...formattedGuest };
+          } else {
+            list.unshift(formattedGuest);
+          }
+          localStorage.setItem(k, JSON.stringify(list));
+        }
+      });
+      localStorage.setItem('evenpass_luis_gerardo_updated_tick', String(tick));
+    } catch (e) {}
+  }
+
+  broadcastGuestUpdate(guest: Guest, actionTimestamp?: number): void {
+    const evId = guest.eventId || this.activeEventId();
+    const now = actionTimestamp || Date.now();
+    const formatted = this.formatGuestForSync(guest);
+    this.upsertGuestInHostPanelStorage(evId, formatted, now);
+
+    const msgId = 'msg_' + now + '_' + Math.random().toString(36).substr(2, 9);
+    this.processedCloudMsgIds.add(msgId);
+
+    const payload = {
+      type: 'GUEST_UPDATED',
+      msgId,
+      eventId: evId,
+      guestId: guest.id,
+      guestToken: guest.qrCodeToken,
+      fullName: guest.fullName,
+      guest: formatted,
+      timestamp: now
+    };
+    this.dispatchCloudMessage('EvenPass Guest Updated', 'guest,update', payload);
+  }
+
+  broadcastTablesSync(targetEventId?: number): void {
+    const evId = targetEventId || this.activeEventId();
+    const salon = this.findSalonForEvent(evId);
+    const ev = this.events().find(e => e.id === evId);
+    const now = Date.now();
+
+    const formattedTables = (salon?.tables || []).map(t => ({
+      id: t.id,
+      name: t.tableName,
+      capacity: t.capacity,
+      shape: t.shape,
+      tableNumber: t.tableNumber,
+      occupiedSeats: t.occupiedSeats || 0,
+      posX: t.posX,
+      posY: t.posY
+    }));
+
+    const eventMeta = ev ? {
+      id: ev.id,
+      name: ev.name,
+      hostName: ev.hostName,
+      eventType: ev.eventType,
+      eventDate: ev.eventDate,
+      venueName: ev.venueName,
+      locationAddress: ev.locationAddress,
+      status: ev.status,
+      tierPlan: ev.tierPlan,
+      hasScanner: ev.hasScanner,
+      hasCroquis: ev.hasCroquis,
+      maxCapacity: ev.maxCapacity,
+      salonId: ev.salonId,
+      salonName: salon?.name || ev.venueName,
+      totalCapacity: salon?.totalCapacity || ev.maxCapacity
+    } : undefined;
+
+    const msgId = 'msg_' + now + '_' + Math.random().toString(36).substr(2, 9);
+    this.processedCloudMsgIds.add(msgId);
+
+    const payload = {
+      type: 'TABLES_SYNC',
+      msgId,
+      eventId: evId,
+      allTables: formattedTables,
+      eventMeta,
+      timestamp: now
+    };
+
+    try {
+      localStorage.setItem(`evenpass_event_${evId}_tables_db`, JSON.stringify(formattedTables));
+      if (eventMeta) {
+        localStorage.setItem(`evenpass_event_${evId}_meta_db`, JSON.stringify(eventMeta));
+      }
+    } catch (e) {}
+
+    this.dispatchCloudMessage('EvenPass Tables Sync', 'tables,croquis', payload);
+  }
+
+  broadcastTableReassignment(guestId: number, newTableId?: number, newTableName?: string, actionTimestamp?: number): void {
     const guest = this.allGuests().find(g => g.id === guestId);
     if (!guest) return;
 
     const evId = guest.eventId || this.activeEventId();
+    const targetSalon = this.findSalonForEvent(evId);
     const token = guest.qrCodeToken;
     const fullName = guest.fullName;
-    const finalTableName = newTableName !== undefined ? newTableName : 
-      ((newTableId ? this.currentSalon()?.tables.find(t => t.id === newTableId)?.tableName : undefined) || 'Sin asignar');
+    const finalTableName = newTableName !== undefined ? newTableName :
+      ((newTableId ? targetSalon?.tables.find(t => t.id === newTableId)?.tableName : undefined) || 'Sin asignar');
 
-    const now = Date.now();
+    const now = actionTimestamp || Date.now();
     const msgId = 'msg_' + now + '_' + Math.random().toString(36).substr(2, 9);
     this.processedCloudMsgIds.add(msgId);
 
     const payload = {
       type: 'TABLE_REASSIGNED',
-      msgId: msgId,
+      msgId,
       eventId: evId,
       guestId: guest.id,
       guestToken: token,
-      fullName: fullName,
+      fullName,
       newTableName: finalTableName,
-      newTableId: newTableId,
+      newTableId,
       timestamp: now
     };
 
-    // 1. Broadcast via BroadcastChannel
-    try {
-      if (typeof BroadcastChannel !== 'undefined') {
-        const bc = new BroadcastChannel('evenpass_invitations_channel');
-        bc.postMessage(payload);
-      }
-    } catch (e) {}
+    this.dispatchCloudMessage('EvenPass Table Reassigned', 'chair,seating', payload);
 
-    // 2. Broadcast to Cloud Relay (Netlify / mobile / external host panel)
-    try {
-      fetch(this.CLOUD_SYNC_RELAY, {
-        method: 'POST',
-        headers: {
-          'Title': 'EvenPass Table Reassigned',
-          'Tags': 'chair,seating'
-        },
-        body: JSON.stringify(payload)
-      }).catch(() => {});
-    } catch (e) {}
-
-    // 3. Update localStorage copies for Netlify & host panel
     try {
       const storageKeys = [
         `evenpass_event_${evId}_guests_db`,
@@ -1997,8 +2273,8 @@ export class EventService {
           if (Array.isArray(list)) {
             let matched = false;
             list.forEach((item: any) => {
-              if ((token && item.token === token) || 
-                  (item.fullName && item.fullName.toLowerCase().trim() === fullName.toLowerCase().trim())) {
+              if ((token && item.token === token) ||
+                  (item.fullName && this.normalizeName(item.fullName) === this.normalizeName(fullName))) {
                 item.tableName = finalTableName;
                 item.manualAssignmentTimestamp = now;
                 matched = true;
@@ -2016,86 +2292,96 @@ export class EventService {
 
   broadcastFullStateToCloud(targetEventId?: number): void {
     const evId = targetEventId || this.activeEventId();
-    const curSalon = this.currentSalon();
+    const targetEv = this.events().find(e => e.id === evId);
+    const targetSalon = this.findSalonForEvent(evId);
     const guests = this.allGuests().filter(g => g.eventId === evId);
 
-    const formattedGuests = guests.map(g => ({
-      id: g.id,
-      fullName: g.fullName,
-      phone: g.phone || 'WhatsApp Directo',
-      passesGranted: g.totalPasses,
-      passesConfirmed: (g.status === 'CONFIRMED' || g.status === 'ATTENDED') ? g.totalPasses : 0,
-      status: g.status,
-      tableName: g.assignedTableName || 'Sin asignar',
-      token: g.qrCodeToken,
-      notes: g.dietNotes || '',
-      updatedAt: g.confirmedAt || 'Hoy',
-      manualAssignmentTimestamp: g.manualAssignmentTimestamp || Date.now()
-    }));
+    const formattedGuests = guests.map(g => this.formatGuestForSync(g));
 
-    const formattedTables = (curSalon?.tables || []).map(t => ({
+    const formattedTables = (targetSalon?.tables || []).map(t => ({
       id: t.id,
       name: t.tableName,
       capacity: t.capacity,
       shape: t.shape,
       tableNumber: t.tableNumber,
-      occupiedSeats: t.occupiedSeats || 0
+      occupiedSeats: t.occupiedSeats || 0,
+      posX: t.posX,
+      posY: t.posY
     }));
+
+    const eventMeta = targetEv ? {
+      id: targetEv.id,
+      name: targetEv.name,
+      hostName: targetEv.hostName,
+      eventType: targetEv.eventType,
+      eventDate: targetEv.eventDate,
+      venueName: targetEv.venueName,
+      locationAddress: targetEv.locationAddress,
+      status: targetEv.status,
+      tierPlan: targetEv.tierPlan,
+      hasScanner: targetEv.hasScanner,
+      hasCroquis: targetEv.hasCroquis,
+      maxCapacity: targetEv.maxCapacity,
+      salonId: targetEv.salonId,
+      salonName: targetSalon?.name || targetEv.venueName,
+      totalCapacity: targetSalon?.totalCapacity || targetEv.maxCapacity
+    } : undefined;
+
+    const now = Date.now();
+    const msgId = 'msg_full_' + now + '_' + Math.random().toString(36).substr(2, 9);
+    this.processedCloudMsgIds.add(msgId);
 
     const payload = {
       type: 'SYNC_FULL_STATE',
+      msgId,
       eventId: evId,
+      eventMeta,
       allGuests: formattedGuests,
       allTables: formattedTables,
-      timestamp: Date.now()
+      timestamp: now
     };
 
-    // 1. BroadcastChannel
-    try {
-      if (typeof BroadcastChannel !== 'undefined') {
-        const bc = new BroadcastChannel('evenpass_invitations_channel');
-        bc.postMessage(payload);
-      }
-    } catch (e) {}
-
-    // 2. Cloud Relay (Netlify / mobile / external host panel)
-    try {
-      fetch(this.CLOUD_SYNC_RELAY, {
-        method: 'POST',
-        headers: {
-          'Title': 'EvenPass Full State Sync',
-          'Tags': 'chair,seating,full_sync'
-        },
-        body: JSON.stringify(payload)
-      }).catch(() => {});
-    } catch (e) {}
-
-    // 3. Update localStorage copies
     try {
       localStorage.setItem(`evenpass_event_${evId}_guests_db`, JSON.stringify(formattedGuests));
       if (evId === 6) {
         localStorage.setItem('evenpass_luis_gerardo_guests_db', JSON.stringify(formattedGuests));
-        localStorage.setItem('evenpass_luis_gerardo_updated_tick', String(Date.now()));
+        localStorage.setItem('evenpass_luis_gerardo_updated_tick', String(now));
       }
       localStorage.setItem(`evenpass_event_${evId}_tables_db`, JSON.stringify(formattedTables));
+      if (eventMeta) {
+        localStorage.setItem(`evenpass_event_${evId}_meta_db`, JSON.stringify(eventMeta));
+      }
     } catch (e) {}
+
+    this.dispatchCloudMessage('EvenPass Full State Sync', 'chair,seating,full_sync', payload);
+  }
+
+  requestCloudFullState(eventId?: number): void {
+    const evId = eventId || this.activeEventId();
+    const now = Date.now();
+    const msgId = 'msg_req_' + now + '_' + Math.random().toString(36).substr(2, 7);
+    this.processedCloudMsgIds.add(msgId);
+    const payload = {
+      type: 'REQUEST_FULL_STATE',
+      msgId,
+      eventId: evId,
+      timestamp: now
+    };
+    this.dispatchCloudMessage('EvenPass Request State', 'cloud,sync', payload);
   }
 
   // Recalculates occupied seats for every table based on real assigned guests (all non-declined)
-  refreshAllTableOccupancies(): void {
-    const curSalon = this.currentSalon();
+  refreshAllTableOccupancies(targetEventId?: number): void {
+    const activeEvId = targetEventId || this.activeEventId();
+    const curSalon = this.findSalonForEvent(activeEvId);
     if (!curSalon) return;
-    const activeEvId = this.activeEventId();
+
     const activeGuests = this.allGuests().filter(
       g => g.eventId === activeEvId && g.status !== 'DECLINED'
     );
 
     const updatedTables = curSalon.tables.map(t => {
-      const seated = activeGuests.filter(g => 
-        (g.assignedTableId != null && Number(g.assignedTableId) === Number(t.id)) ||
-        (g.assignedTableName && g.assignedTableName.toLowerCase().trim() === t.tableName.toLowerCase().trim()) ||
-        (g.assignedTableName && new RegExp(`\\b(mesa|table)\\s*0*${t.tableNumber}\\b`, 'i').test(g.assignedTableName))
-      );
+      const seated = activeGuests.filter(g => this.isGuestAtTable(g, t));
       const totalOccupied = seated.reduce((sum, g) => sum + g.totalPasses, 0);
       return {
         ...t,
@@ -2104,7 +2390,7 @@ export class EventService {
       };
     });
 
-    this.salons.update(list => list.map(s => 
+    this.salons.update(list => list.map(s =>
       s.id === curSalon.id ? { ...s, tables: updatedTables } : s
     ));
     this.persistSalons();
@@ -2116,34 +2402,26 @@ export class EventService {
   enforceSalonCapacityAndBalance(targetEventId?: number): boolean {
     const evId = targetEventId || this.activeEventId();
     const curEv = this.events().find(e => e.id === evId) || this.selectedEvent();
-    if (!curEv) return false;
+    if (!curEv || !curEv.hasCroquis || !curEv.salonId) return false;
 
-    const salonId = curEv.salonId || 4;
-    const curSalon = this.salons().find(s => s.id === salonId);
+    const curSalon = this.salons().find(s => s.id === curEv.salonId);
     if (!curSalon || !curSalon.tables || curSalon.tables.length === 0) return false;
 
-    let tables = curSalon.tables.map(t => ({ ...t }));
-    let allGuestsCopy = this.allGuests().map(g => ({ ...g }));
+    const tables = curSalon.tables.map(t => ({ ...t }));
+    const allGuestsCopy = this.allGuests().map(g => ({ ...g }));
     const eventGuests = allGuestsCopy.filter(g => g.eventId === evId && g.status !== 'DECLINED');
 
     let modified = false;
     let tablesModified = false;
 
-    // Check every table for overcapacity
     for (const table of tables) {
-      const seated = eventGuests.filter(g => 
-        (g.assignedTableId != null && Number(g.assignedTableId) === Number(table.id)) ||
-        (g.assignedTableName && g.assignedTableName.toLowerCase().trim() === table.tableName.toLowerCase().trim()) ||
-        (g.assignedTableName && new RegExp(`\\b(mesa|table)\\s*0*${table.tableNumber}\\b`, 'i').test(g.assignedTableName))
-      );
-
+      const seated = eventGuests.filter(g => this.isGuestAtTable(g, table));
       const totalOccupied = seated.reduce((sum, g) => sum + g.totalPasses, 0);
 
       if (totalOccupied > table.capacity) {
         let currentSeats = 0;
         const overflowGuests: Guest[] = [];
 
-        // Prioritize confirmed guests and earlier assignments to stay in the table
         const sorted = [...seated].sort((a, b) => {
           if (a.status === 'CONFIRMED' && b.status !== 'CONFIRMED') return -1;
           if (b.status === 'CONFIRMED' && a.status !== 'CONFIRMED') return 1;
@@ -2158,31 +2436,25 @@ export class EventService {
           }
         }
 
-        // Reallocate each overflowing guest
         for (const overG of overflowGuests) {
-          // Find an existing table with space
           let candidate = tables.find(t => {
             if (t.id === table.id) return false;
             const tOccupied = allGuestsCopy
-              .filter(g => g.eventId === evId && g.status !== 'DECLINED' && (
-                (g.assignedTableId != null && Number(g.assignedTableId) === Number(t.id)) ||
-                (g.assignedTableName && g.assignedTableName.toLowerCase().trim() === t.tableName.toLowerCase().trim()) ||
-                (g.assignedTableName && new RegExp(`\\b(mesa|table)\\s*0*${t.tableNumber}\\b`, 'i').test(g.assignedTableName))
-              ))
+              .filter(g => g.eventId === evId && g.status !== 'DECLINED' && this.isGuestAtTable(g, t))
               .reduce((sum, g) => sum + g.totalPasses, 0);
             return (t.capacity - tOccupied) >= overG.totalPasses;
           });
 
-          // If no existing table has enough space, auto-create a new table!
           if (!candidate) {
-            const nextNum = Math.max(...tables.map(t => t.tableNumber)) + 1;
+            const nums = tables.map(t => t.tableNumber || 0);
+            const nextNum = (nums.length > 0 ? Math.max(...nums) : 0) + 1;
             const newTable: SalonTable = {
               id: Date.now() + nextNum,
               salonId: curSalon.id,
               tableNumber: nextNum,
               tableName: `Mesa ${nextNum < 10 ? '0' + nextNum : nextNum} - Auto`,
               shape: 'ROUND',
-              capacity: 10,
+              capacity: Math.max(10, overG.totalPasses),
               posX: 140 + ((tables.length) % 3) * 160,
               posY: 180 + Math.floor((tables.length) / 3) * 160,
               occupiedSeats: 0
@@ -2192,7 +2464,6 @@ export class EventService {
             tablesModified = true;
           }
 
-          // Move guest to candidate table
           const gIdx = allGuestsCopy.findIndex(item => item.id === overG.id);
           if (gIdx >= 0) {
             allGuestsCopy[gIdx] = {
@@ -2208,7 +2479,7 @@ export class EventService {
     }
 
     if (tablesModified) {
-      this.salons.update(list => list.map(s => 
+      this.salons.update(list => list.map(s =>
         s.id === curSalon.id ? { ...s, tables, totalCapacity: tables.reduce((sum, t) => sum + t.capacity, 0) } : s
       ));
       this.persistSalons();
@@ -2217,7 +2488,8 @@ export class EventService {
     if (modified) {
       this.allGuests.set(allGuestsCopy);
       this.persistGuests();
-      this.refreshAllTableOccupancies();
+      this.refreshAllTableOccupancies(evId);
+      this.broadcastTablesSync(evId);
       this.broadcastFullStateToCloud(evId);
       this.notificationService.show(
         'info',
@@ -2262,6 +2534,47 @@ export class EventService {
     };
   }
 
+  upgradeEventPlan(eventId: number, targetPlan: 'STANDARD' | 'PREMIUM'): boolean {
+    const ev = this.events().find(e => e.id === eventId);
+    if (!ev) return false;
+
+    if (targetPlan === 'PREMIUM') {
+      const check = this.canUpgradePlan(ev);
+      if (!check.allowed) {
+        this.notificationService.show('error', 'Actualización Bloqueada', check.message);
+        return false;
+      }
+      const assignedSalonId = ev.salonId || this.activeSalonId() || this.salons()[0]?.id || 1;
+      this.events.update(list => list.map(item =>
+        item.id === eventId
+          ? { ...item, tierPlan: 'PREMIUM', hasScanner: true, hasCroquis: true, salonId: assignedSalonId }
+          : item
+      ));
+      this.activeSalonId.set(assignedSalonId);
+      this.persistEvents();
+      this.refreshAllTableOccupancies(eventId);
+      this.broadcastTablesSync(eventId);
+      this.broadcastFullStateToCloud(eventId);
+      this.notificationService.show('success', 'Plan Actualizado a Premium Pro', `"${ev.name}" ahora tiene Croquis CAD y Escáner QR habilitados.`);
+      return true;
+    }
+
+    if (ev.status !== 'PENDIENTE') {
+      this.notificationService.show('error', 'Actualización Bloqueada', `El plan está bloqueado porque el evento está "${ev.status}".`);
+      return false;
+    }
+
+    this.events.update(list => list.map(item =>
+      item.id === eventId
+        ? { ...item, tierPlan: 'STANDARD', hasScanner: true }
+        : item
+    ));
+    this.persistEvents();
+    this.broadcastFullStateToCloud(eventId);
+    this.notificationService.show('success', 'Plan Actualizado a Standard', `"${ev.name}" ahora cuenta con Escáner QR de acceso.`);
+    return true;
+  }
+
   // --- DYNAMIC CUSTOM TEMPLATES REGISTRATION ---
   addCustomTemplate(tpl: Partial<InvitationTemplate>): void {
     const newTpl: InvitationTemplate = {
@@ -2288,17 +2601,35 @@ export class EventService {
     this.notificationService.show('success', 'Recinto Actualizado', 'Dimensiones y datos del salón guardados.');
   }
 
+  setSalonBlueprintBackground(salonId: number, imageUrl: string, descriptionNote?: string): void {
+    this.salons.update(list => list.map(s => {
+      if (s.id === salonId) {
+        return {
+          ...s,
+          type: 'CUSTOM',
+          customCroquisUrl: imageUrl,
+          description: descriptionNote || s.description
+        };
+      }
+      return s;
+    }));
+    this.persistSalons();
+    this.notificationService.show('success', 'Plano PDF Aplicado al Croquis', 'El plano arquitectónico quedó guardado como lienzo interactivo del salón.');
+  }
+
   // --- MULTI-SALON OPERATIONS ---
   selectSalon(salonId: number): void {
     const found = this.salons().find(s => s.id === salonId);
     if (found) {
       this.activeSalonId.set(salonId);
-      // Also update active event's salon link
       const activeEv = this.selectedEvent();
-      if (activeEv) {
-        this.events.update(list => list.map(ev => 
+      if (activeEv && activeEv.hasCroquis) {
+        this.events.update(list => list.map(ev =>
           ev.id === activeEv.id ? { ...ev, salonId } : ev
         ));
+        this.persistEvents();
+        this.broadcastTablesSync(activeEv.id);
+        this.broadcastFullStateToCloud(activeEv.id);
       }
       this.notificationService.show('info', 'Salón Seleccionado', `Ahora visualizando: ${found.name}`);
     }
@@ -2326,19 +2657,23 @@ export class EventService {
   }
 
   importCroquisWithAiDetection(
-    salonName: string, 
-    type: SalonType = 'BANQUET_IMPERIAL', 
+    salonName: string,
+    type: SalonType = 'CUSTOM',
     tableCount: number = 10,
-    imageUrl?: string
+    imageUrl?: string,
+    detectedSpots?: { x: number; y: number }[]
   ): Salon {
     const newId = Date.now();
     const generatedTables: SalonTable[] = [];
 
-    // Dynamically generate layout coordinates based on AI detected table count
     for (let i = 1; i <= tableCount; i++) {
       const isRound = i % 2 !== 0;
       const col = (i - 1) % 4;
       const row = Math.floor((i - 1) / 4);
+      const spot = detectedSpots && detectedSpots[i - 1];
+      const posX = spot ? spot.x : (130 + col * 185);
+      const posY = spot ? spot.y : (145 + row * 140);
+
       generatedTables.push({
         id: newId + i,
         salonId: newId,
@@ -2346,8 +2681,8 @@ export class EventService {
         tableName: `Mesa ${i < 10 ? '0' + i : i} (${isRound ? 'Redonda' : 'Imperial'})`,
         shape: isRound ? 'ROUND' : 'RECTANGULAR',
         capacity: isRound ? 10 : 8,
-        posX: 80 + (col * 130),
-        posY: 180 + (row * 120),
+        posX,
+        posY,
         occupiedSeats: 0
       });
     }
@@ -2357,19 +2692,34 @@ export class EventService {
     const importedSalon: Salon = {
       id: newId,
       name: salonName || 'Recinto Importado CAD',
-      type,
+      type: imageUrl ? 'CUSTOM' : type,
       totalCapacity: calculatedCapacity,
       widthMeters: 35,
       lengthMeters: 25,
-      description: `Salón generado por el motor de auto-detección IA a partir del plano arquitectónico (${tableCount} mesas detectadas).`,
+      description: imageUrl
+        ? `Plano arquitectónico PDF/Imagen cargado con ${tableCount} mesas configuradas sobre el trazo real.`
+        : `Salón generado por el motor CAD con ${tableCount} mesas.`,
       customCroquisUrl: imageUrl,
       tables: generatedTables
     };
 
     this.salons.update(list => [...list, importedSalon]);
     this.persistSalons();
-    this.selectSalon(newId);
-    this.notificationService.show('success', 'Detección CAD Exitosa', `Se detectaron ${tableCount} mesas con capacidad total de ${calculatedCapacity} personas.`);
+
+    const activeEv = this.selectedEvent();
+    if (activeEv && activeEv.hasCroquis) {
+      this.events.update(list => list.map(ev =>
+        ev.id === activeEv.id ? { ...ev, salonId: newId, numTables: generatedTables.length } : ev
+      ));
+      this.activeSalonId.set(newId);
+      this.persistEvents();
+      this.broadcastTablesSync(activeEv.id);
+      this.broadcastFullStateToCloud(activeEv.id);
+    } else {
+      this.activeSalonId.set(newId);
+    }
+
+    this.notificationService.show('success', 'Plano CAD Cargado', `Se generaron ${tableCount} mesas con capacidad de ${calculatedCapacity} personas sobre tu plano.`);
     return importedSalon;
   }
 
@@ -2384,7 +2734,10 @@ export class EventService {
     const rawShape = String(table.shape || 'ROUND').toUpperCase();
     const normalizedShape: 'ROUND' | 'RECTANGULAR' = (rawShape.includes('RECT') || rawShape.includes('IMPERIAL')) ? 'RECTANGULAR' : 'ROUND';
 
-    const newTableNumber = (cur.tables.length > 0) ? Math.max(...cur.tables.map(t => t.tableNumber)) + 1 : 1;
+    const existingNumbers = cur.tables.map(t => t.tableNumber || 0);
+    const newTableNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1;
+    const idx = cur.tables.length;
+
     const newTable: SalonTable = {
       id: Date.now(),
       salonId: cur.id,
@@ -2392,18 +2745,27 @@ export class EventService {
       tableName: table.tableName || `Mesa ${newTableNumber < 10 ? '0' + newTableNumber : newTableNumber}`,
       shape: normalizedShape,
       capacity: table.capacity || 10,
-      posX: table.posX || 250,
-      posY: table.posY || 300,
+      posX: table.posX !== undefined ? table.posX : (140 + (idx % 4) * 180),
+      posY: table.posY !== undefined ? table.posY : (175 + Math.floor(idx / 4) * 145),
       occupiedSeats: 0
     };
 
     const updatedTables = [...cur.tables, newTable];
-    this.salons.update(list => list.map(s => 
-      s.id === cur.id ? { ...s, tables: updatedTables, totalCapacity: s.totalCapacity + newTable.capacity } : s
+    const nextCap = updatedTables.reduce((sum, t) => sum + t.capacity, 0);
+    this.salons.update(list => list.map(s =>
+      s.id === cur.id ? { ...s, tables: updatedTables, totalCapacity: nextCap } : s
     ));
     this.persistSalons();
-    this.broadcastFullStateToCloud();
-    this.notificationService.show('success', 'Mesa Creada', `Mesa ${newTable.tableNumber} (${normalizedShape === 'RECTANGULAR' ? 'Imperial / Rectangular' : 'Redonda'}) añadida al salón actual.`);
+
+    const activeEvId = this.activeEventId();
+    this.events.update(list => list.map(ev =>
+      ev.salonId === cur.id ? { ...ev, numTables: updatedTables.length } : ev
+    ));
+    this.persistEvents();
+    this.broadcastTablesSync(activeEvId);
+    this.broadcastFullStateToCloud(activeEvId);
+
+    this.notificationService.show('success', 'Mesa Creada', `${newTable.tableName} (${normalizedShape === 'RECTANGULAR' ? 'Imperial / Rectangular' : 'Redonda'}) añadida al salón actual.`);
     return newTable;
   }
 
@@ -2417,23 +2779,47 @@ export class EventService {
     const cur = this.currentSalon();
     if (!cur) return;
 
+    const prevTable = cur.tables.find(t => t.id === tableId);
+    if (!prevTable) return;
+
     const normalizedChanges: Partial<SalonTable> = { ...changes };
     if (changes.shape) {
       const rawShape = String(changes.shape).toUpperCase();
       normalizedChanges.shape = (rawShape.includes('RECT') || rawShape.includes('IMPERIAL')) ? 'RECTANGULAR' : 'ROUND';
     }
 
-    const updatedTables = cur.tables.map(t => 
+    const updatedTables = cur.tables.map(t =>
       t.id === tableId ? { ...t, ...normalizedChanges } : t
     );
+    const totalCapacity = updatedTables.reduce((sum, t) => sum + t.capacity, 0);
 
-    this.salons.update(list => list.map(s => 
-      s.id === cur.id ? { ...s, tables: updatedTables } : s
+    this.salons.update(list => list.map(s =>
+      s.id === cur.id ? { ...s, tables: updatedTables, totalCapacity } : s
     ));
+
+    const renamed = changes.tableName && changes.tableName !== prevTable.tableName;
+    if (renamed) {
+      const now = Date.now();
+      this.allGuests.update(list => list.map(g =>
+        this.isGuestAtTable(g, prevTable)
+          ? { ...g, assignedTableId: tableId, assignedTableName: changes.tableName, manualAssignmentTimestamp: now }
+          : g
+      ));
+      this.persistGuests();
+    }
+
+    const activeEvId = this.activeEventId();
+    this.refreshAllTableOccupancies(activeEvId);
     this.persistSalons();
-    this.broadcastFullStateToCloud();
+
+    if (changes.capacity !== undefined && changes.capacity < prevTable.capacity) {
+      this.enforceSalonCapacityAndBalance(activeEvId);
+    }
+
     if (!silent) {
-      this.notificationService.show('info', 'Mesa Modificada', 'Cambios guardados en la mesa.');
+      this.broadcastTablesSync(activeEvId);
+      this.broadcastFullStateToCloud(activeEvId);
+      this.notificationService.show('info', 'Mesa Modificada', 'Cambios guardados y sincronizados.');
     }
   }
 
@@ -2446,21 +2832,31 @@ export class EventService {
     if (!cur) return;
 
     const targetTable = cur.tables.find(t => t.id === tableId);
+    if (!targetTable) return;
     const updatedTables = cur.tables.filter(t => t.id !== tableId);
-    
-    // Unassign guests sitting at this table
-    this.allGuests.update(list => list.map(g => 
-      (g.assignedTableId === tableId || (targetTable && g.assignedTableName === targetTable.tableName))
-        ? { ...g, assignedTableId: undefined, assignedTableName: undefined }
+    const now = Date.now();
+
+    this.allGuests.update(list => list.map(g =>
+      this.isGuestAtTable(g, targetTable)
+        ? { ...g, assignedTableId: undefined, assignedTableName: undefined, manualAssignmentTimestamp: now }
         : g
     ));
 
-    this.salons.update(list => list.map(s => 
-      s.id === cur.id ? { ...s, tables: updatedTables, totalCapacity: Math.max(0, s.totalCapacity - (targetTable?.capacity || 0)) } : s
+    const totalCapacity = updatedTables.reduce((sum, t) => sum + t.capacity, 0);
+    this.salons.update(list => list.map(s =>
+      s.id === cur.id ? { ...s, tables: updatedTables, totalCapacity } : s
     ));
     this.persistSalons();
     this.persistGuests();
-    this.broadcastFullStateToCloud();
+
+    const activeEvId = this.activeEventId();
+    this.events.update(list => list.map(ev =>
+      ev.salonId === cur.id ? { ...ev, numTables: updatedTables.length } : ev
+    ));
+    this.persistEvents();
+
+    this.broadcastTablesSync(activeEvId);
+    this.broadcastFullStateToCloud(activeEvId);
     this.notificationService.show('info', 'Mesa Removida', 'Mesa eliminada del plano y comensales desasignados.');
   }
 
@@ -2485,6 +2881,8 @@ export class EventService {
     this.events.update(list => list.map(ev => 
       ev.id === activeEv.id ? { ...ev, itinerary: updatedItinerary } : ev
     ));
+    this.persistEvents();
+    this.broadcastFullStateToCloud(activeEv.id);
   }
 
   shiftItineraryTimes(minutes: number): void {
@@ -2525,6 +2923,8 @@ export class EventService {
     this.events.update(list => list.map(ev => 
       ev.id === activeEv.id ? { ...ev, itinerary: updatedItinerary } : ev
     ));
+    this.persistEvents();
+    this.broadcastFullStateToCloud(activeEv.id);
 
     const sign = minutes > 0 ? `+${minutes}` : `${minutes}`;
     this.notificationService.show('warning', 'Itinerario Desfasado', `Se ajustaron los momentos futuros en ${sign} minutos.`);
@@ -2551,6 +2951,8 @@ export class EventService {
     this.events.update(list => list.map(ev => 
       ev.id === activeEv.id ? { ...ev, itinerary: updated } : ev
     ));
+    this.persistEvents();
+    this.broadcastFullStateToCloud(activeEv.id);
     this.notificationService.show('success', 'Hito Creado', `"${newMilestone.title}" agregado al itinerario.`);
   }
 
@@ -2566,12 +2968,15 @@ export class EventService {
     this.events.update(list => list.map(ev => 
       ev.id === activeEv.id ? { ...ev, itinerary: updated } : ev
     ));
+    this.persistEvents();
+    this.broadcastFullStateToCloud(activeEv.id);
     this.notificationService.show('info', 'Hito Eliminado', 'Momento removido del itinerario.');
   }
 
   // --- SYSTEM CONFIGURATION ---
   updateSystemConfig(config: Partial<SystemConfig>): void {
     this.systemConfig.update(prev => ({ ...prev, ...config }));
+    try { localStorage.setItem('evenpass_system_config_v1', JSON.stringify(this.systemConfig())); } catch {}
     this.notificationService.show('success', 'Configuración Guardada', 'Parámetros del sistema actualizados correctamente.');
   }
 
@@ -2604,11 +3009,15 @@ export class EventService {
     this.events.update(list => list.map(ev => 
       ev.id === eventId ? { ...ev, status } : ev
     ));
+    this.persistEvents();
+    this.broadcastFullStateToCloud(eventId);
     this.notificationService.show('info', 'Estado Actualizado', `El evento ha cambiado a estado: ${status}`);
   }
 
   addEvent(event: Partial<EventItem>): EventItem {
     const newId = Date.now();
+    const hasCroquis = event.hasCroquis !== undefined ? event.hasCroquis : true;
+    const hasScanner = event.hasScanner !== undefined ? event.hasScanner : true;
     const newEv: EventItem = {
       id: newId,
       name: event.name || 'Nuevo Evento',
@@ -2616,14 +3025,15 @@ export class EventService {
       description: event.description || 'Evento registrado en EvenPass OS.',
       eventType: event.eventType || 'Boda',
       eventDate: event.eventDate || new Date().toISOString(),
+      createdAt: event.createdAt || new Date().toISOString(),
       venueName: event.venueName || 'Salón Principal',
       locationAddress: event.locationAddress || 'Ubicación por definir',
       maxCapacity: event.maxCapacity || 200,
-      salonId: event.salonId || 1,
+      salonId: hasCroquis ? (event.salonId || 1) : undefined,
       tierPlan: event.tierPlan || 'PREMIUM',
-      hasCroquis: event.hasCroquis !== undefined ? event.hasCroquis : true,
-      hasScanner: event.hasScanner !== undefined ? event.hasScanner : true,
-      numTables: event.numTables || 10,
+      hasCroquis,
+      hasScanner,
+      numTables: hasCroquis ? (event.numTables || 10) : 0,
       status: event.status || 'PENDIENTE',
       templateSlug: event.templateSlug || 'miriam-isidro',
       invitationMode: event.invitationMode || 'TEMPLATE',
@@ -2645,7 +3055,13 @@ export class EventService {
     };
     this.events.update(list => [newEv, ...list]);
     this.activeEventId.set(newId);
-    this.notificationService.show('success', 'Evento Creado', `Evento "${newEv.name}" registrado exitosamente.`);
+    if (newEv.salonId) {
+      this.activeSalonId.set(newEv.salonId);
+    }
+    this.persistEvents();
+    this.broadcastTablesSync(newEv.id);
+    this.broadcastFullStateToCloud(newEv.id);
+    this.notificationService.show('success', 'Evento Creado', `Evento "${newEv.name}" registrado y sincronizado en vivo.`);
     return newEv;
   }
 
@@ -2776,9 +3192,13 @@ export class EventService {
   private processedCloudMsgIds = new Set<string>();
   private isFirstCloudPoll = true;
   private lastStorageTick: string | null = null;
+  private sseSource: EventSource | null = null;
+  private sseReconnectTimer: any = null;
+  private lastFullStateReplyAt = new Map<number, number>();
+  private incomingRemoteTableSync = false;
 
   listenForDigitalInvitations(): void {
-    // 1. Escuchar por BroadcastChannel nativo (entre pestañas del mismo navegador)
+    // 1. BroadcastChannel nativo entre pestañas del mismo origen
     try {
       if (typeof BroadcastChannel !== 'undefined') {
         const bc = new BroadcastChannel('evenpass_invitations_channel');
@@ -2786,7 +3206,7 @@ export class EventService {
           if (event && event.data) {
             if (event.data.msgId) {
               if (this.processedCloudMsgIds.has(event.data.msgId)) return;
-              this.processedCloudMsgIds.add(event.data.msgId);
+              this.trackProcessedMsgId(event.data.msgId);
             }
             this.ngZone.run(() => {
               this.processSyncMessage(event.data, true);
@@ -2796,82 +3216,142 @@ export class EventService {
       }
     } catch (e) {}
 
-    // 2. Conectar flujo SSE en tiempo real hacia la nube (Netlify <-> EvenPass OS)
+    // 2. Flujo SSE en tiempo real hacia la nube (Netlify <-> EvenPass OS) con auto-reconciliación
     this.connectCloudRealtimeStream();
 
-    // 3. Auto-sincronización periódica de respaldo cada 3.5 segundos
+    // 3. Auto-sincronización periódica de respaldo cada 3 segundos
     setInterval(() => {
       this.pollCloudSyncUpdates();
       this.pollLocalStorageAllEvents();
-    }, 3500);
+    }, 3000);
 
-    // Consulta inicial inmediata
+    // 4. Consulta inicial inmediata + solicitud de cambios recientes
     this.pollCloudSyncUpdates();
     this.pollLocalStorageAllEvents();
+
+    setTimeout(() => {
+      const evId = this.activeEventId();
+      if (evId) {
+        this.broadcastFullStateToCloud(evId);
+      }
+    }, 450);
+  }
+
+  private trackProcessedMsgId(id: string): void {
+    this.processedCloudMsgIds.add(id);
+    if (this.processedCloudMsgIds.size > 600) {
+      const first = this.processedCloudMsgIds.values().next().value;
+      if (first) this.processedCloudMsgIds.delete(first);
+    }
+  }
+
+  private async unwrapCloudPacket(raw: any): Promise<any | null> {
+    if (!raw || typeof raw !== 'object') return null;
+
+    if (raw.attachment && raw.attachment.url) {
+      try {
+        const res = await fetch(raw.attachment.url, { mode: 'cors', cache: 'no-store' });
+        if (res.ok) {
+          const text = await res.text();
+          return JSON.parse(text);
+        }
+      } catch (e) {}
+    }
+
+    if (raw.message && typeof raw.message === 'string') {
+      const trimmed = raw.message.trim();
+      if (trimmed.startsWith('{')) {
+        try {
+          return JSON.parse(trimmed);
+        } catch (e) {
+          return null;
+        }
+      }
+    }
+
+    return null;
   }
 
   private connectCloudRealtimeStream(): void {
     try {
       if (typeof EventSource === 'undefined') return;
+      if (this.sseSource) {
+        try { this.sseSource.close(); } catch (e) {}
+        this.sseSource = null;
+      }
+
       const sse = new EventSource(`${this.CLOUD_SYNC_RELAY}/sse`);
+      this.sseSource = sse;
+
       sse.onopen = () => {
         this.cloudSyncConnected.set(true);
       };
+
       sse.onmessage = (event) => {
         try {
           const raw = JSON.parse(event.data);
           if (raw.id) {
             if (this.processedCloudMsgIds.has(raw.id)) return;
-            this.processedCloudMsgIds.add(raw.id);
-            if (this.processedCloudMsgIds.size > 500) {
-              const first = this.processedCloudMsgIds.values().next().value;
-              if (first) this.processedCloudMsgIds.delete(first);
-            }
+            this.trackProcessedMsgId(raw.id);
           }
-          if (raw.message) {
-            const data = JSON.parse(raw.message);
-            if (data.msgId && this.processedCloudMsgIds.has(data.msgId)) return;
-            if (data.msgId) this.processedCloudMsgIds.add(data.msgId);
+
+          this.unwrapCloudPacket(raw).then(data => {
+            if (!data) return;
+            if (data.msgId) {
+              if (this.processedCloudMsgIds.has(data.msgId)) return;
+              this.trackProcessedMsgId(data.msgId);
+            }
             this.ngZone.run(() => {
               this.processSyncMessage(data, true);
             });
-          }
+          }).catch(() => {});
         } catch (e) {}
       };
+
       sse.onerror = () => {
         this.cloudSyncConnected.set(false);
+        try { sse.close(); } catch (e) {}
+        this.sseSource = null;
+        if (!this.sseReconnectTimer) {
+          this.sseReconnectTimer = setTimeout(() => {
+            this.sseReconnectTimer = null;
+            this.connectCloudRealtimeStream();
+          }, 4000);
+        }
       };
     } catch (e) {}
   }
 
   private pollCloudSyncUpdates(): void {
-    const timeParam = this.isFirstCloudPoll ? 'since=1h' : 'since=30s';
+    const timeParam = this.isFirstCloudPoll ? 'since=6h' : 'since=45s';
+    const isInitial = this.isFirstCloudPoll;
     this.isFirstCloudPoll = false;
 
-    fetch(`${this.CLOUD_SYNC_RELAY}/json?poll=1&${timeParam}`, { method: 'GET', mode: 'cors' })
-      .then(res => res.ok ? res.text() : '')
-      .then(text => {
+    fetch(`${this.CLOUD_SYNC_RELAY}/json?poll=1&${timeParam}`, { method: 'GET', mode: 'cors', cache: 'no-store' })
+      .then(res => {
+        if (res.ok) this.cloudSyncConnected.set(true);
+        return res.ok ? res.text() : '';
+      })
+      .then(async text => {
         if (!text) return;
         const lines = text.trim().split('\n');
         for (const line of lines) {
+          if (!line.trim()) continue;
           try {
             const parsed = JSON.parse(line);
             if (parsed.id) {
               if (this.processedCloudMsgIds.has(parsed.id)) continue;
-              this.processedCloudMsgIds.add(parsed.id);
-              if (this.processedCloudMsgIds.size > 500) {
-                const first = this.processedCloudMsgIds.values().next().value;
-                if (first) this.processedCloudMsgIds.delete(first);
-              }
+              this.trackProcessedMsgId(parsed.id);
             }
-            if (parsed.message) {
-              const data = JSON.parse(parsed.message);
-              if (data.msgId && this.processedCloudMsgIds.has(data.msgId)) continue;
-              if (data.msgId) this.processedCloudMsgIds.add(data.msgId);
-              this.ngZone.run(() => {
-                this.processSyncMessage(data, false);
-              });
+            const data = await this.unwrapCloudPacket(parsed);
+            if (!data) continue;
+            if (data.msgId) {
+              if (this.processedCloudMsgIds.has(data.msgId)) continue;
+              this.trackProcessedMsgId(data.msgId);
             }
+            this.ngZone.run(() => {
+              this.processSyncMessage(data, !isInitial);
+            });
           } catch (e) {}
         }
       })
@@ -2882,13 +3362,12 @@ export class EventService {
     try {
       const currentTick = localStorage.getItem('evenpass_luis_gerardo_updated_tick');
       if (currentTick && currentTick === this.lastStorageTick) {
-        return; // Sin cambios locales recientes
+        return;
       }
       this.lastStorageTick = currentTick;
 
-      // Monitorear todos los eventos registrados
       this.events().forEach(ev => {
-        const raw = localStorage.getItem(`evenpass_event_${ev.id}_guests_db`) || 
+        const raw = localStorage.getItem(`evenpass_event_${ev.id}_guests_db`) ||
                     (ev.id === 6 ? localStorage.getItem('evenpass_luis_gerardo_guests_db') : null);
         if (raw) {
           const list = JSON.parse(raw);
@@ -2900,45 +3379,128 @@ export class EventService {
     } catch (e) {}
   }
 
+  private mergeRemoteTablesIntoSalon(eventId: number, remoteTables: any[], notify: boolean = false): void {
+    if (!Array.isArray(remoteTables) || remoteTables.length === 0) return;
+    const targetSalon = this.findSalonForEvent(eventId) ||
+      (eventId === 6 ? this.salons().find(s => s.id === 4) : undefined);
+    if (!targetSalon) return;
+
+    this.incomingRemoteTableSync = true;
+    try {
+      let changed = false;
+      const existingById = new Map<number, SalonTable>();
+      const existingByNum = new Map<number, SalonTable>();
+      targetSalon.tables.forEach(t => {
+        existingById.set(Number(t.id), t);
+        existingByNum.set(Number(t.tableNumber), t);
+      });
+
+      const mergedTables: SalonTable[] = [...targetSalon.tables];
+
+      remoteTables.forEach((rt, idx) => {
+        const rtId = Number(rt.id);
+        const rtNum = Number(rt.tableNumber || (idx + 1));
+        const rawShape = String(rt.shape || 'ROUND').toUpperCase();
+        const normalizedShape: 'ROUND' | 'RECTANGULAR' =
+          (rawShape.includes('RECT') || rawShape.includes('IMPERIAL')) ? 'RECTANGULAR' : 'ROUND';
+        const rtName = rt.name || rt.tableName || `Mesa ${rtNum < 10 ? '0' + rtNum : rtNum}`;
+        const rtCap = Number(rt.capacity || 10);
+
+        const match = (!isNaN(rtId) ? existingById.get(rtId) : undefined) ||
+          mergedTables.find(t => this.normalizeName(t.tableName) === this.normalizeName(rtName)) ||
+          existingByNum.get(rtNum);
+
+        if (match) {
+          const mIdx = mergedTables.findIndex(t => t.id === match.id);
+          if (mIdx >= 0 && (
+            mergedTables[mIdx].tableName !== rtName ||
+            mergedTables[mIdx].capacity !== rtCap ||
+            mergedTables[mIdx].shape !== normalizedShape
+          )) {
+            mergedTables[mIdx] = {
+              ...mergedTables[mIdx],
+              tableName: rtName,
+              capacity: rtCap,
+              shape: normalizedShape
+            };
+            changed = true;
+          }
+        } else {
+          const newT: SalonTable = {
+            id: (!isNaN(rtId) && rtId > 0) ? rtId : (Date.now() + idx + 1),
+            salonId: targetSalon.id,
+            tableNumber: rtNum,
+            tableName: rtName,
+            shape: normalizedShape,
+            capacity: rtCap,
+            posX: Number(rt.posX || (150 + (mergedTables.length % 4) * 165)),
+            posY: Number(rt.posY || (180 + Math.floor(mergedTables.length / 4) * 165)),
+            occupiedSeats: 0
+          };
+          mergedTables.push(newT);
+          changed = true;
+          if (notify) {
+            this.notificationService.show('info', 'Mesa Creada (Remota)', `Mesa "${newT.tableName}" añadida desde el panel del anfitrión.`);
+          }
+        }
+      });
+
+      if (changed) {
+        const totalCapacity = mergedTables.reduce((sum, t) => sum + t.capacity, 0);
+        this.salons.update(list => list.map(s =>
+          s.id === targetSalon.id ? { ...s, tables: mergedTables, totalCapacity } : s
+        ));
+        this.refreshAllTableOccupancies(eventId);
+        this.persistSalons();
+      }
+    } finally {
+      this.incomingRemoteTableSync = false;
+    }
+  }
+
   private processSyncMessage(data: any, isLive: boolean): void {
-    if (!data) return;
+    if (!data || !data.type) return;
     const targetEventId = Number(data.eventId) || 6;
+    const targetSalon = this.findSalonForEvent(targetEventId) ||
+      (targetEventId === 6 ? this.salons().find(s => s.id === 4) : undefined);
 
     if (data.type === 'TABLE_REASSIGNED') {
       const token = data.guestToken;
-      const name = data.fullName;
+      const name = data.fullName || '';
       const newTableName = data.newTableName;
       const msgTimestamp = Number(data.timestamp || 0);
 
       const curGuests = [...this.allGuests()];
-      const idx = curGuests.findIndex(g => 
-        (token && g.qrCodeToken === token) || 
-        (name && g.fullName.toLowerCase().trim() === name.toLowerCase().trim() && g.eventId === targetEventId)
+      const idx = curGuests.findIndex(g =>
+        g.eventId === targetEventId && (
+          (token && g.qrCodeToken === token) ||
+          (name && this.normalizeName(g.fullName) === this.normalizeName(name))
+        )
       );
 
       if (idx >= 0) {
         const curG = curGuests[idx];
         const curTs = Number(curG.manualAssignmentTimestamp || 0);
         if (!curTs || msgTimestamp >= curTs) {
-          const targetSalon = this.salons().find(s => s.id === (this.selectedEvent()?.salonId || 4));
           let tableId = data.newTableId;
-          if (!tableId && targetSalon && targetSalon.tables) {
-            const found = targetSalon.tables.find(t => 
-              t.tableName.toLowerCase().trim() === (newTableName || '').toLowerCase().trim() ||
-              (newTableName && newTableName.toLowerCase().includes(`mesa 0${t.tableNumber}`)) ||
-              (newTableName && newTableName.toLowerCase().includes(`mesa ${t.tableNumber}`))
+          if (!tableId && targetSalon && targetSalon.tables && newTableName && newTableName !== 'Sin asignar') {
+            const normTarget = this.normalizeName(newTableName);
+            const found = targetSalon.tables.find(t =>
+              this.normalizeName(t.tableName) === normTarget ||
+              new RegExp(`\\b(mesa|table)\\s*0*${t.tableNumber}\\b`, 'i').test(newTableName)
             );
             if (found) tableId = found.id;
           }
 
+          const unassigned = !newTableName || newTableName === 'Sin asignar';
           curGuests[idx] = {
             ...curG,
-            assignedTableName: (newTableName === 'Sin asignar' || !newTableName) ? undefined : newTableName,
-            assignedTableId: (newTableName === 'Sin asignar' || !newTableName) ? undefined : tableId,
+            assignedTableName: unassigned ? undefined : newTableName,
+            assignedTableId: unassigned ? undefined : tableId,
             manualAssignmentTimestamp: msgTimestamp || Date.now()
           };
           this.allGuests.set(curGuests);
-          this.refreshAllTableOccupancies();
+          this.refreshAllTableOccupancies(targetEventId);
           this.persistGuests();
           this.persistSalons();
 
@@ -2946,7 +3508,7 @@ export class EventService {
             this.notificationService.show(
               'info',
               'Comensal Reubicado en Vivo',
-              `"${name}" ahora está en ${newTableName || 'Sin asignar'}.`
+              `"${curG.fullName}" ahora está en ${newTableName || 'Sin asignar'}.`
             );
           }
         }
@@ -2956,26 +3518,27 @@ export class EventService {
 
     if (data.type === 'GUEST_DELETED') {
       const token = data.guestToken;
-      const name = data.fullName;
+      const name = data.fullName || '';
       const curGuests = this.allGuests();
-      const updated = curGuests.filter(g => 
-        !( (token && g.qrCodeToken === token) || 
-           (name && g.fullName.toLowerCase().trim() === name.toLowerCase().trim() && g.eventId === targetEventId) )
+      const updated = curGuests.filter(g =>
+        !(g.eventId === targetEventId && (
+          (token && g.qrCodeToken === token) ||
+          (name && this.normalizeName(g.fullName) === this.normalizeName(name))
+        ))
       );
 
       if (updated.length !== curGuests.length) {
         this.allGuests.set(updated);
-        this.refreshAllTableOccupancies();
+        this.refreshAllTableOccupancies(targetEventId);
         this.persistGuests();
         this.persistSalons();
-        
-        // Actualizar métricas del evento
+
         const evGuests = updated.filter(g => g.eventId === targetEventId);
         const confirmedCount = evGuests
           .filter(g => g.status === 'CONFIRMED' || g.status === 'ATTENDED')
           .reduce((sum, g) => sum + g.totalPasses, 0);
         const totalCount = evGuests.reduce((sum, g) => sum + g.totalPasses, 0);
-        this.events.update(list => list.map(e => 
+        this.events.update(list => list.map(e =>
           e.id === targetEventId ? { ...e, totalGuests: totalCount, confirmedGuests: confirmedCount } : e
         ));
         this.persistEvents();
@@ -2988,57 +3551,55 @@ export class EventService {
     }
 
     if (data.type === 'REQUEST_FULL_STATE') {
-      this.broadcastFullStateToCloud(targetEventId);
+      const now = Date.now();
+      const lastReply = this.lastFullStateReplyAt.get(targetEventId) || 0;
+      if (now - lastReply > 2500) {
+        this.lastFullStateReplyAt.set(targetEventId, now);
+        this.broadcastFullStateToCloud(targetEventId);
+      }
       return;
     }
 
-    if (data.type === 'NEW_GUEST' || data.type === 'NEW_INVITATION') {
-      if (data.guest) {
-        this.syncDigitalGuestsList(targetEventId, [data.guest], isLive);
-      } else if (Array.isArray(data.allGuests)) {
-        this.syncDigitalGuestsList(targetEventId, data.allGuests, isLive);
-      }
-    } else if (data.type === 'RSVP_CONFIRMED') {
-      if (data.guest) {
-        this.syncDigitalGuestsList(targetEventId, [data.guest], isLive);
-      } else if (Array.isArray(data.allGuests)) {
-        this.syncDigitalGuestsList(targetEventId, data.allGuests, isLive);
-      }
-    } else if (data.type === 'SYNC_ALL' && Array.isArray(data.guests)) {
-      this.syncDigitalGuestsList(targetEventId, data.guests, false);
-    } else if (data.type === 'AUTO_TABLE_CREATED' && data.table) {
-      // Panel del anfitrión creó una mesa automáticamente — reflejarla en EvenPass
-      const rawTable = data.table;
-      const rawShape = String(rawTable.shape || 'ROUND').toUpperCase();
-      const normalizedShape: 'ROUND' | 'RECTANGULAR' = (rawShape.includes('RECT') || rawShape.includes('IMPERIAL')) ? 'RECTANGULAR' : 'ROUND';
-      const targetSalon = this.salons().find(s => s.id === (this.selectedEvent()?.salonId || 4));
+    if (data.type === 'TABLES_SYNC' && Array.isArray(data.allTables)) {
+      this.mergeRemoteTablesIntoSalon(targetEventId, data.allTables, isLive);
+      return;
+    }
 
+    if (data.type === 'SYNC_FULL_STATE') {
+      if (data.eventMeta) {
+        this.hydrateEventAndSalonFromPayload(data.eventMeta, data.allTables, false);
+      }
+      if (Array.isArray(data.allTables)) {
+        this.mergeRemoteTablesIntoSalon(targetEventId, data.allTables, false);
+      }
+      if (Array.isArray(data.allGuests)) {
+        this.syncDigitalGuestsList(targetEventId, data.allGuests, false);
+      }
+      return;
+    }
+
+    if (data.type === 'NEW_GUEST' || data.type === 'NEW_INVITATION' || data.type === 'RSVP_CONFIRMED' || data.type === 'GUEST_UPDATED') {
+      if (data.guest) {
+        this.syncDigitalGuestsList(targetEventId, [data.guest], isLive);
+      } else if (Array.isArray(data.allGuests)) {
+        this.syncDigitalGuestsList(targetEventId, data.allGuests, isLive);
+      }
+      return;
+    }
+
+    if (data.type === 'SYNC_ALL' && Array.isArray(data.guests)) {
+      if (Array.isArray(data.allTables)) {
+        this.mergeRemoteTablesIntoSalon(targetEventId, data.allTables, false);
+      }
+      this.syncDigitalGuestsList(targetEventId, data.guests, false);
+      return;
+    }
+
+    if ((data.type === 'AUTO_TABLE_CREATED' || data.type === 'TABLE_CREATED') && data.table) {
       if (targetSalon) {
-        const alreadyExists = targetSalon.tables.some(t =>
-          t.tableName.toLowerCase().trim() === (rawTable.name || '').toLowerCase().trim() ||
-          t.id === rawTable.id
-        );
-        if (!alreadyExists) {
-          const newT: SalonTable = {
-            id: rawTable.id || Date.now(),
-            salonId: targetSalon.id,
-            tableNumber: rawTable.tableNumber || (targetSalon.tables.length + 1),
-            tableName: rawTable.name || `Mesa ${targetSalon.tables.length + 1} - Auto`,
-            shape: normalizedShape,
-            capacity: rawTable.capacity || 10,
-            posX: rawTable.posX || (150 + ((targetSalon.tables.length) % 4) * 150),
-            posY: rawTable.posY || (150 + Math.floor((targetSalon.tables.length) / 4) * 150),
-            occupiedSeats: 0
-          };
-          const updatedTables = [...targetSalon.tables, newT];
-          this.salons.update(list => list.map(s =>
-            s.id === targetSalon.id
-              ? { ...s, tables: updatedTables, totalCapacity: s.totalCapacity + newT.capacity }
-              : s
-          ));
-          this.persistSalons();
-          this.notificationService.show('info', '🪑 Mesa Creada (Remota)', `Mesa "${newT.tableName}" agregada desde el panel del anfitrión.`);
-          this.broadcastFullStateToCloud(targetEventId);
+        this.mergeRemoteTablesIntoSalon(targetEventId, [data.table], isLive);
+        if (!this.incomingRemoteTableSync) {
+          this.broadcastTablesSync(targetEventId);
         }
       }
     }
@@ -3050,119 +3611,121 @@ export class EventService {
     let changesCount = 0;
     const curGuests = [...this.allGuests()];
     const targetEv = this.events().find(e => e.id === eventId);
+    const targetSalon = this.findSalonForEvent(eventId) ||
+      (eventId === 6 ? this.salons().find(s => s.id === 4) : undefined);
 
     guestList.forEach(item => {
       const token = item.token || item.qrCodeToken;
       const name = item.fullName || item.nombre || item.name;
       if (!name) return;
 
-      const existingIdx = curGuests.findIndex(g => 
-        (token && g.qrCodeToken === token) || 
-        (g.fullName.toLowerCase().trim() === name.toLowerCase().trim() && g.eventId === eventId)
+      const existingIdx = curGuests.findIndex(g =>
+        g.eventId === eventId && (
+          (token && g.qrCodeToken === token) ||
+          (this.normalizeName(g.fullName) === this.normalizeName(name))
+        )
       );
 
-      const passes = Number(item.passesConfirmed || item.passesGranted || item.totalPasses || item.pases || 1);
-      const isConfirmed = item.status === 'CONFIRMED' || (item.passesConfirmed && item.passesConfirmed > 0) || item.asistencia === 'Sí';
-      const tableName = item.tableName || item.assignedTableName || 'Mesa 01 - Familia Cercana';
+      const passes = Math.max(1, Number(item.passesGranted || item.passesConfirmed || item.totalPasses || item.pases || 1));
+      const rawStatus = String(item.status || '').toUpperCase();
+      let mappedStatus: Guest['status'] = 'PENDING';
+      if (rawStatus === 'ATTENDED') {
+        mappedStatus = 'ATTENDED';
+      } else if (rawStatus === 'DECLINED' || item.asistencia === 'No') {
+        mappedStatus = 'DECLINED';
+      } else if (rawStatus === 'CONFIRMED' || (item.passesConfirmed && item.passesConfirmed > 0) || item.asistencia === 'Sí') {
+        mappedStatus = 'CONFIRMED';
+      }
 
-      // Encontrar tableId en el salón del evento respetando aforo
-      const targetSalon = this.salons().find(s => s.id === (targetEv?.salonId || 4));
-      let targetTable = targetSalon?.tables?.find(t => 
-        t.tableName.toLowerCase().trim() === tableName.toLowerCase().trim() ||
-        tableName.toLowerCase().includes(`mesa 0${t.tableNumber}`) ||
-        tableName.toLowerCase().includes(`mesa ${t.tableNumber}`)
-      );
+      const rawTableName = item.tableName || item.assignedTableName || (targetSalon?.tables?.[0]?.tableName) || 'Sin asignar';
 
-      // Verificación de aforo: si la mesa destino ya no tiene cupo, buscar otra con espacio
-      if (targetTable) {
-        const currentOcc = curGuests
-          .filter(g => g.eventId === eventId && g.status !== 'DECLINED' && g.qrCodeToken !== token && (
-            (g.assignedTableId != null && Number(g.assignedTableId) === Number(targetTable!.id)) ||
-            (g.assignedTableName && g.assignedTableName.toLowerCase().trim() === targetTable!.tableName.toLowerCase().trim())
-          ))
-          .reduce((sum, g) => sum + g.totalPasses, 0);
+      let targetTable: SalonTable | undefined;
+      if (targetSalon && targetSalon.tables && rawTableName && rawTableName !== 'Sin asignar') {
+        const normTable = this.normalizeName(rawTableName);
+        targetTable = targetSalon.tables.find(t =>
+          this.normalizeName(t.tableName) === normTable ||
+          new RegExp(`\\b(mesa|table)\\s*0*${t.tableNumber}\\b`, 'i').test(rawTableName)
+        );
 
-        if (currentOcc + passes > targetTable.capacity) {
-          const alternativeTable = targetSalon?.tables.find(t => {
-            const occ = curGuests
-              .filter(g => g.eventId === eventId && g.status !== 'DECLINED' && g.qrCodeToken !== token && (
-                (g.assignedTableId != null && Number(g.assignedTableId) === Number(t.id)) ||
-                (g.assignedTableName && g.assignedTableName.toLowerCase().trim() === t.tableName.toLowerCase().trim())
-              ))
-              .reduce((sum, g) => sum + g.totalPasses, 0);
-            return (t.capacity - occ) >= passes;
-          });
-          if (alternativeTable) {
-            targetTable = alternativeTable;
+        if (targetTable) {
+          const currentOcc = this.getGuestOccupiedSeatsForTable(curGuests, eventId, targetTable, existingIdx >= 0 ? curGuests[existingIdx].id : undefined);
+          if (currentOcc + passes > targetTable.capacity && mappedStatus !== 'DECLINED') {
+            const alternativeTable = targetSalon.tables.find(t => {
+              const occ = this.getGuestOccupiedSeatsForTable(curGuests, eventId, t, existingIdx >= 0 ? curGuests[existingIdx].id : undefined);
+              return (t.capacity - occ) >= passes;
+            });
+            if (alternativeTable) {
+              targetTable = alternativeTable;
+            }
           }
         }
       }
 
-      let tableId = targetTable?.id || targetSalon?.tables?.[0]?.id || 401;
-      const finalTableName = targetTable?.tableName || tableName;
+      const tableId = targetSalon ? targetTable?.id : undefined;
+      const finalTableName = targetSalon
+        ? (targetTable?.tableName || (rawTableName === 'Sin asignar' ? undefined : rawTableName))
+        : undefined;
 
       if (existingIdx >= 0) {
-        // Actualizar invitado existente si cambió estado o pases
         const oldG = curGuests[existingIdx];
-        const newStatus = isConfirmed ? 'CONFIRMED' : (item.status === 'DECLINED' || item.asistencia === 'No' ? 'DECLINED' : 'PENDING');
-        
-        // PROTECTION: If this guest has been manually assigned in EvenPass,
-        // and the incoming item's timestamp is older than oldG.manualAssignmentTimestamp,
-        // or if item does not have a newer explicit reassignment timestamp,
-        // KEEP oldG.assignedTableName and oldG.assignedTableId!
         const incomingTimestamp = Number(item.manualAssignmentTimestamp || item.timestamp || 0);
-        const hasManualOverride = Boolean(
-          oldG.manualAssignmentTimestamp && 
+        const keepExistingTable = Boolean(
+          oldG.manualAssignmentTimestamp &&
           (!incomingTimestamp || incomingTimestamp < oldG.manualAssignmentTimestamp)
         );
 
-        const targetTableName = hasManualOverride ? (oldG.assignedTableName || finalTableName) : finalTableName;
-        const targetTableId = hasManualOverride ? (oldG.assignedTableId || tableId) : tableId;
+        const nextTableName = keepExistingTable ? oldG.assignedTableName : finalTableName;
+        const nextTableId = keepExistingTable ? oldG.assignedTableId : tableId;
+        const nextPhone = item.phone && item.phone !== 'WhatsApp Directo' ? item.phone : oldG.phone;
+        const nextNotes = item.notes !== undefined && item.notes !== '' ? item.notes : oldG.dietNotes;
 
-        const statusChanged = oldG.status !== newStatus;
+        const statusChanged = oldG.status !== mappedStatus;
         const passesChanged = oldG.totalPasses !== passes;
-        const tableChanged = !hasManualOverride && (oldG.assignedTableName !== targetTableName);
+        const tableChanged = !keepExistingTable && (oldG.assignedTableName !== nextTableName || oldG.assignedTableId !== nextTableId);
+        const infoChanged = (item.fullName && oldG.fullName !== item.fullName) || nextPhone !== oldG.phone || nextNotes !== oldG.dietNotes;
 
-        if (statusChanged || passesChanged || tableChanged) {
+        if (statusChanged || passesChanged || tableChanged || infoChanged) {
           curGuests[existingIdx] = {
             ...oldG,
-            status: newStatus,
+            fullName: item.fullName || oldG.fullName,
+            phone: nextPhone,
+            status: mappedStatus,
             totalPasses: passes,
             numCompanions: Math.max(0, passes - 1),
-            assignedTableName: targetTableName,
-            assignedTableId: targetTableId,
-            dietNotes: item.notes || oldG.dietNotes,
-            source: 'DIGITAL_INVITATION',
-            confirmedAt: isConfirmed ? (oldG.confirmedAt || new Date().toLocaleString()) : undefined,
-            manualAssignmentTimestamp: oldG.manualAssignmentTimestamp
+            assignedTableName: nextTableName,
+            assignedTableId: nextTableId,
+            dietNotes: nextNotes,
+            source: oldG.source || 'DIGITAL_INVITATION',
+            confirmedAt: (mappedStatus === 'CONFIRMED' || mappedStatus === 'ATTENDED') ? (oldG.confirmedAt || item.updatedAt || new Date().toLocaleString()) : oldG.confirmedAt,
+            manualAssignmentTimestamp: tableChanged ? (incomingTimestamp || Date.now()) : oldG.manualAssignmentTimestamp
           };
           changesCount++;
 
-          if (notify && newStatus === 'CONFIRMED' && statusChanged) {
+          if (notify && (mappedStatus === 'CONFIRMED' || mappedStatus === 'ATTENDED') && statusChanged) {
             this.notificationService.show(
               'success',
-              'Confirmación en Vivo',
-              `"${name}" confirmó ${passes} pases para ${targetEv?.name || 'el evento'}.`
+              mappedStatus === 'ATTENDED' ? 'Check-In Sincronizado' : 'Confirmación en Vivo',
+              `"${name}" (${passes} pases) actualizado para ${targetEv?.name || 'el evento'}.`
             );
           }
         }
       } else {
-        // Agregar nuevo invitado despachado desde el panel de invitaciones del anfitrión
         const newG: Guest = {
-          id: Date.now() + Math.floor(Math.random() * 1000),
-          eventId: eventId,
+          id: Number(item.id) || (Date.now() + Math.floor(Math.random() * 1000)),
+          eventId,
           fullName: name,
-          email: `${name.toLowerCase().replace(/[^a-z0-9]/g, '')}@gmail.com`,
+          email: `${name.toLowerCase().replace(/[^a-z0-9]/g, '')}@evenpass.guest`,
           phone: item.phone || 'WhatsApp Directo',
           numCompanions: Math.max(0, passes - 1),
           totalPasses: passes,
-          status: isConfirmed ? 'CONFIRMED' : 'PENDING',
-          qrCodeToken: token || `LG10-VIP-${Math.floor(1000 + Math.random() * 9000)}`,
+          status: mappedStatus,
+          qrCodeToken: token || `EP-${Math.floor(1000 + Math.random() * 9000)}`,
           assignedTableId: tableId,
           assignedTableName: finalTableName,
-          dietNotes: item.notes || 'Invitación enviada por WhatsApp',
+          dietNotes: item.notes || 'Invitación digital',
           source: 'DIGITAL_INVITATION',
-          confirmedAt: isConfirmed ? (item.updatedAt || new Date().toLocaleString()) : undefined
+          confirmedAt: (mappedStatus === 'CONFIRMED' || mappedStatus === 'ATTENDED') ? (item.updatedAt || new Date().toLocaleString()) : undefined,
+          manualAssignmentTimestamp: Number(item.manualAssignmentTimestamp || 0)
         };
         curGuests.unshift(newG);
         changesCount++;
@@ -3171,7 +3734,7 @@ export class EventService {
           this.notificationService.show(
             'success',
             'Nuevo Invitado en Vivo',
-            `"${name}" (${passes} pases) se registró desde el panel del anfitrión.`
+            `"${name}" (${passes} pases) se registró desde el panel/invitación.`
           );
         }
       }
@@ -3179,18 +3742,17 @@ export class EventService {
 
     if (changesCount > 0) {
       this.allGuests.set(curGuests);
-      this.refreshAllTableOccupancies();
+      this.refreshAllTableOccupancies(eventId);
       this.persistGuests();
       this.persistSalons();
 
-      // Recalcular métricas de asistentes para el evento correspondiente
       const evGuests = curGuests.filter(g => g.eventId === eventId);
       const confirmedCount = evGuests
         .filter(g => g.status === 'CONFIRMED' || g.status === 'ATTENDED')
         .reduce((sum, g) => sum + g.totalPasses, 0);
       const totalCount = evGuests.reduce((sum, g) => sum + g.totalPasses, 0);
 
-      this.events.update(list => list.map(e => 
+      this.events.update(list => list.map(e =>
         e.id === eventId ? { ...e, totalGuests: totalCount, confirmedGuests: confirmedCount } : e
       ));
       this.persistEvents();
@@ -3199,20 +3761,206 @@ export class EventService {
     return changesCount;
   }
 
+  // --- UNIVERSAL URL & PORTABLE EVENT CONFIG GENERATORS ---
+  encodeCompactEventConfig(ev: EventItem): string {
+    try {
+      const salon = ev.hasCroquis && ev.salonId ? this.salons().find(s => s.id === ev.salonId) : undefined;
+      const compact = {
+        id: ev.id,
+        name: ev.name,
+        hostName: ev.hostName,
+        eventType: ev.eventType,
+        eventDate: ev.eventDate,
+        venueName: ev.venueName,
+        locationAddress: ev.locationAddress,
+        maxCapacity: ev.maxCapacity,
+        salonId: ev.salonId,
+        tierPlan: ev.tierPlan,
+        hasCroquis: ev.hasCroquis,
+        hasScanner: ev.hasScanner,
+        status: ev.status,
+        tables: (salon?.tables || []).map(t => ({
+          id: t.id,
+          name: t.tableName,
+          capacity: t.capacity,
+          shape: t.shape,
+          tableNumber: t.tableNumber,
+          posX: t.posX,
+          posY: t.posY
+        }))
+      };
+      const bytes = new TextEncoder().encode(JSON.stringify(compact));
+      let bin = '';
+      bytes.forEach(b => { bin += String.fromCharCode(b); });
+      return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    } catch (e) {
+      return '';
+    }
+  }
+
+  hydrateEventAndSalonFromPayload(data: any, rawTables?: any[], autoSelect: boolean = false, updateExistingMeta: boolean = true): number | null {
+    if (!data || !data.id || isNaN(Number(data.id))) return null;
+    const evId = Number(data.id);
+    const hasCroquis = data.hasCroquis !== undefined ? !!data.hasCroquis : true;
+    const tablesSource = Array.isArray(rawTables) ? rawTables : (Array.isArray(data.tables) ? data.tables : []);
+    const existing = this.events().find(e => e.id === evId);
+
+    if (!existing) {
+      const targetSalonId = hasCroquis ? Number(data.salonId || evId) : undefined;
+      if (targetSalonId && !this.salons().some(s => s.id === targetSalonId)) {
+        const rebuiltTables: SalonTable[] = tablesSource.map((t: any, idx: number) => {
+          const rawShape = String(t.shape || 'ROUND').toUpperCase();
+          return {
+            id: Number(t.id) || (targetSalonId * 100 + idx + 1),
+            salonId: targetSalonId,
+            tableNumber: Number(t.tableNumber || (idx + 1)),
+            tableName: t.name || t.tableName || `Mesa ${idx + 1}`,
+            shape: (rawShape.includes('RECT') || rawShape.includes('IMPERIAL')) ? 'RECTANGULAR' : 'ROUND',
+            capacity: Number(t.capacity || 10),
+            posX: Number(t.posX || (120 + (idx % 3) * 180)),
+            posY: Number(t.posY || (160 + Math.floor(idx / 3) * 140)),
+            occupiedSeats: Number(t.occupiedSeats || 0)
+          };
+        });
+        const hydratedSalon: Salon = {
+          id: targetSalonId,
+          name: data.salonName || data.venueName || 'Salón del Evento',
+          type: 'CUSTOM',
+          totalCapacity: Number(data.totalCapacity || data.maxCapacity) || rebuiltTables.reduce((s, x) => s + x.capacity, 0),
+          widthMeters: 20,
+          lengthMeters: 25,
+          eventId: evId,
+          description: 'Croquis Sincronizado',
+          tables: rebuiltTables
+        };
+        this.salons.update(s => [hydratedSalon, ...s]);
+        this.persistSalons();
+      }
+
+      const hydratedEv: EventItem = {
+        id: evId,
+        name: data.name || 'Evento EvenPass',
+        hostName: data.hostName || 'Anfitrión',
+        description: data.description || '',
+        eventType: data.eventType || 'Evento',
+        eventDate: data.eventDate || new Date().toISOString(),
+        venueName: data.venueName || 'Salón Principal',
+        locationAddress: data.locationAddress || '',
+        maxCapacity: Number(data.maxCapacity) || 200,
+        salonId: targetSalonId,
+        tierPlan: data.tierPlan || 'STANDARD',
+        hasCroquis,
+        hasScanner: data.hasScanner !== undefined ? !!data.hasScanner : true,
+        numTables: tablesSource.length,
+        status: data.status || 'PENDIENTE',
+        templateSlug: 'universal',
+        invitationMode: 'TEMPLATE',
+        totalGuests: 0,
+        confirmedGuests: 0,
+        attendedGuests: 0,
+        itinerary: []
+      };
+      this.events.update(list => [hydratedEv, ...list]);
+      this.persistEvents();
+    } else if (updateExistingMeta) {
+      let metaChanged = false;
+      this.events.update(list => list.map(ev => {
+        if (ev.id !== evId) return ev;
+        const nextPlan = data.tierPlan || ev.tierPlan;
+        const nextStatus = data.status || ev.status;
+        const nextMax = Number(data.maxCapacity) || ev.maxCapacity;
+        const nextCroquis = data.hasCroquis !== undefined ? !!data.hasCroquis : ev.hasCroquis;
+        const nextScanner = data.hasScanner !== undefined ? !!data.hasScanner : ev.hasScanner;
+        if (
+          ev.tierPlan !== nextPlan ||
+          ev.status !== nextStatus ||
+          ev.maxCapacity !== nextMax ||
+          ev.hasCroquis !== nextCroquis ||
+          ev.hasScanner !== nextScanner ||
+          (data.name && ev.name !== data.name)
+        ) {
+          metaChanged = true;
+          return {
+            ...ev,
+            name: data.name || ev.name,
+            hostName: data.hostName || ev.hostName,
+            eventType: data.eventType || ev.eventType,
+            eventDate: data.eventDate || ev.eventDate,
+            venueName: data.venueName || ev.venueName,
+            locationAddress: data.locationAddress !== undefined ? data.locationAddress : ev.locationAddress,
+            maxCapacity: nextMax,
+            tierPlan: nextPlan,
+            hasCroquis: nextCroquis,
+            hasScanner: nextScanner,
+            status: nextStatus
+          };
+        }
+        return ev;
+      }));
+      if (metaChanged) {
+        this.persistEvents();
+      }
+    }
+
+    if (autoSelect) {
+      this.selectEvent(evId);
+    }
+    return evId;
+  }
+
+  hydrateFromCompactConfig(cfgB64: string, autoSelect: boolean = false): number | null {
+    try {
+      const b64 = cfgB64.replace(/-/g, '+').replace(/_/g, '/');
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const data = JSON.parse(new TextDecoder().decode(bytes));
+      return this.hydrateEventAndSalonFromPayload(data, data?.tables, autoSelect, false);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  getHostPanelUrl(ev?: EventItem | null): string {
+    const target = ev || this.selectedEvent();
+    if (!target) return '/anfitrion/6';
+    const cfg = this.encodeCompactEventConfig(target);
+    return `${window.location.origin}/anfitrion/${target.id}${cfg ? '?cfg=' + cfg : ''}`;
+  }
+
+  getExternalHostPanelUrl(ev?: EventItem | null): string {
+    const target = ev || this.selectedEvent();
+    if (!target) return 'https://ejemplo-invitacion-luis-gerardo.netlify.app/panel.html?eventId=6';
+    const cfg = this.encodeCompactEventConfig(target);
+    const base = target.externalInvitationUrl && target.externalInvitationUrl.includes('netlify.app')
+      ? target.externalInvitationUrl.replace(/\/(index\.html)?(\?.*)?$/, '') + '/panel.html'
+      : 'https://ejemplo-invitacion-luis-gerardo.netlify.app/panel.html';
+    return `${base}?eventId=${target.id}${cfg ? '&cfg=' + cfg : ''}`;
+  }
+
+  getPublicInviteUrl(ev?: EventItem | null, guest?: Guest | null): string {
+    const target = ev || this.selectedEvent();
+    if (!target) return `${window.location.origin}/invitacion/6`;
+    const cfg = this.encodeCompactEventConfig(target);
+    if (guest?.qrCodeToken) {
+      return `${window.location.origin}/p/${encodeURIComponent(guest.qrCodeToken)}?eventId=${target.id}${cfg ? '&cfg=' + cfg : ''}`;
+    }
+    return `${window.location.origin}/invitacion/${target.id}${cfg ? '?cfg=' + cfg : ''}`;
+  }
+
   // --- CLOUD SYNC: SUPABASE & INVITACIONES DIGITALES ---
   syncWithSupabase(eventId: number): { success: boolean; newGuests: number; message: string } {
     const ev = this.events().find(e => e.id === eventId) || this.selectedEvent();
     if (!ev) return { success: false, newGuests: 0, message: 'Evento no seleccionado' };
     if (this.isEventLocked(ev)) {
-      this.notificationService.show('warning', 'Evento Concluido', 'Este evento ha finalizado. La sincronización de confirmaciones está deshabilitada en modo histórico.');
       return { success: false, newGuests: 0, message: 'Evento finalizado en modo histórico.' };
     }
 
     let imported = 0;
 
-    // 1. Sincronizar desde almacenamiento local del panel si existe
     try {
-      const raw = localStorage.getItem('evenpass_luis_gerardo_guests_db');
+      const key = ev.id === 6 ? 'evenpass_luis_gerardo_guests_db' : `evenpass_event_${ev.id}_guests_db`;
+      const raw = localStorage.getItem(key);
       if (raw) {
         const list = JSON.parse(raw);
         if (Array.isArray(list)) {
@@ -3221,12 +3969,12 @@ export class EventService {
       }
     } catch (e) {}
 
-    // 2. Si hay configuración Supabase activa con tabla ep_guests
-    if (this.supabaseConfig().connected && this.supabaseConfig().url) {
-      fetch(`${this.supabaseConfig().url}/rest/v1/${this.supabaseConfig().tableName}?event_id=eq.${ev.id}`, {
+    const cfg = this.supabaseConfig();
+    if (cfg.connected && cfg.url && !cfg.url.includes('wxvueavcyylgnbpksplr')) {
+      fetch(`${cfg.url}/rest/v1/${cfg.tableName}?event_id=eq.${ev.id}`, {
         headers: {
-          'apikey': this.supabaseConfig().anonKey,
-          'Authorization': `Bearer ${this.supabaseConfig().anonKey}`
+          'apikey': cfg.anonKey,
+          'Authorization': `Bearer ${cfg.anonKey}`
         }
       })
       .then(res => res.ok ? res.json() : null)
@@ -3238,16 +3986,12 @@ export class EventService {
       .catch(() => {});
     }
 
-    this.notificationService.show(
-      'success',
-      'Panel de Invitaciones Sincronizado',
-      `Los datos de "${ev.name}" están 100% actualizados y conectados con el panel del anfitrión.`
-    );
+    this.broadcastFullStateToCloud(ev.id);
 
     return {
       success: true,
       newGuests: imported,
-      message: 'Sincronizado exitosamente con el panel de invitaciones.'
+      message: 'Sincronización en vivo activa.'
     };
   }
 
@@ -3292,7 +4036,6 @@ export class EventService {
       console.warn('Google Sheet fetch error:', e);
     }
 
-    // Fallback sync
     this.simulateExternalRsvp(ev.id, 'GOOGLE_SHEETS');
     this.notificationService.show(
       'success',

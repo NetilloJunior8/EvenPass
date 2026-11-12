@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { EventService } from '../../services/event.service';
+import { PdfCroquisService, RenderedBlueprintResult } from '../../services/pdf-croquis.service';
 import { EventItem, EventStatus, ExternalAuditEntry } from '../../models/models';
 import { NotificationService } from '../../services/notification.service';
 import { IconComponent } from '../icon.component';
@@ -112,9 +113,13 @@ import { IconComponent } from '../icon.component';
               <span *ngIf="ev.numTables" class="badge-micro">{{ ev.numTables }} Mesas</span>
             </div>
             <div class="card-btns-row">
-              <button class="btn-action-outline btn-sm" (click)="quickSyncEvent(ev)" title="Sincronizar confirmaciones en tiempo real">
-                <app-icon name="refresh" [size]="13"></app-icon>
-                <span>Sincronizar</span>
+              <button class="btn-action-outline btn-sm" (click)="openPublicInvite(ev)" title="Abrir invitación digital del evento">
+                <app-icon name="external-link" [size]="13"></app-icon>
+                <span>Invitación</span>
+              </button>
+              <button class="btn-action-outline btn-sm" (click)="openHostPanel(ev)" title="Abrir Panel de Anfitriones (sincronización en vivo)">
+                <app-icon name="user" [size]="13"></app-icon>
+                <span>Panel</span>
               </button>
               <button class="btn-action btn-sm btn-enter-event" (click)="enterEventWorkspace(ev)">
                 <span>Entrar</span>
@@ -185,13 +190,13 @@ import { IconComponent } from '../icon.component';
               <div *ngIf="importTab() === 'SAMPLE'" class="sample-pills-row">
                 <span class="sample-label">Prueba con 1 clic:</span>
                 <button type="button" class="sample-pill-btn" (click)="loadSampleWhatsAppText('boda')">
-                  💍 Boda Mariana &amp; Roberto (220 pax)
+                  Boda Mariana &amp; Roberto (220 pax)
                 </button>
                 <button type="button" class="sample-pill-btn" (click)="loadSampleWhatsAppText('xv')">
-                  👑 XV Años Valeria (160 pax)
+                  XV Años Valeria (160 pax)
                 </button>
                 <button type="button" class="sample-pill-btn" (click)="loadSampleWhatsAppText('bautizo')">
-                  🕊️ Bautizo Santiago (35 pax)
+                  Bautizo Santiago (35 pax)
                 </button>
               </div>
 
@@ -249,7 +254,7 @@ import { IconComponent } from '../icon.component';
                     [disabled]="!importRawText.trim()"
                   >
                     <app-icon name="sparkles" [size]="14"></app-icon>
-                    <span>⚡ Aplicar Datos al Formulario</span>
+                    <span>Aplicar Datos al Formulario</span>
                   </button>
                 </div>
               </div>
@@ -337,7 +342,7 @@ import { IconComponent } from '../icon.component';
                 <option *ngFor="let tpl of eventService.templates()" [value]="tpl.slug">
                   {{ tpl.name }} ({{ tpl.category }})
                 </option>
-                <option value="CUSTOM_NEW">✨ + Otra Plantilla / Nueva Personalizada</option>
+                <option value="CUSTOM_NEW">+ Otra Plantilla / Nueva Personalizada</option>
               </select>
             </div>
 
@@ -369,11 +374,11 @@ import { IconComponent } from '../icon.component';
             <div *ngIf="newEvent.invitationMode === 'EXTERNAL_URL'" class="external-inv-box">
               <div class="form-field">
                 <label>URL de la Invitación Web Externa</label>
-                <input 
-                  type="url" 
-                  [(ngModel)]="newEvent.externalInvitationUrl" 
-                  name="externalUrl" 
-                  placeholder="https://bodacamila.com o enlace de Canva / Notion"
+                <input
+                  type="url"
+                  [(ngModel)]="newEvent.externalInvitationUrl"
+                  name="externalUrl"
+                  placeholder="https://bodacamila.com o enlace de Canva / Netlify"
                 >
               </div>
               <div class="form-field">
@@ -423,7 +428,7 @@ import { IconComponent } from '../icon.component';
                     <option *ngFor="let s of eventService.salons()" [value]="s.id">
                       {{ s.name }} ({{ s.tables.length }} mesas · {{ s.totalCapacity }} aforo)
                     </option>
-                    <option value="NEW_SALON">+ Registrar Nuevo Salón Personalizado</option>
+                    <option value="NEW_SALON">+ Registrar Nuevo Salón con Plano PDF</option>
                   </select>
                 </div>
 
@@ -440,10 +445,14 @@ import { IconComponent } from '../icon.component';
                   <input type="text" [(ngModel)]="customSalonName" name="customSalonName" placeholder="Ej. Jardín Las Palmas / Salón Diamante" required>
                 </div>
                 <div class="form-field">
-                  <label>Plano CAD o Croquis en PDF / Imagen (Opcional)</label>
-                  <input type="file" (change)="onCroquisFileSelected($event)" accept="image/*,application/pdf" class="file-picker-input">
-                  <small *ngIf="customCroquisFileName" class="text-success font-bold">✓ Archivo cargado: {{ customCroquisFileName }}</small>
-                  <small *ngIf="!customCroquisFileName" class="text-muted">Si subes un boceto arquitectónico en PDF o imagen, el sistema lo vectorizará para manipular las mesas.</small>
+                  <label>Plano del Salón en PDF / Imagen (Opcional)</label>
+                  <input type="file" (change)="onCroquisFileSelected($event)" accept="application/pdf,image/*" class="file-picker-input">
+                  <small *ngIf="isProcessingCroquisFile()" class="text-muted">Renderizando plano PDF...</small>
+                  <small *ngIf="customCroquisFileName && !isProcessingCroquisFile()" class="text-success font-bold">Archivo cargado: {{ customCroquisFileName }}</small>
+                  <small *ngIf="!customCroquisFileName && !isProcessingCroquisFile()" class="text-muted">Al subir el PDF del salón, podrás manipular mesas Redondas e Imperiales directamente sobre el plano real.</small>
+                  <div *ngIf="customCroquisBlueprint" style="margin-top:8px;border:1px solid var(--border-ui);border-radius:8px;overflow:hidden;background:#fff;max-height:160px;display:flex;justify-content:center;">
+                    <img [src]="customCroquisBlueprint.dataUrl" alt="Vista previa del plano" style="max-height:155px;max-width:100%;object-fit:contain;">
+                  </div>
                 </div>
               </div>
             </div>
@@ -1782,6 +1791,8 @@ export class EventsComponent implements OnInit {
   selectedSalonMode: string = '1';
   customSalonName: string = '';
   customCroquisFileName: string = '';
+  customCroquisBlueprint: RenderedBlueprintResult | null = null;
+  isProcessingCroquisFile = signal(false);
 
   customTemplateForm = {
     name: '',
@@ -1793,6 +1804,7 @@ export class EventsComponent implements OnInit {
   constructor(
     public eventService: EventService,
     private notificationService: NotificationService,
+    private pdfCroquisService: PdfCroquisService,
     private router: Router
   ) {}
 
@@ -2039,14 +2051,33 @@ export class EventsComponent implements OnInit {
     }
   }
 
-  onCroquisFileSelected(event: any): void {
-    const file = event.target.files?.[0];
-    if (file) {
-      this.customCroquisFileName = file.name;
-      if (!this.customSalonName) {
-        this.customSalonName = file.name.replace(/\.[^/.]+$/, "");
-      }
-      this.notificationService.show('info', 'Plano Adjuntado', `Archivo "${file.name}" cargado para calibración.`);
+  async onCroquisFileSelected(event: any): Promise<void> {
+    const file = event?.target?.files?.[0] as File | undefined;
+    if (!file) return;
+
+    this.customCroquisFileName = file.name;
+    if (!this.customSalonName) {
+      this.customSalonName = file.name.replace(/\.[^/.]+$/, '');
+    }
+
+    this.isProcessingCroquisFile.set(true);
+    try {
+      const rendered = await this.pdfCroquisService.processBlueprintFile(
+        file,
+        1,
+        Math.max(1, Math.min(40, Number(this.newEvent.numTables) || 12))
+      );
+      this.customCroquisBlueprint = rendered;
+      this.notificationService.show(
+        'success',
+        rendered.isPdf ? 'Plano PDF Procesado' : 'Plano Cargado',
+        `Archivo "${file.name}" renderizado y listo para manipular mesas.`
+      );
+    } catch (err: any) {
+      this.customCroquisBlueprint = null;
+      this.notificationService.show('error', 'Error al leer plano', err?.message || 'El archivo PDF o imagen no pudo procesarse.');
+    } finally {
+      this.isProcessingCroquisFile.set(false);
     }
   }
 
@@ -2072,6 +2103,18 @@ export class EventsComponent implements OnInit {
     this.router.navigate(['/dashboard']);
   }
 
+  openHostPanel(ev: EventItem): void {
+    this.eventService.selectEvent(ev.id);
+    this.eventService.broadcastFullStateToCloud(ev.id);
+    window.open(this.eventService.getHostPanelUrl(ev), '_blank');
+  }
+
+  openPublicInvite(ev: EventItem): void {
+    this.eventService.selectEvent(ev.id);
+    this.eventService.broadcastFullStateToCloud(ev.id);
+    window.open(this.eventService.getPublicInviteUrl(ev), '_blank');
+  }
+
   handleCreateEvent(): void {
     if (!this.newEvent.name || !this.newEvent.hostName) {
       this.notificationService.show('warning', 'Campos Requeridos', 'Completa el nombre y anfitrión del evento.');
@@ -2081,20 +2124,23 @@ export class EventsComponent implements OnInit {
     let salonId: number | undefined = undefined;
     let venueName = this.newEvent.venueName || 'Salón Principal';
     let capacity = this.newEvent.maxCapacity || 250;
+    const uploadedBp = this.customCroquisBlueprint;
 
-    // Check if registering a new custom salon
     if (this.newEvent.hasCroquis) {
       if (this.selectedSalonMode === 'NEW_SALON') {
         const customName = this.customSalonName.trim() || `${this.newEvent.name} - Salón Principal`;
         const numTables = this.newEvent.numTables || 12;
+        const spots = uploadedBp?.suggestedTableSpots?.map(s => ({ x: s.posX, y: s.posY }));
         const newSalon = this.eventService.importCroquisWithAiDetection(
           customName,
           'CUSTOM',
-          numTables
+          numTables,
+          uploadedBp?.dataUrl,
+          spots
         );
         salonId = newSalon.id;
         venueName = newSalon.name;
-        capacity = newSalon.totalCapacity;
+        capacity = this.newEvent.maxCapacity || newSalon.totalCapacity;
       } else {
         const s = this.eventService.salons().find(item => item.id === Number(this.selectedSalonMode)) || this.eventService.salons()[0];
         if (s) {
@@ -2105,7 +2151,6 @@ export class EventsComponent implements OnInit {
       }
     }
 
-    // Check if registering a custom template
     let finalTemplateSlug = this.newEvent.templateSlug || 'miriam-isidro';
     if (this.newEvent.invitationMode === 'TEMPLATE' && this.newEvent.templateSlug === 'CUSTOM_NEW') {
       const customName = this.customTemplateForm.name.trim() || `${this.newEvent.name} - Estilo Personalizado`;
@@ -2130,28 +2175,26 @@ export class EventsComponent implements OnInit {
       invitationMode: this.newEvent.invitationMode || 'TEMPLATE',
       externalInvitationUrl: this.newEvent.externalInvitationUrl,
       webhookSyncKey: this.newEvent.webhookSyncKey,
-      venueName: venueName,
-      salonId: salonId,
+      venueName,
+      salonId,
       maxCapacity: capacity,
       status: (this.newEvent.status as EventStatus) || 'PENDIENTE',
       templateSlug: finalTemplateSlug,
       tierPlan: this.newEvent.tierPlan || 'PREMIUM',
       hasCroquis: this.newEvent.hasCroquis !== undefined ? this.newEvent.hasCroquis : true,
       hasScanner: this.newEvent.hasScanner !== undefined ? this.newEvent.hasScanner : true,
-      numTables: this.newEvent.numTables || 10
+      numTables: this.newEvent.hasCroquis ? (this.newEvent.numTables || 10) : 0
     });
 
+    this.customCroquisBlueprint = null;
+    this.customCroquisFileName = '';
+    this.customSalonName = '';
     this.showCreateModal.set(false);
-    this.router.navigate(['/dashboard']);
-  }
-
-  // --- QUICK 1-CLICK SYNC METHOD ---
-  quickSyncEvent(ev: EventItem): void {
-    this.eventService.syncWithSupabase(ev.id);
+    this.router.navigate([created.hasCroquis && uploadedBp ? '/croquis' : '/dashboard']);
   }
 
   openLinkAuditModal(ev: EventItem): void {
-    this.quickSyncEvent(ev);
+    this.openHostPanel(ev);
   }
 
   getPublicRsvpUrl(): string {

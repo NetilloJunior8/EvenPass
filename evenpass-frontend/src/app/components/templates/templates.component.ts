@@ -384,7 +384,7 @@ import { IconComponent } from '../icon.component';
 
               <!-- Template 5: Bautizo Celestial Pastel -->
               <div *ngIf="previewSlug() === 'bautizo-celestial'" class="celestial-live-render">
-                <div class="celestial-cross-icon">✝</div>
+                <div class="celestial-cross-icon"><app-icon name="sparkles" [size]="28"></app-icon></div>
                 <small class="celestial-sub-label">MI BAUTIZO</small>
                 <h1 class="celestial-main-name">Santiago López</h1>
                 <p class="celestial-quote">
@@ -452,7 +452,9 @@ import { IconComponent } from '../icon.component';
                 <p class="modal-subtitle">Agrega diseños a la medida y temas visuales para tus eventos</p>
               </div>
             </div>
-            <button class="close-btn" (click)="showNewTemplateModal.set(false)">✕</button>
+            <button class="close-btn" (click)="showNewTemplateModal.set(false)">
+              <app-icon name="x" [size]="16"></app-icon>
+            </button>
           </div>
 
           <form (ngSubmit)="handleRegisterNewTemplate()" class="template-create-form">

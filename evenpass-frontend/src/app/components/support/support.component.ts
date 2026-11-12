@@ -65,7 +65,7 @@ import { NotificationService } from '../../services/notification.service';
           <div class="channel-text">
             <strong>Estado de Infraestructura</strong>
             <p>Microservicios de validación QR operativos al 99.98% uptime.</p>
-            <span class="system-status-ok">● Todos los sistemas operando</span>
+            <span class="system-status-ok">Todos los sistemas operando</span>
           </div>
         </div>
       </div>
@@ -792,13 +792,13 @@ export class SupportComponent {
     });
 
     const text = encodeURIComponent(
-      `🚨 *REPORTE DE INCIDENCIA EVENPASS*\n` +
-      `• Evento: ${ev?.name || 'Evento Activo'}\n` +
-      `• Anfitrión: ${ev?.hostName || 'Cliente'}\n` +
-      `• Prioridad: *ALTA / URGENTE*\n` +
-      `• Asunto: ${this.newTicket.subject}\n` +
-      `• Detalle: ${this.newTicket.description}\n` +
-      `• Hora de reporte: ${new Date().toLocaleTimeString('es-MX')}`
+      `*REPORTE DE INCIDENCIA EVENPASS*\n` +
+      `- Evento: ${ev?.name || 'Evento Activo'}\n` +
+      `- Anfitrión: ${ev?.hostName || 'Cliente'}\n` +
+      `- Prioridad: *ALTA / URGENTE*\n` +
+      `- Asunto: ${this.newTicket.subject}\n` +
+      `- Detalle: ${this.newTicket.description}\n` +
+      `- Hora de reporte: ${new Date().toLocaleTimeString('es-MX')}`
     );
     window.open(`https://wa.me/526671234567?text=${text}`, '_blank');
 

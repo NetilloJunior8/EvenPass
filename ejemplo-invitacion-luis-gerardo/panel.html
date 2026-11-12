@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Panel del Anfitrión · Luis Gerardo (10 Años) | EvenPass</title>
-  
+  <title>Panel del Anfitrión · EvenPass</title>
+
   <meta name="theme-color" content="#1d4ed8">
 
   <!-- Google Fonts -->
@@ -22,16 +22,16 @@
     <header class="panel-header-strip">
       <div>
         <h1>Panel de Control del Anfitrión</h1>
-        <p>Luis Gerardo · Mis 10 Años | Despacho de Invitaciones &amp; Croquis de Mesas</p>
+        <p id="panel-event-subtitle">Luis Gerardo · Mis 10 Años | Despacho de Invitaciones &amp; Croquis de Mesas</p>
       </div>
 
-      <div style="display: flex; align-items: center; gap: 10px;">
-        <span style="display: inline-flex; align-items: center; gap: 6px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #059669; font-size: 0.74rem; font-weight: 800; padding: 4px 12px; border-radius: 9999px;">
+      <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+        <span style="display: inline-flex; align-items: center; gap: 6px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #059669; font-size: 0.74rem; font-weight: 800; padding: 5px 12px; border-radius: 9999px;">
           <span style="width: 7px; height: 7px; border-radius: 50%; background: #059669;"></span>
-          En Línea con EvenPass OS
+          Sincronización Automática en Vivo con EvenPass OS
         </span>
-        <button type="button" class="btn-outline" style="padding: 6px 12px; font-size: 0.76rem; border-color: #059669; color: #059669; cursor: pointer;" onclick="syncDirectWithEvenPass()" title="Sincronizar invitados inmediatamente con EvenPass OS">
-          ⚡ Sincronizar con EvenPass
+        <button type="button" class="btn-outline" style="padding: 6px 12px; font-size: 0.76rem; cursor: pointer;" onclick="openEventInvitationPage()">
+          Ver Invitación Pública
         </button>
       </div>
     </header>
@@ -46,7 +46,7 @@
         </div>
         <div>
           <h2>Enviar Invitación Personalizada</h2>
-          <p>Genera el enlace único por invitado con sus pases y compártelo por WhatsApp</p>
+          <p>Genera el enlace único por invitado con sus pases, asígnale mesa automáticamente y compártelo por WhatsApp</p>
         </div>
       </div>
 
@@ -67,6 +67,7 @@
               <option value="5">5 Pases</option>
               <option value="6">6 Pases</option>
               <option value="8">8 Pases</option>
+              <option value="10">10 Pases</option>
             </select>
           </div>
 
@@ -74,11 +75,6 @@
             <label class="form-label">Mesa en Croquis (Opcional)</label>
             <select id="dispatch-table" class="form-input-clean">
               <option value="AUTO">Asignación Automática Inteligente</option>
-              <option value="Mesa 01 - Familia Cercana">Mesa 01 - Familia Cercana</option>
-              <option value="Mesa 02 - Amigos de Colegio">Mesa 02 - Amigos de Colegio</option>
-              <option value="Mesa 03 - Padrinos & Tíos">Mesa 03 - Padrinos & Tíos</option>
-              <option value="Mesa 04 - Amigos Deportes & Laser">Mesa 04 - Amigos Deportes & Laser</option>
-              <option value="Mesa 05 - Invitados Especiales">Mesa 05 - Invitados Especiales</option>
             </select>
           </div>
         </div>
@@ -99,11 +95,11 @@
         <strong id="kpi-panel-confirmed">0</strong>
       </div>
       <div class="panel-kpi-card">
-        <small>Aforo Salón (50 max)</small>
+        <small id="panel-capacity-label">Aforo Salón (50 max)</small>
         <strong id="kpi-panel-occupancy">0%</strong>
       </div>
       <div class="panel-kpi-card">
-        <small>Familias Asistentes</small>
+        <small>Familias / Grupos</small>
         <strong id="kpi-panel-families">0</strong>
       </div>
       <div class="panel-kpi-card">
@@ -113,18 +109,39 @@
     </div>
 
     <!-- ================================================================ -->
-    <!-- CROQUIS: OCUPACIÓN DE MESAS                                      -->
+    <!-- CROQUIS: OCUPACIÓN Y CREACIÓN DE MESAS                           -->
     <!-- ================================================================ -->
-    <section class="card-module">
-      <div class="card-header-flex" style="margin-bottom: 4px;">
-        <div class="card-icon-bubble">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path></svg>
+    <section id="panel-croquis-module" class="card-module">
+      <div class="card-header-flex" style="margin-bottom: 10px; justify-content: space-between; width: 100%; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div class="card-icon-bubble">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path></svg>
+          </div>
+          <div>
+            <h2 id="panel-croquis-title">Distribución de Mesas en Croquis</h2>
+            <p>Asignación controlada sin sobrecupo ni desbordamiento; se actualiza en vivo con EvenPass OS</p>
+          </div>
         </div>
-        <div>
-          <h2>Distribución de Mesas en Croquis (Capacidad 10 c/u)</h2>
-          <p>Asignación automática controlada sin sobrecupo para el acceso del evento</p>
+
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button type="button" class="btn-outline" style="padding: 7px 12px; font-size: 0.78rem; cursor: pointer;" onclick="autoDistributeFromPanel()">
+            Auto-Acomodar Libres
+          </button>
         </div>
       </div>
+
+      <!-- Creador rápido de nueva mesa desde Panel -->
+      <form onsubmit="createTableFromPanel(event)" style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 12px; border-radius: 10px; margin-bottom: 12px;">
+        <input type="text" id="new-table-name" class="form-input-clean" placeholder="Nueva mesa (ej. Mesa VIP 06)" style="flex: 2; min-width: 170px; padding: 7px 10px; font-size: 0.82rem;" required>
+        <select id="new-table-shape" class="form-input-clean" style="flex: 1; min-width: 130px; padding: 7px 10px; font-size: 0.82rem;">
+          <option value="ROUND">Redonda</option>
+          <option value="RECTANGULAR">Imperial Rectangular</option>
+        </select>
+        <input type="number" id="new-table-capacity" class="form-input-clean" value="10" min="2" max="30" style="width: 82px; padding: 7px 10px; font-size: 0.82rem;" title="Capacidad de lugares">
+        <button type="submit" class="btn-primary" style="padding: 8px 14px; font-size: 0.8rem; border: none; cursor: pointer;">
+          + Crear Mesa en Croquis
+        </button>
+      </form>
 
       <div id="panel-tables-grid" class="tables-grid-preview">
         <!-- Renderizado dinámico de mesas -->
@@ -141,9 +158,6 @@
         </div>
 
         <div style="display: flex; gap: 8px;">
-          <button class="btn-outline" style="padding: 8px 14px; font-size: 0.8rem;" onclick="loadStoredGuests()">
-            ↻ Actualizar Lista
-          </button>
           <button class="btn-primary" style="padding: 8px 14px; font-size: 0.8rem;" onclick="exportCsvForHostess()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
             <span>Descargar Padrón (CSV)</span>
@@ -170,6 +184,45 @@
       </div>
     </section>
 
+  </div>
+
+  <!-- Modal Edición Rápida de Invitado -->
+  <div id="panel-edit-modal" style="display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.55); z-index: 9999; align-items: center; justify-content: center; padding: 16px;">
+    <div style="background: #fff; border-radius: 16px; width: min(440px, 100%); padding: 22px; box-shadow: 0 20px 50px rgba(0,0,0,0.2);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+        <h3 style="margin: 0; font-size: 1.1rem; font-weight: 800;">Editar Invitado</h3>
+        <button type="button" onclick="closeEditGuestModal()" style="border: 1px solid #e2e8f0; background: #fff; border-radius: 8px; padding: 4px 10px; cursor: pointer; font-weight: 700;">Cerrar</button>
+      </div>
+      <form onsubmit="saveEditedGuestFromPanel(event)" style="display: flex; flex-direction: column; gap: 10px;">
+        <input type="hidden" id="edit-guest-id">
+        <div>
+          <label class="form-label">Nombre completo</label>
+          <input type="text" id="edit-guest-name" class="form-input-clean" required>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div>
+            <label class="form-label">Pases</label>
+            <input type="number" id="edit-guest-passes" class="form-input-clean" min="1" max="20" required>
+          </div>
+          <div>
+            <label class="form-label">Estado</label>
+            <select id="edit-guest-status" class="form-input-clean">
+              <option value="CONFIRMED">Confirmado</option>
+              <option value="PENDING">Pendiente</option>
+              <option value="DECLINED">No asistirá</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="form-label">Teléfono / Notas</label>
+          <input type="text" id="edit-guest-phone" class="form-input-clean">
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px;">
+          <button type="button" class="btn-outline" onclick="closeEditGuestModal()">Cancelar</button>
+          <button type="submit" class="btn-primary" style="border: none; cursor: pointer;">Guardar Cambios</button>
+        </div>
+      </form>
+    </div>
   </div>
 
   <script src="app.js"></script>

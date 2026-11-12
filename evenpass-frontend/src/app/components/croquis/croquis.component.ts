@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { EventService } from '../../services/event.service';
+import { PdfCroquisService, RenderedBlueprintResult } from '../../services/pdf-croquis.service';
 import { SalonTable, Guest, Salon, SalonType } from '../../models/models';
 import { NotificationService } from '../../services/notification.service';
 import { IconComponent } from '../icon.component';
@@ -118,13 +119,17 @@ import jsPDF from 'jspdf';
           </div>
 
           <div class="croquis-primary-actions-row">
-            <button class="btn-outline" [disabled]="eventService.isEventLocked()" (click)="openAiDetectorModal()">
-              <app-icon name="sparkles" [size]="15"></app-icon>
-              <span>Auto-Detectar con IA</span>
+            <button class="btn-outline" [disabled]="eventService.isEventLocked()" (click)="openAiDetectorModal('NEW_SALON')">
+              <app-icon name="file-text" [size]="15"></app-icon>
+              <span>Importar Plano PDF / CAD</span>
+            </button>
+            <button class="btn-outline" [disabled]="eventService.isEventLocked()" (click)="openAiDetectorModal('APPLY_CURRENT')" title="Cargar un plano PDF o imagen como fondo del salón actual">
+              <app-icon name="upload" [size]="15"></app-icon>
+              <span>Subir PDF al Salón</span>
             </button>
             <button class="btn-outline" [disabled]="eventService.isEventLocked()" (click)="showNewSalonModal.set(true)">
               <app-icon name="plus" [size]="15"></app-icon>
-              <span>+ Nuevo Salón</span>
+              <span>Nuevo Salón</span>
             </button>
             <button class="btn-outline" [disabled]="eventService.isEventLocked()" (click)="openEditSalonModal()" title="Modificar nombre, aforo y medidas del salón actual">
               <app-icon name="edit" [size]="15"></app-icon>
@@ -132,11 +137,15 @@ import jsPDF from 'jspdf';
             </button>
             <button class="btn-outline" [disabled]="eventService.isEventLocked()" (click)="showNewTableModal.set(true)">
               <app-icon name="plus" [size]="15"></app-icon>
-              <span>+ Agregar Mesa</span>
+              <span>Agregar Mesa</span>
+            </button>
+            <button class="btn-outline" [disabled]="eventService.isEventLocked()" [style.borderColor]="placingMode() ? '#0284c7' : ''" [style.color]="placingMode() ? '#0284c7' : ''" (click)="togglePlacingMode()">
+              <app-icon name="map-pin" [size]="15"></app-icon>
+              <span>{{ placingMode() ? 'Colocación Activa' : 'Colocar en Plano' }}</span>
             </button>
             <button class="btn-outline btn-pdf-export" (click)="showPdfExportModal.set(true)">
               <app-icon name="download" [size]="15"></app-icon>
-              <span>Descargar Dossier / Reportes</span>
+              <span>Descargar Dossier</span>
             </button>
             <button class="btn-action btn-auto-assign" [disabled]="eventService.isEventLocked()" (click)="runAutoAssign()">
               <app-icon name="sparkles" [size]="15"></app-icon>
@@ -164,6 +173,16 @@ import jsPDF from 'jspdf';
         </button>
       </div>
 
+      <!-- Click-to-Place Helper Strip -->
+      <div *ngIf="placingMode()" class="placing-banner-strip">
+        <span>Haz clic en cualquier punto vacío del plano o PDF para insertar una nueva mesa.</span>
+        <div class="placing-shape-pills">
+          <button type="button" [class.active]="placingShape() === 'ROUND'" (click)="togglePlacingMode('ROUND')">Redonda (10p)</button>
+          <button type="button" [class.active]="placingShape() === 'RECTANGULAR'" (click)="togglePlacingMode('RECTANGULAR')">Imperial (8p)</button>
+          <button type="button" (click)="placingMode.set(false)">Terminar</button>
+        </div>
+      </div>
+
       <!-- Main Canvas Layout with Table Details Sidebar -->
       <div class="croquis-main-grid">
 
@@ -174,6 +193,15 @@ import jsPDF from 'jspdf';
               <span class="bp-title">PLANO CAD OFICIAL</span>
               <span class="divider">|</span>
               <small>{{ eventService.currentSalon()?.name || 'Salón de Eventos' }}</small>
+            </div>
+
+            <!-- Blueprint Controls when custom PDF/Image attached -->
+            <div *ngIf="eventService.currentSalon()?.customCroquisUrl" class="blueprint-controls-bar">
+              <span>Opacidad PDF</span>
+              <input type="range" min="0.2" max="1" step="0.05" [ngModel]="blueprintOpacity()" (ngModelChange)="blueprintOpacity.set(+$event)">
+              <button type="button" class="zoom-btn reset" (click)="showBlueprintGrid.set(!showBlueprintGrid())">
+                {{ showBlueprintGrid() ? 'Ocultar Rejilla' : 'Ver Rejilla' }}
+              </button>
             </div>
 
             <!-- Zoom Controls -->
@@ -203,10 +231,12 @@ import jsPDF from 'jspdf';
               <!-- ============================================================== -->
               <!-- CASE 1: SALÓN REAL IMPERIAL (16 Tables CAD Architecture)      -->
               <!-- ============================================================== -->
-              <svg 
+              <svg
                 *ngIf="eventService.currentSalon()?.type === 'BANQUET_IMPERIAL'"
-                viewBox="0 0 600 860" 
+                viewBox="0 0 600 860"
                 class="architectural-svg"
+                [class.placing-cursor]="placingMode()"
+                (click)="onSvgCanvasClick($event)"
                 xmlns="http://www.w3.org/2000/svg"
               >
                 <defs>
@@ -331,10 +361,12 @@ import jsPDF from 'jspdf';
               <!-- CASE 2: CARPA REAL 40x60 WHITE POLE TENT                       -->
               <!-- Exact CAD geometry matching user image media_1793653282587    -->
               <!-- ============================================================== -->
-              <svg 
+              <svg
                 *ngIf="eventService.currentSalon()?.type === 'WHITE_POLE_TENT'"
-                viewBox="0 0 620 880" 
+                viewBox="0 0 620 880"
                 class="architectural-svg"
+                [class.placing-cursor]="placingMode()"
+                (click)="onSvgCanvasClick($event)"
                 xmlns="http://www.w3.org/2000/svg"
               >
                 <defs>
@@ -472,10 +504,12 @@ import jsPDF from 'jspdf';
               <!-- CASE 3: SALÓN ZAFIRO BANQUET ROOM (6.19m x 8.625m)            -->
               <!-- Exact CAD geometry matching user image media_1793653291090    -->
               <!-- ============================================================== -->
-              <svg 
+              <svg
                 *ngIf="eventService.currentSalon()?.type === 'ZAFIRO_ROOM'"
-                viewBox="0 0 600 750" 
+                viewBox="0 0 600 750"
                 class="architectural-svg"
+                [class.placing-cursor]="placingMode()"
+                (click)="onSvgCanvasClick($event)"
                 xmlns="http://www.w3.org/2000/svg"
               >
                 <defs>
@@ -591,24 +625,41 @@ import jsPDF from 'jspdf';
               <!-- ============================================================== -->
               <!-- CASE 4: CUSTOM IMPORTED SALON BLUEPRINT                        -->
               <!-- ============================================================== -->
-              <svg 
+              <svg
                 *ngIf="eventService.currentSalon()?.type === 'CUSTOM'"
-                viewBox="0 0 600 750" 
+                viewBox="0 0 600 750"
                 class="architectural-svg"
+                [class.placing-cursor]="placingMode()"
+                (click)="onSvgCanvasClick($event)"
                 xmlns="http://www.w3.org/2000/svg"
               >
                 <defs>
                   <pattern id="customGrid" width="25" height="25" patternUnits="userSpaceOnUse">
-                    <path d="M 25 0 L 0 0 0 25" fill="none" stroke="currentColor" stroke-opacity="0.05" stroke-width="0.5"/>
+                    <path d="M 25 0 L 0 0 0 25" fill="none" stroke="currentColor" stroke-opacity="0.06" stroke-width="0.5"/>
                   </pattern>
                 </defs>
-                <rect width="600" height="750" fill="url(#customGrid)" />
-                <rect x="30" y="30" width="540" height="690" fill="none" stroke="currentColor" stroke-width="2.5" />
-                <text x="300" y="60" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="800" font-size="13" fill="currentColor">
-                  PLANO PERSONALIZADO IMPORTADO CON IA
+
+                <!-- Uploaded PDF / Image Architectural Floorplan -->
+                <image
+                  *ngIf="eventService.currentSalon()?.customCroquisUrl as bpUrl"
+                  [attr.href]="bpUrl"
+                  x="16"
+                  y="16"
+                  width="568"
+                  height="718"
+                  preserveAspectRatio="xMidYMid meet"
+                  [attr.opacity]="blueprintOpacity()"
+                />
+
+                <rect *ngIf="showBlueprintGrid()" width="600" height="750" fill="url(#customGrid)" />
+                <rect x="20" y="20" width="560" height="710" fill="none" stroke="currentColor" stroke-opacity="0.5" stroke-width="2" />
+
+                <rect x="145" y="26" width="310" height="24" rx="6" fill="rgba(15, 23, 42, 0.78)" />
+                <text x="300" y="42" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="800" font-size="11" fill="#ffffff">
+                  {{ (eventService.currentSalon()?.name || 'PLANO CAD DEL SALÓN') | uppercase }}
                 </text>
 
-                <g *ngFor="let table of eventService.currentSalon()?.tables" 
+                <g *ngFor="let table of eventService.currentSalon()?.tables"
                    (pointerdown)="onTablePointerDown($event, table)"
                    (click)="selectTable(table)"
                    class="table-cad-group"
@@ -622,56 +673,56 @@ import jsPDF from 'jspdf';
 
                   <!-- Round Table -->
                   <ng-container *ngIf="!isRectTable(table)">
-                    <circle 
-                      [attr.cx]="table.posX" 
-                      [attr.cy]="table.posY" 
-                      r="28" 
+                    <circle
+                      [attr.cx]="table.posX"
+                      [attr.cy]="table.posY"
+                      r="28"
                       [attr.fill]="getTableOccupiedSeats(table) >= table.capacity ? '#ef4444' : (getTableOccupiedSeats(table) > 0 ? '#10b981' : '#f8fafc')"
-                      [attr.stroke]="getTableOccupiedSeats(table) > 0 ? '#047857' : '#475569'"
-                      stroke-width="2"
+                      [attr.stroke]="getTableOccupiedSeats(table) > 0 ? '#047857' : '#334155'"
+                      stroke-width="2.2"
                     />
                     <!-- Radial chairs -->
-                    <circle [attr.cx]="table.posX" [attr.cy]="table.posY - 36" r="4.5" fill="#64748b" />
-                    <circle [attr.cx]="table.posX" [attr.cy]="table.posY + 36" r="4.5" fill="#64748b" />
-                    <circle [attr.cx]="table.posX - 36" [attr.cy]="table.posY" r="4.5" fill="#64748b" />
-                    <circle [attr.cx]="table.posX + 36" [attr.cy]="table.posY" r="4.5" fill="#64748b" />
-                    <circle [attr.cx]="table.posX - 25" [attr.cy]="table.posY - 25" r="4.5" fill="#64748b" />
-                    <circle [attr.cx]="table.posX + 25" [attr.cy]="table.posY - 25" r="4.5" fill="#64748b" />
-                    <circle [attr.cx]="table.posX - 25" [attr.cy]="table.posY + 25" r="4.5" fill="#64748b" />
-                    <circle [attr.cx]="table.posX + 25" [attr.cy]="table.posY + 25" r="4.5" fill="#64748b" />
+                    <circle [attr.cx]="table.posX" [attr.cy]="table.posY - 36" r="4.5" fill="#475569" />
+                    <circle [attr.cx]="table.posX" [attr.cy]="table.posY + 36" r="4.5" fill="#475569" />
+                    <circle [attr.cx]="table.posX - 36" [attr.cy]="table.posY" r="4.5" fill="#475569" />
+                    <circle [attr.cx]="table.posX + 36" [attr.cy]="table.posY" r="4.5" fill="#475569" />
+                    <circle [attr.cx]="table.posX - 25" [attr.cy]="table.posY - 25" r="4.5" fill="#475569" />
+                    <circle [attr.cx]="table.posX + 25" [attr.cy]="table.posY - 25" r="4.5" fill="#475569" />
+                    <circle [attr.cx]="table.posX - 25" [attr.cy]="table.posY + 25" r="4.5" fill="#475569" />
+                    <circle [attr.cx]="table.posX + 25" [attr.cy]="table.posY + 25" r="4.5" fill="#475569" />
 
                     <text [attr.x]="table.posX" [attr.y]="table.posY - 2" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="800" font-size="11" [attr.fill]="getTableOccupiedSeats(table) > 0 ? '#ffffff' : '#0f172a'">
                       {{ table.tableNumber }}
                     </text>
-                    <text [attr.x]="table.posX" [attr.y]="table.posY + 10" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="700" font-size="8.5" [attr.fill]="getTableOccupiedSeats(table) > 0 ? '#ffffff' : '#64748b'">
+                    <text [attr.x]="table.posX" [attr.y]="table.posY + 10" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="700" font-size="8.5" [attr.fill]="getTableOccupiedSeats(table) > 0 ? '#ffffff' : '#475569'">
                       {{ getTableOccupiedSeats(table) }}/{{ table.capacity }}p
                     </text>
                   </ng-container>
 
                   <!-- Rectangular / Imperial Table -->
                   <ng-container *ngIf="isRectTable(table)">
-                    <rect 
-                      [attr.x]="table.posX - 30" 
-                      [attr.y]="table.posY - 22" 
-                      width="60" 
-                      height="44" 
+                    <rect
+                      [attr.x]="table.posX - 30"
+                      [attr.y]="table.posY - 22"
+                      width="60"
+                      height="44"
                       rx="4"
                       [attr.fill]="getTableOccupiedSeats(table) >= table.capacity ? '#ef4444' : (getTableOccupiedSeats(table) > 0 ? '#10b981' : '#f8fafc')"
-                      [attr.stroke]="getTableOccupiedSeats(table) > 0 ? '#047857' : '#475569'"
-                      stroke-width="2"
+                      [attr.stroke]="getTableOccupiedSeats(table) > 0 ? '#047857' : '#334155'"
+                      stroke-width="2.2"
                     />
                     <!-- Top & Bottom Chairs -->
-                    <rect [attr.x]="table.posX - 25" [attr.y]="table.posY - 29" width="10" height="5" rx="1" fill="#64748b" />
-                    <rect [attr.x]="table.posX - 5" [attr.y]="table.posY - 29" width="10" height="5" rx="1" fill="#64748b" />
-                    <rect [attr.x]="table.posX + 15" [attr.y]="table.posY - 29" width="10" height="5" rx="1" fill="#64748b" />
-                    <rect [attr.x]="table.posX - 25" [attr.y]="table.posY + 24" width="10" height="5" rx="1" fill="#64748b" />
-                    <rect [attr.x]="table.posX - 5" [attr.y]="table.posY + 24" width="10" height="5" rx="1" fill="#64748b" />
-                    <rect [attr.x]="table.posX + 15" [attr.y]="table.posY + 24" width="10" height="5" rx="1" fill="#64748b" />
-                    
+                    <rect [attr.x]="table.posX - 25" [attr.y]="table.posY - 29" width="10" height="5" rx="1" fill="#475569" />
+                    <rect [attr.x]="table.posX - 5" [attr.y]="table.posY - 29" width="10" height="5" rx="1" fill="#475569" />
+                    <rect [attr.x]="table.posX + 15" [attr.y]="table.posY - 29" width="10" height="5" rx="1" fill="#475569" />
+                    <rect [attr.x]="table.posX - 25" [attr.y]="table.posY + 24" width="10" height="5" rx="1" fill="#475569" />
+                    <rect [attr.x]="table.posX - 5" [attr.y]="table.posY + 24" width="10" height="5" rx="1" fill="#475569" />
+                    <rect [attr.x]="table.posX + 15" [attr.y]="table.posY + 24" width="10" height="5" rx="1" fill="#475569" />
+
                     <text [attr.x]="table.posX" [attr.y]="table.posY - 2" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="800" font-size="11" [attr.fill]="getTableOccupiedSeats(table) > 0 ? '#ffffff' : '#0f172a'">
                       {{ table.tableNumber }}
                     </text>
-                    <text [attr.x]="table.posX" [attr.y]="table.posY + 10" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="700" font-size="8.5" [attr.fill]="getTableOccupiedSeats(table) > 0 ? '#ffffff' : '#64748b'">
+                    <text [attr.x]="table.posX" [attr.y]="table.posY + 10" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="700" font-size="8.5" [attr.fill]="getTableOccupiedSeats(table) > 0 ? '#ffffff' : '#475569'">
                       {{ getTableOccupiedSeats(table) }}/{{ table.capacity }}p
                     </text>
                   </ng-container>
@@ -861,24 +912,73 @@ import jsPDF from 'jspdf';
         <div class="modal-box ai-scanner-modal">
           <div class="modal-header">
             <div class="modal-title-with-icon">
-              <app-icon name="sparkles" [size]="20"></app-icon>
-              <h3>Importar Plano CAD con Detección IA</h3>
+              <app-icon name="file-text" [size]="20"></app-icon>
+              <h3>Importar Plano PDF / CAD del Salón</h3>
             </div>
-            <button class="close-btn" (click)="showAiModal.set(false)">✕</button>
+            <button type="button" class="close-btn" (click)="showAiModal.set(false)" title="Cerrar">
+              <app-icon name="x" [size]="16"></app-icon>
+            </button>
           </div>
 
           <div class="ai-modal-content">
             <p class="modal-intro">
-              Sube un boceto arquitectónico o plano en PDF/PNG. Nuestro motor de visión por computadora detectará automáticamente las mesas, pistas de baile y aforos.
+              Sube el plano real del salón en <strong>PDF</strong> o imagen (PNG/JPG). Renderizaremos el plano dentro del croquis para que puedas arrastrar, agregar y editar mesas directamente sobre él.
             </p>
 
-            <!-- Preset Plan Selector -->
-            <div class="presets-selector-group">
-              <label>O selecciona una plantilla de plano arquitectónico:</label>
+            <!-- Upload Zone -->
+            <div class="file-upload-dropzone" [class.scanning]="isScanning() || isRenderingPdf()">
+              <input type="file" (change)="onFileSelected($event)" accept="application/pdf,image/*" class="file-input-hidden" id="croquisFile">
+              <label for="croquisFile" class="dropzone-label">
+                <app-icon name="upload" [size]="30"></app-icon>
+                <strong>{{ isRenderingPdf() ? 'Renderizando documento PDF...' : 'Haz clic o arrastra tu plano arquitectónico en PDF o Imagen' }}</strong>
+                <small>Formatos admitidos: PDF (cualquier página), PNG, JPG, WebP</small>
+              </label>
+
+              <div *ngIf="isScanning() || isRenderingPdf()" class="scanner-laser-bar"></div>
+            </div>
+
+            <!-- Live PDF / Image Preview Card -->
+            <div *ngIf="uploadedBlueprint() as bp" class="blueprint-preview-card">
+              <div class="blueprint-preview-header">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <app-icon name="check-circle" [size]="16"></app-icon>
+                  <strong style="font-size:0.84rem;">{{ bp.fileName }}</strong>
+                </div>
+                <div *ngIf="bp.isPdf && bp.pageCount > 1" class="pdf-page-controls">
+                  <button type="button" (click)="changePdfPage(-1)" [disabled]="bp.currentPage <= 1 || isRenderingPdf()">Anterior</button>
+                  <span>Página {{ bp.currentPage }} / {{ bp.pageCount }}</span>
+                  <button type="button" (click)="changePdfPage(1)" [disabled]="bp.currentPage >= bp.pageCount || isRenderingPdf()">Siguiente</button>
+                </div>
+              </div>
+              <div class="blueprint-preview-img-wrap">
+                <img [src]="bp.dataUrl" alt="Vista previa del plano del salón">
+              </div>
+
+              <div class="import-mode-row">
+                <button
+                  type="button"
+                  [class.active]="aiImportMode() === 'NEW_SALON'"
+                  (click)="aiImportMode.set('NEW_SALON')"
+                >
+                  Crear Nuevo Salón con este Plano
+                </button>
+                <button
+                  type="button"
+                  [class.active]="aiImportMode() === 'APPLY_CURRENT'"
+                  (click)="aiImportMode.set('APPLY_CURRENT')"
+                >
+                  Aplicar al Salón Actual
+                </button>
+              </div>
+            </div>
+
+            <!-- Preset Plan Selector (only when no custom file loaded) -->
+            <div class="presets-selector-group" *ngIf="!uploadedBlueprint()">
+              <label>O selecciona una plantilla arquitectónica predefinida:</label>
               <div class="presets-grid">
-                <button 
-                  type="button" 
-                  class="preset-card" 
+                <button
+                  type="button"
+                  class="preset-card"
                   [class.selected]="aiSelectedPreset() === 'WHITE_POLE_TENT'"
                   (click)="selectAiPreset('WHITE_POLE_TENT')"
                 >
@@ -886,9 +986,9 @@ import jsPDF from 'jspdf';
                   <small>15 mesas · Pista 12x20 · 124 comensales</small>
                 </button>
 
-                <button 
-                  type="button" 
-                  class="preset-card" 
+                <button
+                  type="button"
+                  class="preset-card"
                   [class.selected]="aiSelectedPreset() === 'ZAFIRO_ROOM'"
                   (click)="selectAiPreset('ZAFIRO_ROOM')"
                 >
@@ -896,9 +996,9 @@ import jsPDF from 'jspdf';
                   <small>6 mesas · Chimenea · 56 comensales</small>
                 </button>
 
-                <button 
-                  type="button" 
-                  class="preset-card" 
+                <button
+                  type="button"
+                  class="preset-card"
                   [class.selected]="aiSelectedPreset() === 'BANQUET_IMPERIAL'"
                   (click)="selectAiPreset('BANQUET_IMPERIAL')"
                 >
@@ -908,20 +1008,7 @@ import jsPDF from 'jspdf';
               </div>
             </div>
 
-            <!-- Upload Zone -->
-            <div class="file-upload-dropzone" [class.scanning]="isScanning()">
-              <input type="file" (change)="onFileSelected($event)" accept="image/*,application/pdf" class="file-input-hidden" id="croquisFile">
-              <label for="croquisFile" class="dropzone-label">
-                <app-icon name="camera" [size]="32"></app-icon>
-                <strong>Arrastra aquí el plano arquitectónico</strong>
-                <small>Formatos admitidos: PNG, JPG, CAD DWG, PDF (Hasta 25MB)</small>
-              </label>
-
-              <!-- Scanning HUD Laser Overlay -->
-              <div *ngIf="isScanning()" class="scanner-laser-bar"></div>
-            </div>
-
-            <!-- Real-time AI Progress Bar -->
+            <!-- Real-time Progress Bar -->
             <div *ngIf="isScanning()" class="scanning-feedback-box">
               <div class="scan-step-text">{{ scanningStepText() }}</div>
               <div class="progress-track">
@@ -929,18 +1016,24 @@ import jsPDF from 'jspdf';
               </div>
             </div>
 
-            <!-- Manual Name Input -->
-            <div class="form-group" style="margin-top: 14px;">
-              <label>Nombre para este Nuevo Salón / Recinto:</label>
-              <input type="text" [(ngModel)]="aiSalonName" placeholder="Ej. Jardín Las Palmas / Carpa Diamante">
+            <!-- Configuration Row -->
+            <div class="form-row" style="margin-top: 14px;">
+              <div class="form-group" style="flex:2;" *ngIf="aiImportMode() === 'NEW_SALON' || !uploadedBlueprint()">
+                <label>Nombre para el Salón / Recinto:</label>
+                <input type="text" [(ngModel)]="aiSalonName" name="aiSalonNameInput" placeholder="Ej. Jardín Las Palmas / Salón Diamante">
+              </div>
+              <div class="form-group" style="flex:1;" *ngIf="uploadedBlueprint()">
+                <label>Mesas Iniciales a Posicionar:</label>
+                <input type="number" [(ngModel)]="aiTableCount" name="aiTableCountInput" min="1" max="40">
+              </div>
             </div>
           </div>
 
           <div class="modal-footer">
-            <button class="btn-outline" (click)="showAiModal.set(false)" [disabled]="isScanning()">Cancelar</button>
-            <button class="btn-action" (click)="runAiDetection()" [disabled]="isScanning()">
+            <button type="button" class="btn-outline" (click)="showAiModal.set(false)" [disabled]="isScanning() || isRenderingPdf()">Cancelar</button>
+            <button type="button" class="btn-action" (click)="runAiDetection()" [disabled]="isScanning() || isRenderingPdf()">
               <app-icon name="sparkles" [size]="15"></app-icon>
-              <span>{{ isScanning() ? 'Escaneando Plano CAD...' : 'Iniciar Auto-Detección' }}</span>
+              <span>{{ isScanning() ? 'Procesando Plano...' : (uploadedBlueprint() ? 'Cargar Plano al Croquis CAD' : 'Aplicar Plantilla CAD') }}</span>
             </button>
           </div>
         </div>
@@ -953,7 +1046,9 @@ import jsPDF from 'jspdf';
         <div class="modal-box">
           <div class="modal-header">
             <h3>Registrar Nuevo Salón / Recinto</h3>
-            <button class="close-btn" (click)="showNewSalonModal.set(false)">✕</button>
+            <button type="button" class="close-btn" (click)="showNewSalonModal.set(false)" title="Cerrar">
+              <app-icon name="x" [size]="16"></app-icon>
+            </button>
           </div>
 
           <form (ngSubmit)="handleCreateSalon()">
@@ -1010,7 +1105,9 @@ import jsPDF from 'jspdf';
         <div class="modal-box">
           <div class="modal-header">
             <h3>Agregar Mesa al Salón Actual</h3>
-            <button class="close-btn" (click)="showNewTableModal.set(false)">✕</button>
+            <button type="button" class="close-btn" (click)="showNewTableModal.set(false)" title="Cerrar">
+              <app-icon name="x" [size]="16"></app-icon>
+            </button>
           </div>
 
           <form (ngSubmit)="handleCreateTable()">
@@ -1049,7 +1146,9 @@ import jsPDF from 'jspdf';
         <div class="modal-box pdf-export-modal">
           <div class="modal-header">
             <h3>Hoja Técnica de Montaje &amp; Croquis Oficial</h3>
-            <button class="close-btn" (click)="showPdfExportModal.set(false)">✕</button>
+            <button type="button" class="close-btn" (click)="showPdfExportModal.set(false)" title="Cerrar">
+              <app-icon name="x" [size]="16"></app-icon>
+            </button>
           </div>
 
           <div class="pdf-print-sheet" id="printableCroquisSheet">
@@ -1108,7 +1207,9 @@ import jsPDF from 'jspdf';
               <app-icon name="users" [size]="20"></app-icon>
               <h3>Reubicar Invitado a Otra Mesa</h3>
             </div>
-            <button class="close-btn" (click)="showReassignModal.set(false)">✕</button>
+            <button type="button" class="close-btn" (click)="showReassignModal.set(false)" title="Cerrar">
+              <app-icon name="x" [size]="16"></app-icon>
+            </button>
           </div>
 
           <div class="modal-body-content" *ngIf="guestToReassign() as guest">
@@ -1125,8 +1226,8 @@ import jsPDF from 'jspdf';
             </p>
 
             <div class="tables-reassign-grid">
-              <div 
-                *ngFor="let t of eventService.currentSalon()?.tables" 
+              <div
+                *ngFor="let t of eventService.currentSalon()?.tables"
                 class="reassign-table-card"
                 [class.current-table]="t.id === guest.assignedTableId"
                 [class.has-space]="(t.capacity - getTableOccupiedSeats(t)) >= guest.totalPasses"
@@ -1147,7 +1248,7 @@ import jsPDF from 'jspdf';
                   </div>
                 </div>
 
-                <button 
+                <button
                   class="btn-choose-table"
                   [disabled]="t.id === guest.assignedTableId"
                   (click)="confirmReassign(t.id)"
@@ -1176,7 +1277,9 @@ import jsPDF from 'jspdf';
         <div class="modal-box">
           <div class="modal-header">
             <h3>Modificar Propiedades de Mesa</h3>
-            <button class="close-btn" (click)="showEditTableModal.set(false)">✕</button>
+            <button type="button" class="close-btn" (click)="showEditTableModal.set(false)" title="Cerrar">
+              <app-icon name="x" [size]="16"></app-icon>
+            </button>
           </div>
 
           <form (ngSubmit)="saveTableEdit()">
@@ -1215,7 +1318,9 @@ import jsPDF from 'jspdf';
         <div class="modal-box">
           <div class="modal-header">
             <h3>Modificar Salón / Recinto</h3>
-            <button class="close-btn" (click)="showEditSalonModal.set(false)">✕</button>
+            <button type="button" class="close-btn" (click)="showEditSalonModal.set(false)" title="Cerrar">
+              <app-icon name="x" [size]="16"></app-icon>
+            </button>
           </div>
 
           <form (ngSubmit)="saveSalonEdit()">
@@ -2633,6 +2738,141 @@ import jsPDF from 'jspdf';
       color: #64748b;
     }
 
+    .placing-banner-strip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: color-mix(in srgb, #0284c7 10%, transparent);
+      border: 1px solid rgba(2, 132, 199, 0.35);
+      margin-bottom: 10px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .placing-shape-pills {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .placing-shape-pills button {
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .placing-shape-pills button.active {
+      background: #0284c7;
+      border-color: #0284c7;
+      color: #ffffff;
+    }
+
+    .blueprint-controls-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--text-primary) 4%, transparent);
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .blueprint-controls-bar input[type="range"] {
+      width: 90px;
+      accent-color: #0284c7;
+    }
+
+    .architectural-svg.placing-cursor {
+      cursor: crosshair !important;
+    }
+
+    .blueprint-preview-card {
+      margin-top: 14px;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 12px;
+      background: color-mix(in srgb, var(--bg-body) 60%, transparent);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .blueprint-preview-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .blueprint-preview-img-wrap {
+      max-height: 220px;
+      overflow: hidden;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: #ffffff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .blueprint-preview-img-wrap img {
+      max-height: 215px;
+      max-width: 100%;
+      object-fit: contain;
+    }
+
+    .pdf-page-controls {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+
+    .pdf-page-controls button {
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-primary);
+      border-radius: 6px;
+      padding: 2px 8px;
+      cursor: pointer;
+    }
+
+    .import-mode-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .import-mode-row button {
+      flex: 1;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .import-mode-row button.active {
+      background: color-mix(in srgb, #0284c7 14%, transparent);
+      border-color: #0284c7;
+      color: #0284c7;
+    }
+
     @media (max-width: 1024px) {
       .croquis-main-grid {
         grid-template-columns: 1fr;
@@ -2666,6 +2906,14 @@ export class CroquisComponent {
   dragStartTableY = 0;
   hasMoved = false;
 
+  // Blueprint & CAD interaction state
+  blueprintOpacity = signal<number>(0.88);
+  showBlueprintGrid = signal<boolean>(true);
+  placingMode = signal<boolean>(false);
+  placingShape = signal<'ROUND' | 'RECTANGULAR'>('ROUND');
+  private dragScaleX = 1;
+  private dragScaleY = 1;
+
   // Modals state
   showPdfExportModal = signal(false);
   showAiModal = signal(false);
@@ -2677,12 +2925,17 @@ export class CroquisComponent {
 
   guestToReassign = signal<Guest | null>(null);
 
-  // AI Scanner state
+  // AI & PDF Scanner state
   isScanning = signal(false);
+  isRenderingPdf = signal(false);
   scanningProgress = signal(0);
   scanningStepText = signal('Iniciando calibración...');
   aiSelectedPreset = signal<SalonType>('WHITE_POLE_TENT');
   aiSalonName: string = 'Carpa Real Imperial 40x60';
+  aiTableCount: number = 10;
+  aiImportMode = signal<'NEW_SALON' | 'APPLY_CURRENT'>('NEW_SALON');
+  uploadedBlueprint = signal<RenderedBlueprintResult | null>(null);
+  private uploadedBlueprintFile: File | null = null;
 
   // Forms
   newSalonForm: Partial<Salon> = {
@@ -2705,7 +2958,8 @@ export class CroquisComponent {
 
   constructor(
     public eventService: EventService,
-    private notificationService: NotificationService
+    private notificationService: NotificationService,
+    private pdfCroquisService: PdfCroquisService
   ) {
     const tables = this.eventService.currentSalon()?.tables || [];
     if (tables.length > 0) {
@@ -2717,6 +2971,47 @@ export class CroquisComponent {
     this.eventService.selectSalon(salonId);
     const tables = this.eventService.currentSalon()?.tables || [];
     this.selectedTable.set(tables.length > 0 ? tables[0] : null);
+  }
+
+  togglePlacingMode(shape?: 'ROUND' | 'RECTANGULAR'): void {
+    if (this.eventService.isEventLocked()) return;
+    if (shape) {
+      this.placingShape.set(shape);
+      this.placingMode.set(true);
+      return;
+    }
+    this.placingMode.update(v => !v);
+  }
+
+  onSvgCanvasClick(event: MouseEvent): void {
+    if (!this.placingMode() || this.eventService.isEventLocked()) return;
+    const target = event.target as Element | null;
+    if (target && target.closest('.table-cad-group')) return;
+
+    const svg = event.currentTarget as SVGSVGElement | null;
+    if (!svg) return;
+
+    const rect = svg.getBoundingClientRect();
+    const vb = svg.viewBox?.baseVal;
+    const vbW = vb && vb.width > 0 ? vb.width : 600;
+    const vbH = vb && vb.height > 0 ? vb.height : 750;
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    const rawX = ((event.clientX - rect.left) / rect.width) * vbW;
+    const rawY = ((event.clientY - rect.top) / rect.height) * vbH;
+    const posX = Math.max(40, Math.min(Math.round(vbW - 40), Math.round(rawX)));
+    const posY = Math.max(40, Math.min(Math.round(vbH - 40), Math.round(rawY)));
+
+    const shape = this.placingShape();
+    const created = this.eventService.addTableToCurrentSalon({
+      shape,
+      capacity: shape === 'RECTANGULAR' ? 8 : 10,
+      posX,
+      posY
+    });
+    if (created) {
+      this.selectedTable.set(created);
+    }
   }
 
   zoomIn(): void {
@@ -2745,7 +3040,7 @@ export class CroquisComponent {
   getGuestsForSelectedTable(): Guest[] {
     const t = this.activeSelectedTable();
     if (!t) return [];
-    return this.eventService.eventGuests().filter(g => 
+    return this.eventService.eventGuests().filter(g =>
       (g.assignedTableId != null && Number(g.assignedTableId) === Number(t.id)) ||
       (g.assignedTableName && g.assignedTableName.toLowerCase().trim() === t.tableName.toLowerCase().trim()) ||
       (g.assignedTableName && new RegExp(`\\b(mesa|table)\\s*0*${t.tableNumber}\\b`, 'i').test(g.assignedTableName))
@@ -2785,64 +3080,155 @@ export class CroquisComponent {
     this.selectedTable.set(tables.length > 0 ? tables[0] : null);
   }
 
-  // --- AI DETECTOR METHODS ---
-  openAiDetectorModal(): void {
+  // --- AI & REAL PDF BLUEPRINT DETECTOR METHODS ---
+  openAiDetectorModal(mode: 'NEW_SALON' | 'APPLY_CURRENT' = 'NEW_SALON'): void {
     this.isScanning.set(false);
+    this.isRenderingPdf.set(false);
     this.scanningProgress.set(0);
+    this.uploadedBlueprint.set(null);
+    this.uploadedBlueprintFile = null;
+    this.aiImportMode.set(mode);
+    const cur = this.eventService.currentSalon();
+    if (mode === 'APPLY_CURRENT' && cur) {
+      this.aiSalonName = cur.name;
+      this.aiTableCount = cur.tables.length || 10;
+    }
     this.showAiModal.set(true);
   }
 
   selectAiPreset(type: SalonType): void {
     this.aiSelectedPreset.set(type);
+    this.uploadedBlueprint.set(null);
+    this.uploadedBlueprintFile = null;
     if (type === 'WHITE_POLE_TENT') {
       this.aiSalonName = 'Carpa Real 40x60 White Pole Tent';
+      this.aiTableCount = 15;
     } else if (type === 'ZAFIRO_ROOM') {
       this.aiSalonName = 'Salón Zafiro Banquet Room';
+      this.aiTableCount = 6;
     } else {
       this.aiSalonName = 'Salón Real Imperial';
+      this.aiTableCount = 16;
     }
   }
 
-  onFileSelected(event: any): void {
-    const file = event.target.files?.[0];
-    if (file) {
-      this.aiSalonName = `Plano Detectado - ${file.name.replace(/\.[^/.]+$/, "")}`;
-      this.notificationService.show('info', 'Archivo Cargado', `Listo para procesar "${file.name}"`);
+  async onFileSelected(event: any): Promise<void> {
+    const file = event?.target?.files?.[0] as File | undefined;
+    if (!file) return;
+
+    this.uploadedBlueprintFile = file;
+    if (this.aiImportMode() === 'NEW_SALON') {
+      this.aiSalonName = file.name.replace(/\.[^/.]+$/, '');
+    }
+    this.isRenderingPdf.set(true);
+
+    try {
+      const rendered = await this.pdfCroquisService.processBlueprintFile(file, 1, this.aiTableCount || 10);
+      this.uploadedBlueprint.set(rendered);
+      this.notificationService.show(
+        'success',
+        rendered.isPdf ? 'Plano PDF Renderizado' : 'Imagen del Salón Cargada',
+        `Archivo "${file.name}" procesado (${rendered.isPdf ? 'Pág. ' + rendered.currentPage + '/' + rendered.pageCount : rendered.naturalWidth + 'x' + rendered.naturalHeight + 'px'}).`
+      );
+    } catch (err: any) {
+      this.notificationService.show('error', 'Error al Procesar Plano', err?.message || 'Verifica que el archivo PDF o imagen sea válido.');
+    } finally {
+      this.isRenderingPdf.set(false);
     }
   }
 
-  runAiDetection(): void {
+  async changePdfPage(delta: number): Promise<void> {
+    const bp = this.uploadedBlueprint();
+    if (!bp || !this.uploadedBlueprintFile || !bp.isPdf) return;
+    const nextPage = Math.min(Math.max(1, bp.currentPage + delta), bp.pageCount);
+    if (nextPage === bp.currentPage) return;
+
+    this.isRenderingPdf.set(true);
+    try {
+      const rendered = await this.pdfCroquisService.processBlueprintFile(this.uploadedBlueprintFile, nextPage, this.aiTableCount || 10);
+      this.uploadedBlueprint.set(rendered);
+    } catch {
+      this.notificationService.show('error', 'Error de Página', 'No se pudo renderizar esa página del PDF.');
+    } finally {
+      this.isRenderingPdf.set(false);
+    }
+  }
+
+  async runAiDetection(): Promise<void> {
+    const bp = this.uploadedBlueprint();
     this.isScanning.set(true);
-    this.scanningProgress.set(10);
-    this.scanningStepText.set('Calibrando escala métrica y vectores del plano...');
+    this.scanningProgress.set(20);
+    this.scanningStepText.set(
+      bp ? 'Procesando geometría del plano PDF y detectando zonas de montaje...' : 'Calibrando escala métrica y vectores del plano...'
+    );
+
+    let activeBp = bp;
+    if (this.uploadedBlueprintFile && activeBp && activeBp.suggestedTableSpots.length !== (this.aiTableCount || 10)) {
+      try {
+        activeBp = await this.pdfCroquisService.processBlueprintFile(
+          this.uploadedBlueprintFile,
+          activeBp.currentPage,
+          Math.max(1, Math.min(40, Number(this.aiTableCount) || 10))
+        );
+      } catch {}
+    }
 
     setTimeout(() => {
-      this.scanningProgress.set(40);
-      this.scanningStepText.set('Analizando geometría: detectando mesas redondas y pistas...');
-    }, 700);
-
-    setTimeout(() => {
-      this.scanningProgress.set(75);
-      this.scanningStepText.set('Vectorizando coordenadas de sillas y zonas de servicio...');
-    }, 1400);
+      this.scanningProgress.set(65);
+      this.scanningStepText.set('Generando posiciones interactivas de mesas Redondas e Imperiales...');
+    }, 350);
 
     setTimeout(() => {
       this.scanningProgress.set(100);
-      this.scanningStepText.set('¡Detección completada con éxito!');
+      this.scanningStepText.set('Plano CAD configurado.');
 
-      const preset = this.aiSelectedPreset();
-      const tableCount = preset === 'WHITE_POLE_TENT' ? 15 : (preset === 'ZAFIRO_ROOM' ? 6 : 16);
-      
-      const imported = this.eventService.importCroquisWithAiDetection(
-        this.aiSalonName || 'Recinto Importado CAD',
-        preset,
-        tableCount
-      );
+      if (activeBp && this.aiImportMode() === 'APPLY_CURRENT') {
+        const cur = this.eventService.currentSalon();
+        if (cur) {
+          this.eventService.setSalonBlueprintBackground(
+            cur.id,
+            activeBp.dataUrl,
+            `Plano PDF/Imagen "${activeBp.fileName}" vinculado al recinto actual.`
+          );
+          if (cur.tables.length === 0 && activeBp.suggestedTableSpots.length > 0) {
+            activeBp.suggestedTableSpots.forEach((spot, idx) => {
+              this.eventService.addTableToCurrentSalon({
+                tableName: `Mesa ${idx + 1 < 10 ? '0' + (idx + 1) : idx + 1}`,
+                shape: spot.shape,
+                capacity: spot.capacity,
+                posX: spot.posX,
+                posY: spot.posY
+              });
+            });
+          }
+          this.selectedTable.set(this.eventService.currentSalon()?.tables[0] || null);
+        }
+      } else if (activeBp) {
+        const count = Math.max(1, Math.min(40, Number(this.aiTableCount) || 10));
+        const spots = activeBp.suggestedTableSpots.map(s => ({ x: s.posX, y: s.posY }));
+        const imported = this.eventService.importCroquisWithAiDetection(
+          this.aiSalonName || `Plano PDF - ${activeBp.fileName}`,
+          'CUSTOM',
+          count,
+          activeBp.dataUrl,
+          spots
+        );
+        this.selectedTable.set(imported.tables[0] || null);
+      } else {
+        const preset = this.aiSelectedPreset();
+        const tableCount = preset === 'WHITE_POLE_TENT' ? 15 : (preset === 'ZAFIRO_ROOM' ? 6 : 16);
+        const imported = this.eventService.importCroquisWithAiDetection(
+          this.aiSalonName || 'Recinto Importado CAD',
+          preset,
+          tableCount
+        );
+        this.selectedTable.set(imported.tables[0] || null);
+      }
 
       this.isScanning.set(false);
       this.showAiModal.set(false);
-      this.selectedTable.set(imported.tables[0] || null);
-    }, 2100);
+      this.placingMode.set(false);
+    }, 750);
   }
 
   // --- MANUAL CREATION METHODS ---
@@ -2879,8 +3265,22 @@ export class CroquisComponent {
     event.stopPropagation();
     this.selectedTable.set(table);
     if (this.eventService.isEventLocked()) {
-      return; // Locked event mode
+      return;
     }
+
+    const ownerSvg = (event.currentTarget as SVGElement | null)?.ownerSVGElement;
+    if (ownerSvg) {
+      const rect = ownerSvg.getBoundingClientRect();
+      const vb = ownerSvg.viewBox?.baseVal;
+      const vbW = vb && vb.width > 0 ? vb.width : 600;
+      const vbH = vb && vb.height > 0 ? vb.height : 750;
+      this.dragScaleX = rect.width > 0 ? rect.width / vbW : this.zoomScale();
+      this.dragScaleY = rect.height > 0 ? rect.height / vbH : this.zoomScale();
+    } else {
+      this.dragScaleX = this.zoomScale();
+      this.dragScaleY = this.zoomScale();
+    }
+
     this.draggedTable = table;
     this.dragStartPointerX = event.clientX;
     this.dragStartPointerY = event.clientY;
@@ -2894,15 +3294,17 @@ export class CroquisComponent {
   onWindowPointerMove(event: PointerEvent): void {
     if (!this.isDragging() || !this.draggedTable) return;
 
-    const dx = (event.clientX - this.dragStartPointerX) / this.zoomScale();
-    const dy = (event.clientY - this.dragStartPointerY) / this.zoomScale();
+    const dx = (event.clientX - this.dragStartPointerX) / (this.dragScaleX || this.zoomScale() || 1);
+    const dy = (event.clientY - this.dragStartPointerY) / (this.dragScaleY || this.zoomScale() || 1);
 
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
       this.hasMoved = true;
     }
 
+    const curType = this.eventService.currentSalon()?.type;
+    const maxY = (curType === 'CUSTOM' || curType === 'ZAFIRO_ROOM') ? 720 : 835;
     const newX = Math.max(30, Math.min(570, Math.round(this.dragStartTableX + dx)));
-    const newY = Math.max(30, Math.min(830, Math.round(this.dragStartTableY + dy)));
+    const newY = Math.max(30, Math.min(maxY, Math.round(this.dragStartTableY + dy)));
 
     this.eventService.updateTableInCurrentSalon(this.draggedTable.id, { posX: newX, posY: newY }, true);
     this.selectedTable.set({ ...this.draggedTable, posX: newX, posY: newY });
@@ -2913,7 +3315,11 @@ export class CroquisComponent {
     if (!this.isDragging() || !this.draggedTable) return;
 
     if (this.hasMoved) {
-      this.notificationService.show('success', 'Mesa Reubicada', `Se guardó la nueva posición de ${this.draggedTable.tableName}.`);
+      this.eventService.updateTableInCurrentSalon(
+        this.draggedTable.id,
+        { posX: this.selectedTable()?.posX ?? this.draggedTable.posX, posY: this.selectedTable()?.posY ?? this.draggedTable.posY },
+        false
+      );
     }
     this.isDragging.set(false);
     this.draggedTable = null;
@@ -3084,14 +3490,11 @@ export class CroquisComponent {
 
   upgradeCurrentEventToPremium(): void {
     const ev = this.eventService.selectedEvent();
-    if (ev) {
-      ev.tierPlan = 'PREMIUM';
-      ev.hasCroquis = true;
-      this.notificationService.show(
-        'success',
-        '¡Plan Actualizado a Premium CAD!',
-        `Se desbloqueó el módulo de Croquis arquitectónico y asignación de mesas para "${ev.name}".`
-      );
+    if (!ev) return;
+    const ok = this.eventService.upgradeEventPlan(ev.id, 'PREMIUM');
+    if (ok) {
+      const tables = this.eventService.currentSalon()?.tables || [];
+      this.selectedTable.set(tables.length > 0 ? tables[0] : null);
     }
   }
 

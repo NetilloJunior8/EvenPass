@@ -1,31 +1,37 @@
 /**
- * LUIS GERARDO · MIS 10 AÑOS | MOTOR DE INVITACIÓN & PANEL DEL ANFITRIÓN
- * Soporta index.html (Invitados) y panel.html (Anfitriones) con sincronización total.
+ * MOTOR UNIVERSAL DE INVITACIÓN Y PANEL DEL ANFITRIÓN | EVENPASS OS
+ * Soporta Luis Gerardo 10 (evento 6) y cualquier evento futuro vía ?eventId=...&cfg=...
+ * Sincronización automática bidireccional en vivo (BroadcastChannel + ntfy SSE + Attachment Unwrap).
  */
 
 // ============================================================================
-// 1. CONFIGURACIÓN DEL EVENTO Y SALÓN
+// 1. CONFIGURACIÓN BASE Y RESOLUCIÓN DINÁMICA POR EVENTO
 // ============================================================================
-const EVENT_DATA = {
+const DEFAULT_EVENT_6 = {
+  id: 6,
   title: 'Mis 10 Años · Luis Gerardo',
   boyName: 'Luis Gerardo',
+  hostName: 'Familia Morales (Papás)',
+  eventType: 'Cumpleaños',
   date: 'Sábado 14 de Noviembre, 2026',
   time: '4:00 PM (16:00 hrs)',
-  targetDate: new Date('2026-11-14T16:00:00'),
+  eventDate: '2026-11-14T16:00:00',
   venue: 'Arena Laser Quest & Salón Neón VIP',
   venueAddress: 'Av. Paseo de los Héroes 450, Col. Las Quintas, Culiacán, Sinaloa',
-  parentPhone: '526676118835', // Número oficial de atención y WhatsApp
+  parentPhone: '526676118835',
   totalCapacity: 50,
+  hasCroquis: true,
+  hasScanner: true,
+  tierPlan: 'PREMIUM',
   tables: [
-    { id: 1, name: 'Mesa 01 - Familia Cercana', capacity: 10 },
-    { id: 2, name: 'Mesa 02 - Amigos de Colegio', capacity: 10 },
-    { id: 3, name: 'Mesa 03 - Padrinos & Tíos', capacity: 10 },
-    { id: 4, name: 'Mesa 04 - Amigos Deportes & Laser', capacity: 10 },
-    { id: 5, name: 'Mesa 05 - Invitados Especiales', capacity: 10 }
+    { id: 1, name: 'Mesa 01 - Familia Cercana', capacity: 10, shape: 'ROUND', tableNumber: 1 },
+    { id: 2, name: 'Mesa 02 - Amigos de Colegio', capacity: 10, shape: 'ROUND', tableNumber: 2 },
+    { id: 3, name: 'Mesa 03 - Padrinos & Tíos', capacity: 10, shape: 'ROUND', tableNumber: 3 },
+    { id: 4, name: 'Mesa 04 - Amigos Deportes & Laser', capacity: 10, shape: 'ROUND', tableNumber: 4 },
+    { id: 5, name: 'Mesa 05 - Invitados Especiales', capacity: 10, shape: 'ROUND', tableNumber: 5 }
   ]
 };
 
-// Event ID dinámico para soportar este y todos los futuros eventos
 function getActiveEventId() {
   const params = new URLSearchParams(window.location.search);
   const paramId = params.get('eventId') || params.get('ev') || params.get('id');
@@ -33,25 +39,189 @@ function getActiveEventId() {
     const parsed = parseInt(paramId, 10);
     if (!isNaN(parsed) && parsed > 0) return parsed;
   }
-  return 6; // Por defecto: Mis 10 Años · Luis Gerardo (ID 6)
+  return 6;
 }
 
 const CLOUD_SYNC_RELAY = 'https://ntfy.sh/evenpass_cloud_sync_relay';
 const STORAGE_KEY = `evenpass_event_${getActiveEventId()}_guests_db`;
 const processedCloudMsgIds = new Set();
 let isFirstAppPoll = true;
+let cloudSseSource = null;
+let cloudSseReconnectTimer = null;
+let lastRenderedPassToken = null;
 
-// Emisor en tiempo real hacia la nube (CORS libre, funciona en Netlify, localhost y móviles)
+function trackProcessedMsgId(id) {
+  if (!id) return;
+  processedCloudMsgIds.add(id);
+  if (processedCloudMsgIds.size > 600) {
+    const first = processedCloudMsgIds.values().next().value;
+    if (first) processedCloudMsgIds.delete(first);
+  }
+}
+
+// Decodifica configuración compacta ?cfg=... generada por EvenPass OS para nuevos eventos
+function decodeCompactConfigFromUrl() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const cfg = params.get('cfg');
+    if (!cfg) return null;
+    const b64 = cfg.replace(/-/g, '+').replace(/_/g, '/');
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const decoded = JSON.parse(new TextDecoder().decode(bytes));
+    if (!decoded || !decoded.id) return null;
+
+    const evId = Number(decoded.id);
+    const meta = {
+      id: evId,
+      name: decoded.name || 'Evento EvenPass',
+      hostName: decoded.hostName || 'Anfitrión',
+      eventType: decoded.eventType || 'Evento',
+      eventDate: decoded.eventDate || DEFAULT_EVENT_6.eventDate,
+      venueName: decoded.venueName || 'Salón Principal',
+      locationAddress: decoded.locationAddress || '',
+      maxCapacity: Number(decoded.maxCapacity) || 200,
+      tierPlan: decoded.tierPlan || 'STANDARD',
+      hasCroquis: !!decoded.hasCroquis,
+      hasScanner: !!decoded.hasScanner,
+      status: decoded.status || 'PENDIENTE'
+    };
+    localStorage.setItem(`evenpass_event_${evId}_meta_db`, JSON.stringify(meta));
+    if (Array.isArray(decoded.tables) && decoded.tables.length > 0) {
+      localStorage.setItem(`evenpass_event_${evId}_tables_db`, JSON.stringify(decoded.tables));
+    }
+    return { meta, tables: decoded.tables || [] };
+  } catch (e) {
+    return null;
+  }
+}
+
+function getEventMeta() {
+  const evId = getActiveEventId();
+  try {
+    const rawMeta = localStorage.getItem(`evenpass_event_${evId}_meta_db`);
+    if (rawMeta) {
+      const m = JSON.parse(rawMeta);
+      if (m && m.name) return m;
+    }
+  } catch (e) {}
+
+  try {
+    const rawEvents = localStorage.getItem('evenpass_events_db');
+    if (rawEvents) {
+      const list = JSON.parse(rawEvents);
+      if (Array.isArray(list)) {
+        const found = list.find(e => Number(e.id) === evId);
+        if (found) return found;
+      }
+    }
+  } catch (e) {}
+
+  if (evId === 6) {
+    return {
+      id: 6,
+      name: DEFAULT_EVENT_6.title,
+      hostName: DEFAULT_EVENT_6.hostName,
+      eventType: DEFAULT_EVENT_6.eventType,
+      eventDate: DEFAULT_EVENT_6.eventDate,
+      venueName: DEFAULT_EVENT_6.venue,
+      locationAddress: DEFAULT_EVENT_6.venueAddress,
+      maxCapacity: DEFAULT_EVENT_6.totalCapacity,
+      hasCroquis: true,
+      hasScanner: true,
+      tierPlan: 'PREMIUM'
+    };
+  }
+
+  return {
+    id: evId,
+    name: `Evento EvenPass #${evId}`,
+    hostName: 'Anfitrión del Evento',
+    eventType: 'Celebración',
+    eventDate: new Date().toISOString(),
+    venueName: 'Salón Principal',
+    locationAddress: '',
+    maxCapacity: 200,
+    hasCroquis: true,
+    hasScanner: true,
+    tierPlan: 'STANDARD'
+  };
+}
+
+function updateDynamicEventUI() {
+  const meta = getEventMeta();
+  const evId = getActiveEventId();
+  const evName = meta.name || meta.title || DEFAULT_EVENT_6.title;
+  const venue = meta.venueName || meta.venue || DEFAULT_EVENT_6.venue;
+  const address = meta.locationAddress || meta.venueAddress || DEFAULT_EVENT_6.venueAddress;
+  const hasCroquis = meta.hasCroquis !== false;
+  const tables = getEventTablesRaw();
+  const cap = tables.reduce((s, t) => s + (t.capacity || 10), 0) || Number(meta.maxCapacity) || 50;
+
+  // Panel del Anfitrión
+  const panelSub = document.getElementById('panel-event-subtitle');
+  if (panelSub) {
+    panelSub.innerText = `${evName} | Plan ${meta.tierPlan || 'STANDARD'} · ${venue}`;
+  }
+  const capLabel = document.getElementById('panel-capacity-label');
+  if (capLabel) {
+    capLabel.innerText = `Aforo Salón (${cap} max)`;
+  }
+  const croquisModule = document.getElementById('panel-croquis-module');
+  if (croquisModule) {
+    croquisModule.style.display = hasCroquis ? 'block' : 'none';
+  }
+  const dispatchTableWrap = document.getElementById('dispatch-table')?.parentElement;
+  if (dispatchTableWrap) {
+    dispatchTableWrap.style.display = hasCroquis ? 'block' : 'none';
+  }
+
+  // Invitación pública (index.html) cuando no es Event 6 o trae meta remota
+  if (evId !== 6 || localStorage.getItem(`evenpass_event_${evId}_meta_db`)) {
+    const heroTitle = document.getElementById('hero-event-title');
+    const heroSub = document.getElementById('hero-event-subtitle');
+    const heroVenue = document.getElementById('hero-event-venue');
+    const heroDate = document.getElementById('hero-event-date');
+    const heroTime = document.getElementById('hero-event-time');
+    const vTitle = document.getElementById('venue-title-text');
+    const vAddr = document.getElementById('venue-address-text');
+    const notesLbl = document.getElementById('notes-label');
+
+    if (heroTitle && evId !== 6) heroTitle.innerText = evName.toUpperCase();
+    if (heroSub && evId !== 6) heroSub.innerText = `${meta.eventType || 'Evento'} · Anfitrión: ${meta.hostName || 'Organizador'}`;
+    if (heroVenue) heroVenue.innerText = venue;
+    if (vTitle) vTitle.innerText = venue;
+    if (vAddr && address) vAddr.innerText = address;
+    if (notesLbl && evId !== 6) notesLbl.innerText = `Dedicatoria para ${meta.hostName || 'los Anfitriones'} (Opcional)`;
+
+    if (meta.eventDate) {
+      const dt = new Date(meta.eventDate);
+      if (!isNaN(dt.getTime())) {
+        DEFAULT_EVENT_6.targetDate = dt;
+        if (heroDate && evId !== 6) {
+          heroDate.innerText = dt.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        }
+        if (heroTime && evId !== 6) {
+          heroTime.innerText = dt.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+        }
+      }
+    }
+    if (evId !== 6) {
+      document.title = `${evName} | Invitación EvenPass`;
+    }
+  }
+}
+
+// ============================================================================
+// 2. EMISOR Y DESEMPAQUETADOR CLOUD (SOPORTA PAYLOADS >4KB VÍA ATTACHMENT URL)
+// ============================================================================
 function broadcastToCloud(payload) {
   try {
     if (!payload.msgId) {
       payload.msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     }
-    processedCloudMsgIds.add(payload.msgId);
-    if (processedCloudMsgIds.size > 500) {
-      const first = processedCloudMsgIds.values().next().value;
-      if (first) processedCloudMsgIds.delete(first);
-    }
+    trackProcessedMsgId(payload.msgId);
     fetch(CLOUD_SYNC_RELAY, {
       method: 'POST',
       headers: {
@@ -63,33 +233,79 @@ function broadcastToCloud(payload) {
   } catch (e) {}
 }
 
+function broadcastLocalChannel(payload) {
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      const bc = new BroadcastChannel('evenpass_invitations_channel');
+      bc.postMessage(payload);
+    }
+  } catch (e) {}
+}
+
+async function unwrapCloudPacket(raw) {
+  if (!raw) return null;
+  if (typeof raw.message === 'string' && raw.message.trim().startsWith('{')) {
+    try {
+      return JSON.parse(raw.message);
+    } catch (e) {}
+  }
+  if (raw.attachment && typeof raw.attachment.url === 'string') {
+    try {
+      const res = await fetch(raw.attachment.url, { method: 'GET', mode: 'cors', cache: 'no-store' });
+      if (res.ok) {
+        const text = await res.text();
+        if (text && text.trim().startsWith('{')) {
+          return JSON.parse(text);
+        }
+      }
+    } catch (e) {
+      console.warn('Attachment fetch warn:', e);
+    }
+  }
+  return null;
+}
+
 // ============================================================================
-// 2. BASE DE DATOS LOCAL Y SINCRONIZACIÓN
-// ============================================================================
-// ============================================================================
-// 2. BASE DE DATOS LOCAL, SALONES Y AUTO-BALANCEADOR DE AFORO
+// 3. SALONES, MESAS Y AUTO-BALANCEADOR SIN SOBRECUPO
 // ============================================================================
 function getEventTablesRaw() {
   const evId = getActiveEventId();
-  let baseTables = [...EVENT_DATA.tables];
+  const meta = getEventMeta();
+  if (meta && meta.hasCroquis === false) {
+    return [];
+  }
 
-  // 1. Verificar si hay tablas guardadas del salón de EvenPass
+  let baseTables = evId === 6 ? DEFAULT_EVENT_6.tables.map(t => ({ ...t })) : [];
+
   try {
     const cachedTables = localStorage.getItem(`evenpass_event_${evId}_tables_db`);
     if (cachedTables) {
       const parsed = JSON.parse(cachedTables);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        baseTables = parsed;
+      if (Array.isArray(parsed)) {
+        baseTables = parsed.map((t, idx) => ({
+          id: t.id || (idx + 1),
+          name: t.name || t.tableName || `Mesa ${idx + 1}`,
+          capacity: Number(t.capacity) || 10,
+          shape: t.shape || 'ROUND',
+          tableNumber: t.tableNumber || (idx + 1)
+        }));
       }
     }
   } catch (e) {}
 
-  // 2. Si EvenPass está en el mismo navegador, leer salón activo
+  // Si EvenPass está en el mismo navegador, leer salón exacto del evento
   try {
     const rawSalons = localStorage.getItem('evenpass_salons_db');
+    const rawEvents = localStorage.getItem('evenpass_events_db');
     if (rawSalons) {
       const salons = JSON.parse(rawSalons);
-      const curSalon = salons.find(s => s.id === 4) || salons[0];
+      let targetSalonId = evId === 6 ? 4 : null;
+      if (rawEvents) {
+        const evList = JSON.parse(rawEvents);
+        const ev = Array.isArray(evList) ? evList.find(item => Number(item.id) === evId) : null;
+        if (ev && ev.salonId) targetSalonId = Number(ev.salonId);
+      }
+      const curSalon = targetSalonId ? salons.find(s => Number(s.id) === Number(targetSalonId)) : null;
       if (curSalon && Array.isArray(curSalon.tables) && curSalon.tables.length > 0) {
         baseTables = curSalon.tables.map(t => ({
           id: t.id,
@@ -106,96 +322,101 @@ function getEventTablesRaw() {
 }
 
 function getEventTables() {
-  const baseTables = getEventTablesRaw();
-  const evId = getActiveEventId();
-
-  // 3. Incluir cualquier mesa asignada a invitados que no esté en baseTables (sin llamada recursiva)
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(`evenpass_event_${evId}_guests_db`);
-    if (raw) {
-      const guests = JSON.parse(raw);
-      if (Array.isArray(guests)) {
-        guests.forEach(g => {
-          if (g.tableName && !baseTables.some(t => matchesTableName(g.tableName, t)) && 
-              !g.tableName.toLowerCase().includes('sin mesa') && !g.tableName.toLowerCase().includes('sin asignar')) {
-            baseTables.push({
-              id: baseTables.length + 1,
-              name: g.tableName,
-              capacity: 10,
-              shape: 'ROUND',
-              tableNumber: baseTables.length + 1
-            });
-          }
-        });
-      }
-    }
-  } catch (e) {}
-
-  return baseTables;
+  const meta = getEventMeta();
+  if (meta && meta.hasCroquis === false) return [];
+  return getEventTablesRaw();
 }
 
-// MOTOR DE BALANCEO Y AUTOSANACIÓN DE AFORO (GARANTIZA CERO SOBRECUPO EN EL PANEL)
+function matchesTableName(guestTableName, table) {
+  if (!guestTableName || !table) return false;
+  const g = String(guestTableName).toLowerCase().trim();
+  const t = String(table.name || table.tableName || '').toLowerCase().trim();
+  if (!g || !t) return false;
+  if (g === t) return true;
+  if (g.startsWith(t) || t.startsWith(g)) return true;
+
+  const gMatch = g.match(/\b(?:mesa|table)\s*0*(\d+)/i);
+  const tMatch = t.match(/\b(?:mesa|table)\s*0*(\d+)/i);
+  if (gMatch && tMatch && parseInt(gMatch[1], 10) === parseInt(tMatch[1], 10)) {
+    return true;
+  }
+  if (gMatch && table.tableNumber && parseInt(gMatch[1], 10) === Number(table.tableNumber)) {
+    return true;
+  }
+  return false;
+}
+
 function balanceGuestsAgainstCapacity(guestsList) {
   if (!Array.isArray(guestsList) || guestsList.length === 0) {
     return { guests: guestsList, changed: false };
   }
+  const meta = getEventMeta();
+  if (meta && meta.hasCroquis === false) {
+    return { guests: guestsList, changed: false };
+  }
 
   const tables = getEventTablesRaw();
-  const tableCapMap = new Map();
-  const occTracker = new Map();
-  tables.forEach(t => {
-    tableCapMap.set(t.name, t.capacity || 10);
-    occTracker.set(t.name, 0);
-  });
+  if (tables.length === 0) {
+    return { guests: guestsList, changed: false };
+  }
 
+  const occTracker = new Map();
+  tables.forEach(t => occTracker.set(t.name, 0));
+  const evId = getActiveEventId();
   let changed = false;
 
   guestsList.forEach(g => {
-    if (g.status !== 'DECLINED' && g.tableName && 
-        !g.tableName.toLowerCase().includes('sin asignar') && 
-        !g.tableName.toLowerCase().includes('sin mesa')) {
-
+    if (
+      g.status !== 'DECLINED' &&
+      g.tableName &&
+      !g.tableName.toLowerCase().includes('sin asignar') &&
+      !g.tableName.toLowerCase().includes('sin mesa')
+    ) {
       const passes = Number(g.passesGranted || g.passesConfirmed || g.totalPasses || 1);
       const matched = tables.find(t => matchesTableName(g.tableName, t));
       const tName = matched ? matched.name : g.tableName;
       const current = occTracker.get(tName) || 0;
-      const cap = matched ? (matched.capacity || 10) : (tableCapMap.get(tName) || 10);
+      const cap = matched ? (matched.capacity || 10) : 10;
 
-      if (current + passes > cap) {
-        // SOBRECUPO DETECTADO: Buscar mesa con espacio disponible
+      if (matched && current + passes > cap) {
         let alt = tables.find(t => {
           if (t.name === tName) return false;
           const altOcc = occTracker.get(t.name) || 0;
           return ((t.capacity || 10) - altOcc) >= passes;
         });
 
-        // Si todas las mesas existentes están llenas, auto-crear una nueva mesa
         if (!alt) {
-          const nextNum = tables.length + 1;
-          const newTbl = {
-            id: Date.now() + nextNum,
-            name: `Mesa ${nextNum < 10 ? '0' + nextNum : nextNum} - Auto`,
-            capacity: 10,
-            shape: 'ROUND',
-            tableNumber: nextNum
-          };
-          tables.push(newTbl);
-          tableCapMap.set(newTbl.name, 10);
-          occTracker.set(newTbl.name, 0);
-          alt = newTbl;
+          const totalCap = Math.max(Number(meta.maxCapacity) || 0, tables.reduce((s, x) => s + (x.capacity || 10), 0));
+          const totalUsed = [...occTracker.values()].reduce((s, v) => s + v, 0);
+          if (totalUsed + passes <= totalCap || evId === 6) {
+            const nextNum = (tables.reduce((m, t) => Math.max(m, t.tableNumber || 0), 0)) + 1;
+            const newTbl = {
+              id: Date.now() + nextNum,
+              name: `Mesa ${nextNum < 10 ? '0' + nextNum : nextNum} - Auto`,
+              capacity: Math.max(10, passes),
+              shape: 'ROUND',
+              tableNumber: nextNum
+            };
+            tables.push(newTbl);
+            occTracker.set(newTbl.name, 0);
+            alt = newTbl;
 
-          try {
-            const evId = getActiveEventId();
-            localStorage.setItem(`evenpass_event_${evId}_tables_db`, JSON.stringify(tables));
-          } catch (e) {}
+            try {
+              localStorage.setItem(`evenpass_event_${evId}_tables_db`, JSON.stringify(tables));
+            } catch (e) {}
 
-          broadcastToCloud({ type: 'AUTO_TABLE_CREATED', eventId: getActiveEventId(), table: newTbl, timestamp: Date.now() });
+            const msgId = 'msg_tbl_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+            broadcastLocalChannel({ type: 'AUTO_TABLE_CREATED', msgId, eventId: evId, table: newTbl });
+            broadcastToCloud({ type: 'AUTO_TABLE_CREATED', msgId, eventId: evId, table: newTbl, timestamp: Date.now() });
+          }
         }
 
-        g.tableName = alt.name;
-        g.manualAssignmentTimestamp = Date.now();
-        occTracker.set(alt.name, (occTracker.get(alt.name) || 0) + passes);
-        changed = true;
+        if (alt) {
+          g.tableName = alt.name;
+          g.manualAssignmentTimestamp = Date.now();
+          occTracker.set(alt.name, (occTracker.get(alt.name) || 0) + passes);
+          changed = true;
+        }
       } else {
         occTracker.set(tName, current + passes);
       }
@@ -208,14 +429,14 @@ function balanceGuestsAgainstCapacity(guestsList) {
 function getStoredGuests() {
   const evId = getActiveEventId();
 
-  // 1. Si EvenPass tiene su base de datos local en este navegador, sincronizar con máxima fidelidad
+  // 1. Si EvenPass OS corre en el mismo origen/navegador, leer su base filtrada por evId
   try {
     const epAll = localStorage.getItem('evenpass_all_guests_db');
     if (epAll) {
       const epGuests = JSON.parse(epAll);
       if (Array.isArray(epGuests)) {
-        const evGuests = epGuests.filter(g => g.eventId === evId);
-        if (evGuests.length > 0) {
+        const evGuests = epGuests.filter(g => Number(g.eventId) === evId);
+        if (evGuests.length > 0 || localStorage.getItem('evenpass_events_db')) {
           const mapped = evGuests.map(g => ({
             id: g.id,
             fullName: g.fullName,
@@ -232,133 +453,63 @@ function getStoredGuests() {
 
           const balanceResult = balanceGuestsAgainstCapacity(mapped);
           const finalMapped = balanceResult.guests;
-
           localStorage.setItem(STORAGE_KEY, JSON.stringify(finalMapped));
           localStorage.setItem(`evenpass_event_${evId}_guests_db`, JSON.stringify(finalMapped));
-          localStorage.setItem('evenpass_luis_gerardo_guests_db', JSON.stringify(finalMapped));
+          if (evId === 6) {
+            localStorage.setItem('evenpass_luis_gerardo_guests_db', JSON.stringify(finalMapped));
+          }
           return finalMapped;
         }
       }
     }
   } catch (e) {}
 
-  // 2. Revisar almacenamiento local del panel
-  const cached = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('evenpass_luis_gerardo_guests_db');
+  // 2. Caché local aislada por eventId (evita contaminar eventos nuevos con datos de Event 6)
+  const cached = localStorage.getItem(STORAGE_KEY) || (evId === 6 ? localStorage.getItem('evenpass_luis_gerardo_guests_db') : null);
   if (cached) {
     try {
       const parsed = JSON.parse(cached);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        let changed = false;
-
-        // Auto-sanar sobrecupo heredado de Mesa 01 si Quiñónez y Mario siguen asignados a Mesa 01
-        parsed.forEach(g => {
-          const name = (g.fullName || '').toLowerCase().trim();
-          if ((name.includes('quiñónez') || name.includes('quinonez')) && (g.tableName || '').includes('Mesa 01')) {
-            g.tableName = 'Mesa 05 - Invitados Especiales';
-            changed = true;
-          }
-        });
-
-        // Garantizar que Mario con 3 pases siempre esté disponible
-        if (!parsed.some(g => (g.fullName || '').toLowerCase().trim() === 'mario')) {
-          parsed.push({
-            id: 6,
-            fullName: 'Mario',
-            phone: '667-611-8835',
-            passesGranted: 3,
-            passesConfirmed: 0,
-            status: 'PENDING',
-            tableName: 'Mesa 03 - Padrinos & Tíos',
-            token: 'LG10-VIP-8835',
-            notes: 'Invitación con 3 pases',
-            updatedAt: '12:45 PM'
-          });
-          changed = true;
-        }
-
-        // Auto-sanar y balancear sobrecupo en cualquier mesa
+      if (Array.isArray(parsed)) {
         const balanceResult = balanceGuestsAgainstCapacity(parsed);
-        if (balanceResult.changed) {
-          changed = true;
-        }
-
         const finalParsed = balanceResult.guests;
-
-        if (changed) {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(finalParsed));
-          localStorage.setItem(`evenpass_event_${evId}_guests_db`, JSON.stringify(finalParsed));
-          localStorage.setItem('evenpass_luis_gerardo_guests_db', JSON.stringify(finalParsed));
+        if (balanceResult.changed) {
+          saveGuestsListSilently(finalParsed);
         }
         return finalParsed;
       }
     } catch (e) {}
   }
 
-  // 3. Padrón inicial oficial sincronizado con EvenPass (distribución balanceada sin sobrecupo)
-  const initial = [
-    { id: 1, fullName: 'Familia Morales Valenzuela', phone: '667-112-3344', passesGranted: 4, passesConfirmed: 4, status: 'CONFIRMED', tableName: 'Mesa 01 - Familia Cercana', token: 'LG10-VIP-1102', notes: 'Abuelos y tíos', updatedAt: '09:30 AM' },
-    { id: 2, fullName: 'Mateo González & Padres', phone: '667-223-4455', passesGranted: 3, passesConfirmed: 3, status: 'CONFIRMED', tableName: 'Mesa 02 - Amigos de Colegio', token: 'LG10-VIP-2481', notes: 'Compañero de salón', updatedAt: '10:15 AM' },
-    { id: 3, fullName: 'Lic. Roberto Somoza & Fam.', phone: '667-334-5566', passesGranted: 3, passesConfirmed: 3, status: 'CONFIRMED', tableName: 'Mesa 03 - Padrinos & Tíos', token: 'LG10-VIP-3392', notes: 'Padrino', updatedAt: '11:00 AM' },
-    { id: 4, fullName: 'Santiago Beltrán & Papás', phone: '667-445-6677', passesGranted: 3, passesConfirmed: 3, status: 'CONFIRMED', tableName: 'Mesa 04 - Amigos Deportes & Laser', token: 'LG10-VIP-4819', notes: 'Fútbol', updatedAt: '11:45 AM' },
-    { id: 5, fullName: 'Familia Quiñónez Rivas', phone: '667-556-7788', passesGranted: 4, passesConfirmed: 0, status: 'PENDING', tableName: 'Mesa 05 - Invitados Especiales', token: 'LG10-VIP-5520', notes: 'Enviado por WhatsApp', updatedAt: '12:20 PM' },
-    { id: 6, fullName: 'Mario', phone: '667-611-8835', passesGranted: 3, passesConfirmed: 0, status: 'PENDING', tableName: 'Mesa 03 - Padrinos & Tíos', token: 'LG10-VIP-8835', notes: 'Invitación con 3 pases', updatedAt: '12:45 PM' }
-  ];
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
-  localStorage.setItem('evenpass_luis_gerardo_guests_db', JSON.stringify(initial));
-  return initial;
+  // 3. Padrón inicial exclusivo para Evento 6 (Luis Gerardo 10 años, Mario en Mesa 02 = EvenPass)
+  if (evId === 6) {
+    const initial = [
+      { id: 1, fullName: 'Familia Morales Valenzuela', phone: '667-112-3344', passesGranted: 4, passesConfirmed: 4, status: 'CONFIRMED', tableName: 'Mesa 01 - Familia Cercana', token: 'LG10-VIP-1102', notes: 'Abuelos y tíos', updatedAt: '09:30 AM' },
+      { id: 2, fullName: 'Mateo González & Padres', phone: '667-223-4455', passesGranted: 3, passesConfirmed: 3, status: 'CONFIRMED', tableName: 'Mesa 02 - Amigos de Colegio', token: 'LG10-VIP-2481', notes: 'Compañero de salón', updatedAt: '10:15 AM' },
+      { id: 3, fullName: 'Lic. Roberto Somoza & Fam.', phone: '667-334-5566', passesGranted: 3, passesConfirmed: 3, status: 'CONFIRMED', tableName: 'Mesa 03 - Padrinos & Tíos', token: 'LG10-VIP-3392', notes: 'Padrino', updatedAt: '11:00 AM' },
+      { id: 4, fullName: 'Santiago Beltrán & Papás', phone: '667-445-6677', passesGranted: 3, passesConfirmed: 3, status: 'CONFIRMED', tableName: 'Mesa 04 - Amigos Deportes & Laser', token: 'LG10-VIP-4819', notes: 'Fútbol', updatedAt: '11:45 AM' },
+      { id: 5, fullName: 'Familia Quiñónez Rivas', phone: '667-556-7788', passesGranted: 4, passesConfirmed: 0, status: 'PENDING', tableName: 'Mesa 05 - Invitados Especiales', token: 'LG10-VIP-5520', notes: 'Enviado por WhatsApp', updatedAt: '12:20 PM' },
+      { id: 6, fullName: 'Mario', phone: '667-611-8835', passesGranted: 3, passesConfirmed: 0, status: 'PENDING', tableName: 'Mesa 02 - Amigos de Colegio', token: 'LG10-VIP-8835', notes: 'Invitación con 3 pases', updatedAt: '12:45 PM' }
+    ];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
+    localStorage.setItem('evenpass_luis_gerardo_guests_db', JSON.stringify(initial));
+    return initial;
+  }
+
+  return [];
 }
 
-function saveGuestsList(list) {
+function saveGuestsListSilently(list) {
   const evId = getActiveEventId();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
   try {
     localStorage.setItem(`evenpass_event_${evId}_guests_db`, JSON.stringify(list));
-    localStorage.setItem('evenpass_luis_gerardo_guests_db', JSON.stringify(list));
-    localStorage.setItem('evenpass_luis_gerardo_updated_tick', String(Date.now()));
-  } catch (e) {}
-
-  const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-  processedCloudMsgIds.add(msgId);
-
-  // 1. Sincronizar en la misma pestaña/navegador vía BroadcastChannel
-  try {
-    if (typeof BroadcastChannel !== 'undefined') {
-      const bc = new BroadcastChannel('evenpass_invitations_channel');
-      bc.postMessage({ type: 'SYNC_ALL', msgId: msgId, eventId: evId, guests: list });
+    if (evId === 6) {
+      localStorage.setItem('evenpass_luis_gerardo_guests_db', JSON.stringify(list));
+      localStorage.setItem('evenpass_luis_gerardo_updated_tick', String(Date.now()));
     }
   } catch (e) {}
-
-  // 2. Sincronizar hacia la nube para EvenPass OS en tiempo real (Netlify <-> EvenPass)
-  broadcastToCloud({
-    type: 'SYNC_ALL',
-    msgId: msgId,
-    eventId: evId,
-    guests: list,
-    timestamp: Date.now()
-  });
 }
 
-// Comparador robusto de mesas (tolera "Mesa 02", "Mesa 2", "Mesa 02 - Amigos de Colegio", etc.)
-function matchesTableName(guestTableName, table) {
-  if (!guestTableName || !table) return false;
-  const g = guestTableName.toLowerCase().trim();
-  const t = (table.name || '').toLowerCase().trim();
-  if (g === t) return true;
-  if (g.startsWith(t) || t.startsWith(g)) return true;
-
-  // Comparar por número de mesa: "Mesa 02" vs "Mesa 2" vs "Mesa 02 - Amigos de Colegio"
-  const gMatch = g.match(/mesa\s*0?(\d+)/i);
-  const tMatch = t.match(/mesa\s*0?(\d+)/i);
-  if (gMatch && tMatch && parseInt(gMatch[1], 10) === parseInt(tMatch[1], 10)) {
-    return true;
-  }
-  if (gMatch && table.tableNumber && parseInt(gMatch[1], 10) === table.tableNumber) {
-    return true;
-  }
-  return false;
-}
-
-// Cálculo de Asientos Ocupados por Mesa (Croquis) - Sincronizado exactamente con EvenPass
 function getTableOccupancies() {
   const guests = getStoredGuests();
   const tables = getEventTables();
@@ -366,9 +517,13 @@ function getTableOccupancies() {
   tables.forEach(t => occ.set(t.name, 0));
 
   guests.forEach(g => {
-    if (g.status !== 'DECLINED' && g.tableName && !g.tableName.toLowerCase().includes('sin mesa') && !g.tableName.toLowerCase().includes('sin asignar')) {
+    if (
+      g.status !== 'DECLINED' &&
+      g.tableName &&
+      !g.tableName.toLowerCase().includes('sin mesa') &&
+      !g.tableName.toLowerCase().includes('sin asignar')
+    ) {
       const passes = Number(g.passesGranted || g.passesConfirmed || g.totalPasses || 1);
-      
       const matchedTable = tables.find(t => matchesTableName(g.tableName, t));
       if (matchedTable) {
         occ.set(matchedTable.name, (occ.get(matchedTable.name) || 0) + passes);
@@ -377,15 +532,27 @@ function getTableOccupancies() {
       }
     }
   });
-
   return occ;
 }
 
 function autoAssignTable(passes = 2, preferredName = 'AUTO') {
+  const meta = getEventMeta();
   const tables = getEventTables();
   const occ = getTableOccupancies();
+  const guests = getStoredGuests();
+  const committedPasses = guests
+    .filter(g => g.status !== 'DECLINED')
+    .reduce((sum, g) => sum + Number(g.passesGranted || g.passesConfirmed || 1), 0);
+  const maxEventCap = Number(meta.maxCapacity) || tables.reduce((s, t) => s + (t.capacity || 10), 0) || 200;
 
-  // 1. Si se prefirió una mesa concreta, verificar que tiene cupo
+  if (committedPasses + passes > maxEventCap) {
+    return { tableName: null, autoCreated: false, venueFull: true };
+  }
+
+  if (meta && meta.hasCroquis === false) {
+    return { tableName: 'Acceso General', autoCreated: false, venueFull: false };
+  }
+
   if (preferredName && preferredName !== 'AUTO') {
     const target = tables.find(t => t.name === preferredName);
     if (target) {
@@ -393,11 +560,9 @@ function autoAssignTable(passes = 2, preferredName = 'AUTO') {
       if (current + passes <= target.capacity) {
         return { tableName: target.name, autoCreated: false, venueFull: false };
       }
-      // Mesa preferida llena — continuar búsqueda automática
     }
   }
 
-  // 2. Buscar cualquier mesa con cupo libre suficiente
   for (const table of tables) {
     const current = occ.get(table.name) || 0;
     if (table.capacity - current >= passes) {
@@ -405,100 +570,54 @@ function autoAssignTable(passes = 2, preferredName = 'AUTO') {
     }
   }
 
-  // 3. Todas las mesas llenas — verificar aforo total del evento
-  const totalVenueCap = tables.reduce((sum, t) => sum + (t.capacity || 10), 0) || EVENT_DATA.totalCapacity || 50;
-  const totalOccupied = [...occ.values()].reduce((sum, v) => sum + v, 0);
-
-  if (totalOccupied + passes > totalVenueCap) {
-    // 🚫 Aforo del evento completo — no se puede admitir más invitados
-    return { tableName: null, autoCreated: false, venueFull: true };
-  }
-
-  // 4. Hay capacidad de aforo global pero todas las mesas están llenas — AUTO-CREAR MESA
+  // Todas las mesas llenas pero dentro del aforo máximo: auto-crear nueva mesa
   const evId = getActiveEventId();
-  const nextNum = tables.length + 1;
+  const nextNum = (tables.reduce((m, t) => Math.max(m, t.tableNumber || 0), 0)) + 1;
   const newTableName = `Mesa ${nextNum < 10 ? '0' + nextNum : nextNum} - Auto`;
   const newTable = {
     id: Date.now(),
     name: newTableName,
-    capacity: 10,
+    capacity: Math.max(10, passes),
     shape: 'ROUND',
     tableNumber: nextNum
   };
 
-  // Persistir la nueva mesa en localStorage para que EvenPass y el panel la lean
   try {
-    const cachedTables = localStorage.getItem(`evenpass_event_${evId}_tables_db`);
-    const existing = cachedTables ? JSON.parse(cachedTables) : tables;
+    const existing = getEventTablesRaw();
     existing.push(newTable);
     localStorage.setItem(`evenpass_event_${evId}_tables_db`, JSON.stringify(existing));
   } catch (e) {}
 
-  // Avisar a EvenPass OS via BroadcastChannel + Cloud Relay
-  const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-  processedCloudMsgIds.add(msgId);
+  const msgId = 'msg_tbl_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+  trackProcessedMsgId(msgId);
+  broadcastLocalChannel({ type: 'AUTO_TABLE_CREATED', msgId, eventId: evId, table: newTable });
   broadcastToCloud({ type: 'AUTO_TABLE_CREATED', msgId, eventId: evId, table: newTable, timestamp: Date.now() });
-  try {
-    if (typeof BroadcastChannel !== 'undefined') {
-      const bc = new BroadcastChannel('evenpass_invitations_channel');
-      bc.postMessage({ type: 'AUTO_TABLE_CREATED', msgId, eventId: evId, table: newTable });
-    }
-  } catch (e) {}
 
   return { tableName: newTableName, autoCreated: true, venueFull: false };
 }
 
-function syncDirectWithEvenPass() {
-  const evId = getActiveEventId();
-  const guests = getStoredGuests();
-  saveGuestsList(guests);
-
-  // Solicitar el estado completo de mesas y distribución a EvenPass OS
-  try {
-    if (typeof BroadcastChannel !== 'undefined') {
-      const bc = new BroadcastChannel('evenpass_invitations_channel');
-      bc.postMessage({ type: 'REQUEST_FULL_STATE', eventId: evId });
-    }
-  } catch (e) {}
-
-  broadcastToCloud({
-    type: 'REQUEST_FULL_STATE',
-    eventId: evId,
-    timestamp: Date.now()
-  });
-
-  const payload = JSON.stringify(guests, null, 2);
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(payload).then(() => {
-      alert(`¡Sincronización enviada con éxito a EvenPass OS!\n\nSe emitieron los ${guests.length} invitados del panel por el canal en tiempo real.\n(Copia de respaldo en portapapeles lista por si abres EvenPass en otro equipo).`);
-    }).catch(() => {
-      alert(`¡Sincronización emitida!\n\n${guests.length} invitados conectados en tiempo real con EvenPass OS.`);
-    });
-  } else {
-    alert(`¡Sincronización emitida!\n\n${guests.length} invitados conectados en tiempo real con EvenPass OS.`);
-  }
-}
-
 // ============================================================================
-// 3. ENLACE A GOOGLE CALENDAR
+// 4. ENLACE A GOOGLE CALENDAR & UTILIDADES
 // ============================================================================
 function getGoogleCalendarUrl(guestName = '', passes = 2, table = '') {
-  const title = encodeURIComponent(`Mis 10 Años · Luis Gerardo`);
-  const dates = '20261114T220000Z/20261115T023000Z'; // 16:00 a 20:30 UTC-6 -> 22:00 a 02:30 UTC
-  const location = encodeURIComponent(EVENT_DATA.venueAddress);
+  const meta = getEventMeta();
+  const evTitle = meta.name || meta.title || DEFAULT_EVENT_6.title;
+  const venue = meta.venueName || meta.venue || DEFAULT_EVENT_6.venue;
+  const address = meta.locationAddress || DEFAULT_EVENT_6.venueAddress;
+  const title = encodeURIComponent(evTitle);
+  const dates = '20261114T220000Z/20261115T023000Z';
+  const location = encodeURIComponent(address || venue);
   const details = encodeURIComponent(
-    `Recepción de cumpleaños de Luis Gerardo (10 Años) en ${EVENT_DATA.venue}.\n\n` +
+    `${evTitle} en ${venue}.\n\n` +
     (guestName ? `Pase reservado para: ${guestName} (${passes} personas)\n` : '') +
-    (table ? `Mesa Asignada en Croquis: ${table}\n\n` : '') +
-    `Presenta tu pase digital o código QR al llegar a la puerta del salón.\n` +
-    `Contacto de anfitriones: 667 611 8835.`
+    (table ? `Mesa Asignada: ${table}\n\n` : '') +
+    `Presenta tu pase digital o código QR al llegar.`
   );
-
-  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}&location=${location}`;
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}&location=${location}&sf=true&output=xml`;
 }
 
 // ============================================================================
-// 4. LÓGICA DE LA INVITACIÓN DEL INVITADO (INDEX.HTML)
+// 5. LÓGICA DE INVITACIÓN DIGITAL (INDEX.HTML)
 // ============================================================================
 let userAttendance = true;
 
@@ -523,12 +642,14 @@ function selectAttendance(attending) {
 }
 
 function initGuestPage() {
+  decodeCompactConfigFromUrl();
+  updateDynamicEventUI();
+
   const urlParams = new URLSearchParams(window.location.search);
   const nameParam = urlParams.get('nombre');
   const passesParam = parseInt(urlParams.get('pases'), 10);
   const tokenParam = urlParams.get('token');
 
-  // Enlace a calendario del héroe
   const heroCal = document.getElementById('btn-hero-calendar');
   if (heroCal) heroCal.href = getGoogleCalendarUrl(nameParam || '', passesParam || 2);
 
@@ -550,15 +671,22 @@ function initGuestPage() {
     if (rPassesBadge) rPassesBadge.innerText = `${defaultPasses} Pases Reservados`;
     if (inputName) inputName.value = nameParam;
   } else {
-    if (rTargetName) rTargetName.innerText = 'Familia Invitada';
-    if (rPassesBadge) rPassesBadge.innerText = `${defaultPasses} Pases Reservados`;
-    if (inputName) inputName.value = 'Familia Invitada';
+    // Si abrieron el enlace general sin nombre personalizado, habilitar edición directa
+    if (inputName && inputName.type === 'hidden') {
+      inputName.type = 'text';
+      inputName.className = 'form-input-clean';
+      inputName.placeholder = 'Escribe tu nombre completo o familia';
+      inputName.value = '';
+      inputName.required = true;
+      const guestCard = document.querySelector('.rsvp-guest-card');
+      if (guestCard) guestCard.style.display = 'none';
+    }
   }
 
-  // Configurar opciones de select según los pases otorgados por los anfitriones
   if (selectPasses) {
     selectPasses.innerHTML = '';
-    for (let i = 1; i <= defaultPasses; i++) {
+    const maxSel = nameParam ? defaultPasses : 6;
+    for (let i = 1; i <= maxSel; i++) {
       const opt = document.createElement('option');
       opt.value = i;
       opt.innerText = `${i} ${i === 1 ? 'Persona' : 'Personas'}`;
@@ -567,25 +695,26 @@ function initGuestPage() {
     }
   }
 
-  // Verificar si este token o usuario YA confirmó (Caducidad del link / Solo se genera una vez)
   if (tokenParam) {
+    lastRenderedPassToken = tokenParam;
     const guests = getStoredGuests();
     const existing = guests.find(g => g.token === tokenParam);
-    if (existing && existing.status === 'CONFIRMED') {
-      // Mostrar directamente el pase ya emitido
-      renderIssuedPass(existing.fullName, existing.passesConfirmed, existing.tableName, existing.token);
+    if (existing && (existing.status === 'CONFIRMED' || existing.status === 'ATTENDED')) {
+      renderIssuedPass(existing.fullName, existing.passesConfirmed || existing.passesGranted, existing.tableName, existing.token);
     }
   }
 
   initCountdown();
   startLiveCloudSyncListener();
+  broadcastLocalChannel({ type: 'REQUEST_FULL_STATE', eventId: getActiveEventId() });
+  broadcastToCloud({ type: 'REQUEST_FULL_STATE', eventId: getActiveEventId(), timestamp: Date.now() });
 }
 
 function submitRsvp(e) {
   e.preventDefault();
 
-  const name = document.getElementById('input-name').value.trim() || 'Familia Invitada';
-  const phone = document.getElementById('input-phone').value.trim() || 'Enlace WhatsApp';
+  const name = document.getElementById('input-name').value.trim();
+  const phone = document.getElementById('input-phone').value.trim() || 'Enlace Digital';
   const notes = document.getElementById('input-notes').value.trim();
   const passesSelected = userAttendance ? parseInt(document.getElementById('select-passes').value, 10) : 0;
 
@@ -596,105 +725,74 @@ function submitRsvp(e) {
 
   const urlParams = new URLSearchParams(window.location.search);
   const tokenFromUrl = urlParams.get('token');
-  const token = tokenFromUrl || `LG10-VIP-${Math.floor(1000 + Math.random() * 9000)}`;
+  const token = tokenFromUrl || `EP-${Math.floor(1000 + Math.random() * 9000)}`;
+  lastRenderedPassToken = token;
 
   const guests = getStoredGuests();
-  let assignedTable = 'Sin mesa (No Asiste)';
+  let assignedTable = 'Sin asignar';
 
   if (userAttendance) {
-    // Asignación de mesa automática e inteligente en Croquis
-    const assignRes = autoAssignTable(passesSelected);
-    assignedTable = (assignRes && typeof assignRes === 'object' && assignRes.tableName) 
-      ? assignRes.tableName 
-      : (typeof assignRes === 'string' ? assignRes : 'Mesa 01 - Familia Cercana');
+    const existingPre = guests.find(g => (tokenFromUrl && g.token === tokenFromUrl) || g.fullName.toLowerCase() === name.toLowerCase());
+    const preferred = existingPre && existingPre.tableName && existingPre.tableName !== 'Sin asignar' ? existingPre.tableName : 'AUTO';
+    const assignRes = autoAssignTable(passesSelected, preferred);
+    if (assignRes.venueFull) {
+      alert('El evento ha alcanzado su capacidad máxima de lugares disponibles.');
+      return;
+    }
+    assignedTable = assignRes.tableName || 'Sin asignar';
   }
 
-  // Actualizar o crear invitado en el padrón
   const existingIdx = guests.findIndex(g => (tokenFromUrl && g.token === tokenFromUrl) || g.fullName.toLowerCase() === name.toLowerCase());
+  const now = Date.now();
+  const confirmedGuestObj = {
+    id: existingIdx >= 0 ? guests[existingIdx].id : now,
+    fullName: name,
+    phone: existingIdx >= 0 ? (phone || guests[existingIdx].phone) : phone,
+    passesGranted: passesSelected || (existingIdx >= 0 ? guests[existingIdx].passesGranted : 2),
+    passesConfirmed: passesSelected,
+    status: userAttendance ? 'CONFIRMED' : 'DECLINED',
+    tableName: assignedTable,
+    token: token,
+    notes: notes,
+    updatedAt: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }),
+    manualAssignmentTimestamp: now
+  };
 
   if (existingIdx >= 0) {
-    guests[existingIdx].status = userAttendance ? 'CONFIRMED' : 'DECLINED';
-    guests[existingIdx].passesConfirmed = passesSelected;
-    guests[existingIdx].phone = phone || guests[existingIdx].phone;
-    guests[existingIdx].tableName = assignedTable;
-    guests[existingIdx].token = token;
-    guests[existingIdx].notes = notes;
-    guests[existingIdx].updatedAt = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+    guests[existingIdx] = confirmedGuestObj;
   } else {
-    guests.unshift({
-      id: Date.now(),
-      fullName: name,
-      phone: phone || 'N/A',
-      passesGranted: passesSelected || 2,
-      passesConfirmed: passesSelected,
-      status: userAttendance ? 'CONFIRMED' : 'DECLINED',
-      tableName: assignedTable,
-      token: token,
-      notes: notes,
-      updatedAt: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
-    });
+    guests.unshift(confirmedGuestObj);
   }
 
   saveGuestsListSilently(guests);
 
-  // Sincronizar inmediatamente con EvenPass OS en tiempo real (para reflejar en Croquis central y Escáner)
   const evId = getActiveEventId();
+  const msgId = 'msg_rsvp_' + now + '_' + Math.random().toString(36).substr(2, 7);
+  trackProcessedMsgId(msgId);
+
   try {
-    const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    processedCloudMsgIds.add(msgId);
-
-    const rsvpPayload = {
-      msgId: msgId,
-      eventId: evId,
-      fullName: name,
-      phone: phone || 'WhatsApp Directo',
-      passes: passesSelected,
-      token: token,
-      assignedTable: assignedTable,
-      status: userAttendance ? 'CONFIRMED' : 'DECLINED',
-      source: 'DIGITAL_INVITATION',
-      timestamp: Date.now()
-    };
-    localStorage.setItem('evenpass_latest_rsvp_guest', JSON.stringify(rsvpPayload));
-
-    if (typeof BroadcastChannel !== 'undefined') {
-      const bc = new BroadcastChannel('evenpass_invitations_channel');
-      bc.postMessage({
-        type: 'RSVP_CONFIRMED',
-        msgId: msgId,
-        eventId: evId,
-        guest: {
-          fullName: name,
-          phone: phone,
-          passesConfirmed: userAttendance ? passesSelected : 0,
-          passesGranted: passesSelected,
-          status: userAttendance ? 'CONFIRMED' : 'DECLINED',
-          tableName: assignedTable,
-          token: token,
-          notes: notes
-        },
-        allGuests: guests
-      });
-    }
-
-    broadcastToCloud({
-      type: 'RSVP_CONFIRMED',
-      msgId: msgId,
-      eventId: evId,
-      guest: {
-        fullName: name,
-        phone: phone,
-        passesConfirmed: userAttendance ? passesSelected : 0,
-        passesGranted: passesSelected,
-        status: userAttendance ? 'CONFIRMED' : 'DECLINED',
-        tableName: assignedTable,
-        token: token,
-        notes: notes
-      },
-      allGuests: guests,
-      timestamp: Date.now()
-    });
+    localStorage.setItem('evenpass_latest_rsvp_guest', JSON.stringify({
+      msgId, eventId: evId, fullName: name, phone, passes: passesSelected, token, assignedTable,
+      status: confirmedGuestObj.status, source: 'DIGITAL_INVITATION', timestamp: now
+    }));
   } catch (err) {}
+
+  broadcastLocalChannel({
+    type: 'RSVP_CONFIRMED',
+    msgId,
+    eventId: evId,
+    guest: confirmedGuestObj,
+    allGuests: guests
+  });
+
+  // Cloud payload compacto (<4KB) para entrega SSE instantánea
+  broadcastToCloud({
+    type: 'RSVP_CONFIRMED',
+    msgId,
+    eventId: evId,
+    guest: confirmedGuestObj,
+    timestamp: now
+  });
 
   if (userAttendance) {
     triggerConfetti();
@@ -706,7 +804,7 @@ function submitRsvp(e) {
         <div style="text-align: center; padding: 24px 10px;">
           <h3 style="color: #0f172a; font-size: 1.2rem; margin-bottom: 8px;">Agradecemos tu respuesta</h3>
           <p style="color: #475569; font-size: 0.9rem;">
-            Hemos registrado que no podrás asistir. Tus buenos deseos han sido enviados a Luis Gerardo y a su familia.
+            Hemos registrado que no podrás asistir y notificamos a los anfitriones.
           </p>
         </div>
       `;
@@ -725,8 +823,9 @@ function renderIssuedPass(name, passes, tableName, token, notes = '') {
   const waBtn = document.getElementById('btn-notify-parents-wa');
   const calBtn = document.getElementById('btn-pass-calendar');
 
+  lastRenderedPassToken = token;
   if (pName) pName.innerText = name;
-  if (pTable) pTable.innerText = `Mesa Asignada: ${tableName}`;
+  if (pTable) pTable.innerText = `Mesa Asignada: ${tableName || 'Por asignar'}`;
   if (pFolio) pFolio.innerText = token;
   if (pPasses) pPasses.innerText = `${passes} ${passes === 1 ? 'Persona' : 'Personas'}`;
 
@@ -734,21 +833,20 @@ function renderIssuedPass(name, passes, tableName, token, notes = '') {
     drawQrMatrix(qrCanvas, token);
   }
 
-  // Enlace WhatsApp a los papás (6676118835)
   if (waBtn) {
+    const meta = getEventMeta();
+    const evTitle = meta.name || DEFAULT_EVENT_6.title;
     const msg = encodeURIComponent(
-      `¡Hola! 👋 Confirmamos nuestra asistencia a los 10 años de Luis Gerardo 🎉\n\n` +
-      `👤 Invitado: ${name}\n` +
-      `🎟️ Pases: ${passes} personas\n` +
-      `🍽️ Mesa: ${tableName}\n` +
-      `🔑 Folio QR: ${token}\n` +
-      (notes ? `💬 Mensaje: "${notes}"\n\n` : `\n`) +
-      `¡Nos vemos el Sábado 14 de Noviembre a las 4:00 PM!`
+      `Hola. Confirmamos nuestra asistencia a ${evTitle}.\n\n` +
+      `Invitado: ${name}\n` +
+      `Pases: ${passes} personas\n` +
+      `Mesa asignada: ${tableName || 'Por asignar'}\n` +
+      `Folio QR: ${token}` +
+      (notes ? `\nMensaje: "${notes}"` : '')
     );
-    waBtn.href = `https://wa.me/${EVENT_DATA.parentPhone}?text=${msg}`;
+    waBtn.href = `https://wa.me/${DEFAULT_EVENT_6.parentPhone}?text=${msg}`;
   }
 
-  // Enlace Google Calendar personalizado
   if (calBtn) {
     calBtn.href = getGoogleCalendarUrl(name, passes, tableName);
   }
@@ -760,10 +858,28 @@ function renderIssuedPass(name, passes, tableName, token, notes = '') {
   }
 }
 
-// ============================================================================
-// 5. LÓGICA DEL PANEL DEL ANFITRIÓN (PANEL.HTML) & SINCRONIZACIÓN EN TIEMPO REAL
-// ============================================================================
+function syncOpenGuestPassScreen(guest) {
+  if (!guest) return;
+  const token = guest.token;
+  if (!lastRenderedPassToken || (token && token !== lastRenderedPassToken)) return;
 
+  const pName = document.getElementById('pass-guest-name');
+  const pTable = document.getElementById('pass-table-name');
+  const pPasses = document.getElementById('pass-passes-count');
+  const rTargetName = document.getElementById('rsvp-target-name');
+  const rPassesBadge = document.getElementById('rsvp-passes-badge');
+
+  const passes = guest.passesConfirmed || guest.passesGranted || 1;
+  if (pName) pName.innerText = guest.fullName;
+  if (pTable) pTable.innerText = `Mesa Asignada: ${guest.tableName || 'Por asignar'}`;
+  if (pPasses) pPasses.innerText = `${passes} ${passes === 1 ? 'Persona' : 'Personas'}`;
+  if (rTargetName) rTargetName.innerText = guest.fullName;
+  if (rPassesBadge) rPassesBadge.innerText = `${guest.passesGranted || passes} Pases Reservados`;
+}
+
+// ============================================================================
+// 6. SINCRONIZACIÓN BIDIRECCIONAL EN TIEMPO REAL (SIN BOTONES MANUALES)
+// ============================================================================
 function applyTableReassignment(data) {
   if (!data) return;
   const targetEvId = Number(data.eventId) || 6;
@@ -771,6 +887,7 @@ function applyTableReassignment(data) {
 
   const guests = getStoredGuests();
   let modified = false;
+  let updatedGuest = null;
   const msgTimestamp = Number(data.timestamp || 0);
 
   guests.forEach(g => {
@@ -778,37 +895,29 @@ function applyTableReassignment(data) {
     const matchName = data.fullName && g.fullName && g.fullName.toLowerCase().trim() === data.fullName.toLowerCase().trim();
     if (matchToken || matchName) {
       const curTs = Number(g.manualAssignmentTimestamp || 0);
-      // Evitar que mensajes viejos reviertan cambios manuales más recientes
       if (curTs && msgTimestamp && msgTimestamp < curTs) {
         return;
       }
 
       const tables = getEventTablesRaw();
       const matchedTable = tables.find(t => matchesTableName(data.newTableName, t));
-      const newTbl = data.newTableName === 'Sin asignar' 
-        ? 'Sin asignar' 
-        : (matchedTable ? matchedTable.name : (data.newTableName || 'Sin asignar'));
+      const newTbl = (!data.newTableName || data.newTableName === 'Sin asignar')
+        ? 'Sin asignar'
+        : (matchedTable ? matchedTable.name : data.newTableName);
 
       if (g.tableName !== newTbl) {
         g.tableName = newTbl;
         g.manualAssignmentTimestamp = msgTimestamp || Date.now();
         modified = true;
       }
+      updatedGuest = g;
     }
   });
 
   if (modified) {
     saveGuestsListSilently(guests);
-
-    // Si estamos en panel.html, refrescar tablero y tabla EN VIVO SIN REFRESCAR PÁGINA
     schedulePanelRender();
-
-    // Si estamos en index.html con un pase abierto, actualizar número de mesa en pantalla
-    const pTable = document.getElementById('pass-table-name');
-    const pFolio = document.getElementById('pass-folio-code');
-    if (pTable && pFolio && (data.guestToken === pFolio.innerText.trim() || !pFolio.innerText)) {
-      pTable.innerText = `Mesa Asignada: ${data.newTableName}`;
-    }
+    syncOpenGuestPassScreen(updatedGuest);
   }
 }
 
@@ -819,22 +928,35 @@ function applyFullStateSync(data) {
 
   let changed = false;
 
-  // 1. Guardar tablas sincronizadas
-  if (Array.isArray(data.allTables) && data.allTables.length > 0) {
+  if (data.eventMeta) {
     try {
-      localStorage.setItem(`evenpass_event_${targetEvId}_tables_db`, JSON.stringify(data.allTables));
+      localStorage.setItem(`evenpass_event_${targetEvId}_meta_db`, JSON.stringify(data.eventMeta));
+      updateDynamicEventUI();
       changed = true;
     } catch (e) {}
   }
 
-  // 2. Fusionar invitados inteligentemente (sin sobrescribir asignaciones locales más recientes)
-  if (Array.isArray(data.allGuests) && data.allGuests.length > 0) {
+  if (Array.isArray(data.allTables)) {
+    try {
+      const normalizedTables = data.allTables.map((t, idx) => ({
+        id: t.id || (idx + 1),
+        name: t.name || t.tableName || `Mesa ${idx + 1}`,
+        capacity: Number(t.capacity) || 10,
+        shape: t.shape || 'ROUND',
+        tableNumber: t.tableNumber || (idx + 1)
+      }));
+      localStorage.setItem(`evenpass_event_${targetEvId}_tables_db`, JSON.stringify(normalizedTables));
+      changed = true;
+    } catch (e) {}
+  }
+
+  if (Array.isArray(data.allGuests)) {
     try {
       const localGuests = getStoredGuests();
       const mergedGuests = [...localGuests];
 
       data.allGuests.forEach(incomingG => {
-        const idx = mergedGuests.findIndex(g => 
+        const idx = mergedGuests.findIndex(g =>
           (incomingG.token && g.token === incomingG.token) ||
           (incomingG.id && g.id === incomingG.id) ||
           (incomingG.fullName && g.fullName && g.fullName.toLowerCase().trim() === incomingG.fullName.toLowerCase().trim())
@@ -844,22 +966,26 @@ function applyFullStateSync(data) {
           const cur = mergedGuests[idx];
           const localTs = Number(cur.manualAssignmentTimestamp || 0);
           const incomingTs = Number(incomingG.manualAssignmentTimestamp || data.timestamp || 0);
+          const preferLocal = localTs > incomingTs;
 
-          const preserveLocalTable = localTs > incomingTs;
-          const finalTableName = preserveLocalTable ? cur.tableName : incomingG.tableName;
-          const finalTs = preserveLocalTable ? localTs : incomingTs;
+          const finalTableName = preferLocal ? cur.tableName : (incomingG.tableName || 'Sin asignar');
+          const finalTs = preferLocal ? localTs : incomingTs;
+          const finalStatus = preferLocal ? cur.status : (incomingG.status || cur.status);
+          const finalPasses = preferLocal ? cur.passesGranted : (incomingG.passesGranted || cur.passesGranted);
 
-          const isLocalConfirmed = cur.status === 'CONFIRMED' || cur.status === 'ATTENDED';
-          const isIncomingConfirmed = incomingG.status === 'CONFIRMED' || incomingG.status === 'ATTENDED';
-          const finalStatus = (isLocalConfirmed || isIncomingConfirmed) ? 'CONFIRMED' : (incomingG.status || cur.status);
-
-          if (cur.tableName !== finalTableName || cur.status !== finalStatus || cur.passesGranted !== incomingG.passesGranted) {
+          if (
+            cur.tableName !== finalTableName ||
+            cur.status !== finalStatus ||
+            cur.passesGranted !== finalPasses ||
+            cur.fullName !== incomingG.fullName
+          ) {
             mergedGuests[idx] = {
               ...cur,
               ...incomingG,
               tableName: finalTableName,
               manualAssignmentTimestamp: finalTs,
-              status: finalStatus
+              status: finalStatus,
+              passesGranted: finalPasses
             };
             changed = true;
           }
@@ -871,6 +997,11 @@ function applyFullStateSync(data) {
 
       if (changed) {
         saveGuestsListSilently(mergedGuests);
+      }
+
+      if (lastRenderedPassToken) {
+        const matched = mergedGuests.find(g => g.token === lastRenderedPassToken);
+        if (matched) syncOpenGuestPassScreen(matched);
       }
     } catch (e) {}
   }
@@ -886,8 +1017,8 @@ function schedulePanelRender() {
   panelRenderScheduled = true;
   const doRender = () => {
     panelRenderScheduled = false;
-    if (typeof loadStoredGuests === 'function' && 
-        (document.getElementById('panel-tables-grid') || document.getElementById('panel-guest-list') || document.getElementById('table-host-guests'))) {
+    updateDynamicEventUI();
+    if (document.getElementById('panel-tables-grid') || document.getElementById('panel-table-body')) {
       loadStoredGuests();
     }
   };
@@ -900,77 +1031,176 @@ function schedulePanelRender() {
 
 function handleIncomingCloudMessage(data) {
   if (!data || !data.type) return;
+  const evId = getActiveEventId();
+  if (data.eventId && Number(data.eventId) !== evId) return;
 
   if (data.type === 'SYNC_FULL_STATE') {
     applyFullStateSync(data);
-  } else if (data.type === 'TABLE_REASSIGNED') {
-    applyTableReassignment(data);
-  } else if (data.type === 'GUEST_DELETED') {
-    if (data.eventId === getActiveEventId() || !data.eventId) {
-      const guests = getStoredGuests();
-      const filtered = guests.filter(g => 
-        !( (data.guestToken && g.token === data.guestToken) ||
-           (data.fullName && g.fullName && g.fullName.toLowerCase().trim() === data.fullName.toLowerCase().trim()) ||
-           (data.guestId && g.id === data.guestId) )
-      );
-      if (filtered.length !== guests.length) {
-        saveGuestsListSilently(filtered);
-        schedulePanelRender();
-      }
-    }
-  } else if (data.type === 'AUTO_TABLE_CREATED') {
-    if (data.table && (data.eventId === getActiveEventId() || !data.eventId)) {
-      try {
-        const evId = getActiveEventId();
-        const cachedTables = localStorage.getItem(`evenpass_event_${evId}_tables_db`);
-        const existing = cachedTables ? JSON.parse(cachedTables) : getEventTables();
-        const alreadyExists = existing.some(t => t.name === data.table.name || t.id === data.table.id);
-        if (!alreadyExists) {
-          existing.push(data.table);
-          localStorage.setItem(`evenpass_event_${evId}_tables_db`, JSON.stringify(existing));
-        }
-      } catch (e) {}
+    return;
+  }
+
+  if (data.type === 'TABLES_SYNC' && Array.isArray(data.allTables)) {
+    try {
+      const normalized = data.allTables.map((t, idx) => ({
+        id: t.id || (idx + 1),
+        name: t.name || t.tableName || `Mesa ${idx + 1}`,
+        capacity: Number(t.capacity) || 10,
+        shape: t.shape || 'ROUND',
+        tableNumber: t.tableNumber || (idx + 1)
+      }));
+      localStorage.setItem(`evenpass_event_${evId}_tables_db`, JSON.stringify(normalized));
       if (typeof populateDispatchTablesSelect === 'function') populateDispatchTablesSelect();
       schedulePanelRender();
-    }
-  } else if (data.type === 'SYNC_ALL' && Array.isArray(data.guests)) {
-    if (data.eventId === getActiveEventId()) {
-      saveGuestsListSilently(data.guests);
+    } catch (e) {}
+    return;
+  }
+
+  if (data.type === 'TABLE_REASSIGNED') {
+    applyTableReassignment(data);
+    return;
+  }
+
+  if (data.type === 'GUEST_DELETED') {
+    const guests = getStoredGuests();
+    const filtered = guests.filter(g =>
+      !(
+        (data.guestToken && g.token === data.guestToken) ||
+        (data.fullName && g.fullName && g.fullName.toLowerCase().trim() === data.fullName.toLowerCase().trim()) ||
+        (data.guestId && g.id === data.guestId)
+      )
+    );
+    if (filtered.length !== guests.length) {
+      saveGuestsListSilently(filtered);
       schedulePanelRender();
     }
-  } else if (data.type === 'NEW_GUEST' || data.type === 'NEW_INVITATION') {
-    if (data.guest && (data.eventId === getActiveEventId() || !data.eventId)) {
+    return;
+  }
+
+  if ((data.type === 'AUTO_TABLE_CREATED' || data.type === 'TABLE_CREATED') && data.table) {
+    try {
+      const existing = getEventTablesRaw();
+      const tblName = data.table.name || data.table.tableName;
+      const alreadyExists = existing.some(t => t.name === tblName || Number(t.id) === Number(data.table.id));
+      if (!alreadyExists) {
+        existing.push({
+          id: data.table.id || Date.now(),
+          name: tblName,
+          capacity: Number(data.table.capacity) || 10,
+          shape: data.table.shape || 'ROUND',
+          tableNumber: data.table.tableNumber || (existing.length + 1)
+        });
+        localStorage.setItem(`evenpass_event_${evId}_tables_db`, JSON.stringify(existing));
+      }
+      if (typeof populateDispatchTablesSelect === 'function') populateDispatchTablesSelect();
+      schedulePanelRender();
+    } catch (e) {}
+    return;
+  }
+
+  if (data.type === 'SYNC_ALL' && Array.isArray(data.guests)) {
+    saveGuestsListSilently(data.guests);
+    schedulePanelRender();
+    return;
+  }
+
+  if (data.type === 'NEW_GUEST' || data.type === 'NEW_INVITATION' || data.type === 'GUEST_UPDATED' || data.type === 'RSVP_CONFIRMED') {
+    if (data.guest) {
       const guests = getStoredGuests();
-      const existingIdx = guests.findIndex(g => 
-        (data.guest.token && g.token === data.guest.token) || 
+      const existingIdx = guests.findIndex(g =>
+        (data.guest.token && g.token === data.guest.token) ||
         (data.guest.id && g.id === data.guest.id) ||
         (g.fullName && data.guest.fullName && g.fullName.toLowerCase().trim() === data.guest.fullName.toLowerCase().trim())
       );
+      const msgTs = Number(data.guest.manualAssignmentTimestamp || data.timestamp || 0);
+      let modifiedGuest;
       if (existingIdx < 0) {
-        guests.unshift(data.guest);
-        saveGuestsListSilently(guests);
-        schedulePanelRender();
+        modifiedGuest = { ...data.guest, manualAssignmentTimestamp: msgTs };
+        guests.unshift(modifiedGuest);
       } else {
-        guests[existingIdx] = { ...guests[existingIdx], ...data.guest };
-        saveGuestsListSilently(guests);
-        schedulePanelRender();
+        const cur = guests[existingIdx];
+        const curTs = Number(cur.manualAssignmentTimestamp || 0);
+        const preferLocal = curTs > msgTs;
+        modifiedGuest = {
+          ...cur,
+          ...data.guest,
+          tableName: preferLocal ? cur.tableName : (data.guest.tableName || cur.tableName),
+          manualAssignmentTimestamp: Math.max(curTs, msgTs)
+        };
+        guests[existingIdx] = modifiedGuest;
       }
+      saveGuestsListSilently(guests);
+      schedulePanelRender();
+      syncOpenGuestPassScreen(modifiedGuest);
     } else if (Array.isArray(data.allGuests) && data.allGuests.length > 0) {
       applyFullStateSync(data);
     }
-  } else if (data.type === 'RSVP_CONFIRMED') {
-    if (data.guest && (data.eventId === getActiveEventId() || !data.eventId)) {
-      const guests = getStoredGuests();
-      const idx = guests.findIndex(g => (data.guest.token && g.token === data.guest.token) || (g.fullName && data.guest.fullName && g.fullName.toLowerCase().trim() === data.guest.fullName.toLowerCase().trim()));
-      if (idx >= 0) {
-        guests[idx].status = data.guest.status;
-        guests[idx].passesConfirmed = data.guest.passesConfirmed;
-        if (data.guest.tableName) guests[idx].tableName = data.guest.tableName;
-        saveGuestsListSilently(guests);
-        schedulePanelRender();
-      }
-    }
   }
+}
+
+function connectCloudSse() {
+  try {
+    if (typeof EventSource === 'undefined') return;
+    if (cloudSseSource) {
+      try { cloudSseSource.close(); } catch (e) {}
+    }
+    cloudSseSource = new EventSource(`${CLOUD_SYNC_RELAY}/sse`);
+    cloudSseSource.onmessage = async (e) => {
+      try {
+        const raw = JSON.parse(e.data);
+        if (raw.id) {
+          if (processedCloudMsgIds.has(raw.id)) return;
+          trackProcessedMsgId(raw.id);
+        }
+        const data = await unwrapCloudPacket(raw);
+        if (!data) return;
+        if (data.msgId) {
+          if (processedCloudMsgIds.has(data.msgId)) return;
+          trackProcessedMsgId(data.msgId);
+        }
+        handleIncomingCloudMessage(data);
+      } catch (err) {}
+    };
+    cloudSseSource.onerror = () => {
+      try { cloudSseSource.close(); } catch (e) {}
+      cloudSseSource = null;
+      if (!cloudSseReconnectTimer) {
+        cloudSseReconnectTimer = setTimeout(() => {
+          cloudSseReconnectTimer = null;
+          connectCloudSse();
+        }, 3500);
+      }
+    };
+  } catch (e) {}
+}
+
+function pollCloudRelay() {
+  const timeParam = isFirstAppPoll ? 'since=6h' : 'since=45s';
+  isFirstAppPoll = false;
+
+  fetch(`${CLOUD_SYNC_RELAY}/json?poll=1&${timeParam}`, { method: 'GET', mode: 'cors', cache: 'no-store' })
+    .then(res => res.ok ? res.text() : '')
+    .then(async text => {
+      if (!text) return;
+      const lines = text.trim().split('\n');
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const parsed = JSON.parse(line);
+          if (parsed.id) {
+            if (processedCloudMsgIds.has(parsed.id)) continue;
+            trackProcessedMsgId(parsed.id);
+          }
+          const data = await unwrapCloudPacket(parsed);
+          if (!data) continue;
+          if (data.msgId) {
+            if (processedCloudMsgIds.has(data.msgId)) continue;
+            trackProcessedMsgId(data.msgId);
+          }
+          handleIncomingCloudMessage(data);
+        } catch (e) {}
+      }
+    })
+    .catch(() => {});
 }
 
 let cloudListenerStarted = false;
@@ -978,7 +1208,6 @@ function startLiveCloudSyncListener() {
   if (cloudListenerStarted) return;
   cloudListenerStarted = true;
 
-  // 1. BroadcastChannel (mismo navegador / diferentes pestañas)
   try {
     if (typeof BroadcastChannel !== 'undefined') {
       const bc = new BroadcastChannel('evenpass_invitations_channel');
@@ -986,7 +1215,7 @@ function startLiveCloudSyncListener() {
         if (event && event.data) {
           if (event.data.msgId) {
             if (processedCloudMsgIds.has(event.data.msgId)) return;
-            processedCloudMsgIds.add(event.data.msgId);
+            trackProcessedMsgId(event.data.msgId);
           }
           handleIncomingCloudMessage(event.data);
         }
@@ -994,82 +1223,33 @@ function startLiveCloudSyncListener() {
     }
   } catch (e) {}
 
-  // 2. SSE Server-Sent Events desde ntfy Cloud Relay (Netlify <-> EvenPass)
-  try {
-    if (typeof EventSource !== 'undefined') {
-      const sse = new EventSource(`${CLOUD_SYNC_RELAY}/sse`);
-      sse.onmessage = (e) => {
-        try {
-          const raw = JSON.parse(e.data);
-          if (raw.id) {
-            if (processedCloudMsgIds.has(raw.id)) return;
-            processedCloudMsgIds.add(raw.id);
-            if (processedCloudMsgIds.size > 500) {
-              const first = processedCloudMsgIds.values().next().value;
-              if (first) processedCloudMsgIds.delete(first);
-            }
-          }
-          if (raw.message) {
-            const data = JSON.parse(raw.message);
-            if (data.msgId && processedCloudMsgIds.has(data.msgId)) return;
-            if (data.msgId) processedCloudMsgIds.add(data.msgId);
-            handleIncomingCloudMessage(data);
-          }
-        } catch (err) {}
-      };
-    }
-  } catch (e) {}
-
-  // 3. Polling de respaldo cada 3.5 segundos
-  setInterval(() => {
-    const timeParam = isFirstAppPoll ? 'since=1h' : 'since=30s';
-    isFirstAppPoll = false;
-
-    fetch(`${CLOUD_SYNC_RELAY}/json?poll=1&${timeParam}`, { method: 'GET', mode: 'cors' })
-      .then(res => res.ok ? res.text() : '')
-      .then(text => {
-        if (!text) return;
-        const lines = text.trim().split('\n');
-        for (const line of lines) {
-          try {
-            const parsed = JSON.parse(line);
-            if (parsed.id) {
-              if (processedCloudMsgIds.has(parsed.id)) continue;
-              processedCloudMsgIds.add(parsed.id);
-              if (processedCloudMsgIds.size > 500) {
-                const first = processedCloudMsgIds.values().next().value;
-                if (first) processedCloudMsgIds.delete(first);
-              }
-            }
-            if (parsed.message) {
-              const data = JSON.parse(parsed.message);
-              if (data.msgId && processedCloudMsgIds.has(data.msgId)) continue;
-              if (data.msgId) processedCloudMsgIds.add(data.msgId);
-              handleIncomingCloudMessage(data);
-            }
-          } catch (e) {}
-        }
-      })
-      .catch(() => {});
-  }, 3500);
+  connectCloudSse();
+  pollCloudRelay();
+  setInterval(pollCloudRelay, 3500);
 }
 
+// ============================================================================
+// 7. PANEL DEL ANFITRIÓN (PANEL.HTML) — SIN SOBRECUPO Y CON MESAS EN VIVO
+// ============================================================================
 function initHostPanel() {
+  decodeCompactConfigFromUrl();
+  updateDynamicEventUI();
   loadStoredGuests();
   startLiveCloudSyncListener();
 
-  // Solicitar estado maestro completo a EvenPass OS
-  try {
-    if (typeof BroadcastChannel !== 'undefined') {
-      const bc = new BroadcastChannel('evenpass_invitations_channel');
-      bc.postMessage({ type: 'REQUEST_FULL_STATE', eventId: getActiveEventId() });
-    }
-  } catch (e) {}
-  broadcastToCloud({ type: 'REQUEST_FULL_STATE', eventId: getActiveEventId(), timestamp: Date.now() });
+  const evId = getActiveEventId();
+  broadcastLocalChannel({ type: 'REQUEST_FULL_STATE', eventId: evId });
+  broadcastToCloud({ type: 'REQUEST_FULL_STATE', eventId: evId, timestamp: Date.now() });
 
-  // Escuchar si un invitado confirma desde otra pestaña para actualizar inmediatamente
   window.addEventListener('storage', (e) => {
-    if (e.key === STORAGE_KEY || e.key === 'evenpass_luis_gerardo_updated_tick' || e.key === `evenpass_event_${getActiveEventId()}_tables_db`) {
+    if (
+      e.key === STORAGE_KEY ||
+      e.key === 'evenpass_all_guests_db' ||
+      e.key === 'evenpass_salons_db' ||
+      e.key === 'evenpass_luis_gerardo_updated_tick' ||
+      e.key === `evenpass_event_${evId}_tables_db` ||
+      e.key === `evenpass_event_${evId}_meta_db`
+    ) {
       schedulePanelRender();
     }
   });
@@ -1110,6 +1290,7 @@ function renderPanelKPIs(guests) {
   let confirmedPasses = 0;
   let confirmedFamilies = 0;
   let pendingCount = 0;
+  let totalCommittedPasses = 0;
 
   guests.forEach(g => {
     if (g.status === 'CONFIRMED' || g.status === 'ATTENDED') {
@@ -1118,23 +1299,19 @@ function renderPanelKPIs(guests) {
     } else if (g.status === 'PENDING') {
       pendingCount++;
     }
+    if (g.status !== 'DECLINED') {
+      totalCommittedPasses += (g.passesGranted || g.passesConfirmed || 0);
+    }
   });
 
+  const meta = getEventMeta();
   const tables = getEventTables();
-  const totalVenueCap = tables.reduce((sum, t) => sum + (t.capacity || 10), 0) || EVENT_DATA.totalCapacity || 50;
+  const totalVenueCap = tables.reduce((sum, t) => sum + (t.capacity || 10), 0) || Number(meta.maxCapacity) || 50;
 
   const kpiConf = document.getElementById('kpi-panel-confirmed');
   const kpiOcc = document.getElementById('kpi-panel-occupancy');
   const kpiFam = document.getElementById('kpi-panel-families');
   const kpiPend = document.getElementById('kpi-panel-pending');
-
-  // Contar también pases PENDIENTES para saber el aforo real comprometido
-  let totalCommittedPasses = 0;
-  guests.forEach(g => {
-    if (g.status !== 'DECLINED') {
-      totalCommittedPasses += (g.passesGranted || g.passesConfirmed || 0);
-    }
-  });
 
   const occPct = Math.round((confirmedPasses / totalVenueCap) * 100);
   const commitPct = Math.round((totalCommittedPasses / totalVenueCap) * 100);
@@ -1145,19 +1322,17 @@ function renderPanelKPIs(guests) {
   if (kpiFam) kpiFam.innerText = String(confirmedFamilies);
   if (kpiPend) kpiPend.innerText = String(pendingCount);
 
-  // Banner AFORO COMPLETO
   let bannerEl = document.getElementById('panel-aforo-banner');
   if (!bannerEl) {
     bannerEl = document.createElement('div');
     bannerEl.id = 'panel-aforo-banner';
-    bannerEl.style.cssText = 'display:none;background:#dc2626;color:#fff;text-align:center;padding:12px 20px;font-weight:700;font-size:1.1rem;border-radius:8px;margin:10px 0;letter-spacing:0.03em;';
-    const kpiSection = document.querySelector('.kpi-section, .panel-kpis, #panel-kpis, .stats-grid');
+    bannerEl.style.cssText = 'display:none;background:#dc2626;color:#fff;text-align:center;padding:12px 20px;font-weight:700;font-size:0.95rem;border-radius:10px;margin:10px 0;';
+    const kpiSection = document.querySelector('.panel-kpis-grid');
     if (kpiSection) kpiSection.after(bannerEl);
-    else document.body.prepend(bannerEl);
   }
   if (isVenueFull) {
     bannerEl.style.display = 'block';
-    bannerEl.innerHTML = `⛔ AFORO COMPLETO &mdash; ${totalCommittedPasses}/${totalVenueCap} pases comprometidos. No se pueden crear nuevas invitaciones hasta liberar espacio o agregar mesas.`;
+    bannerEl.innerText = `AFORO COMPLETO: ${totalCommittedPasses}/${totalVenueCap} pases comprometidos. No se pueden crear más invitaciones hasta liberar espacio o agregar mesas.`;
   } else {
     bannerEl.style.display = 'none';
   }
@@ -1176,19 +1351,18 @@ function renderPanelTablesGrid(guests) {
     const isFull = occupied >= table.capacity;
     const pct = Math.min(100, Math.round((occupied / table.capacity) * 100));
 
-    // Comensales asignados a esta mesa (Confirmados y Pendientes)
     const seatedList = guests
       .filter(g => g.status !== 'DECLINED' && matchesTableName(g.tableName, table))
       .map(g => {
         const passes = g.passesGranted || g.passesConfirmed || g.totalPasses || 1;
         const isConf = g.status === 'CONFIRMED' || g.status === 'ATTENDED';
         const shortName = g.fullName.split(' ')[0];
-        return `${shortName} (${passes}p ${isConf ? '✓' : 'pend.'})`;
+        return `${shortName} (${passes}p ${isConf ? 'Conf.' : 'Pend.'})`;
       });
 
     const isRect = table.shape === 'IMPERIAL' || table.shape === 'RECTANGULAR';
-    const shapeBadge = isRect 
-      ? '<span style="font-size: 0.65rem; background: #e0e7ff; color: #4338ca; padding: 1px 5px; border-radius: 4px; margin-left: 4px; font-weight: 700;">Rectangular</span>' 
+    const shapeBadge = isRect
+      ? '<span style="font-size: 0.65rem; background: #e0e7ff; color: #4338ca; padding: 1px 5px; border-radius: 4px; margin-left: 4px; font-weight: 700;">Imperial</span>'
       : '';
 
     const cell = document.createElement('div');
@@ -1201,7 +1375,7 @@ function renderPanelTablesGrid(guests) {
         </span>
       </div>
       <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 6px;">
-        ${table.name.split(' - ')[1] || (isRect ? 'Mesa Imperial / Rectangular' : 'Mesa Redonda')}
+        ${table.name.split(' - ')[1] || (isRect ? 'Mesa Imperial Rectangular' : 'Mesa Redonda')}
       </div>
       <div class="table-bar-bg">
         <div class="table-bar-fill" style="width: ${pct}%; background: ${isFull ? '#dc2626' : '#1d4ed8'};"></div>
@@ -1214,19 +1388,95 @@ function renderPanelTablesGrid(guests) {
   });
 }
 
+function createTableFromPanel(e) {
+  e.preventDefault();
+  const nameInput = document.getElementById('new-table-name');
+  const shapeSelect = document.getElementById('new-table-shape');
+  const capInput = document.getElementById('new-table-capacity');
+
+  const name = nameInput.value.trim();
+  if (!name) return;
+  const shape = shapeSelect.value === 'RECTANGULAR' ? 'RECTANGULAR' : 'ROUND';
+  const capacity = Math.max(2, Math.min(30, parseInt(capInput.value, 10) || 10));
+
+  const evId = getActiveEventId();
+  const existing = getEventTablesRaw();
+  const nextNum = (existing.reduce((m, t) => Math.max(m, t.tableNumber || 0), 0)) + 1;
+
+  const newTable = {
+    id: Date.now(),
+    name: name,
+    capacity: capacity,
+    shape: shape,
+    tableNumber: nextNum
+  };
+
+  existing.push(newTable);
+  try {
+    localStorage.setItem(`evenpass_event_${evId}_tables_db`, JSON.stringify(existing));
+  } catch (err) {}
+
+  const msgId = 'msg_tbl_' + Date.now() + '_' + Math.random().toString(36).substr(2, 7);
+  trackProcessedMsgId(msgId);
+
+  const payload = {
+    type: 'TABLE_CREATED',
+    msgId,
+    eventId: evId,
+    table: newTable,
+    timestamp: Date.now()
+  };
+  broadcastLocalChannel({ ...payload, allTables: existing });
+  broadcastToCloud(payload);
+
+  nameInput.value = '';
+  populateDispatchTablesSelect();
+  schedulePanelRender();
+}
+
+function autoDistributeFromPanel() {
+  const guests = getStoredGuests();
+  const tables = getEventTablesRaw();
+  if (tables.length === 0) return;
+
+  let changed = false;
+  const occ = getTableOccupancies();
+  guests.forEach(g => {
+    if (g.status === 'DECLINED') return;
+    if (!g.tableName || g.tableName === 'Sin asignar') {
+      const passes = Number(g.passesGranted || g.passesConfirmed || 1);
+      const target = tables.find(t => ((t.capacity || 10) - (occ.get(t.name) || 0)) >= passes);
+      if (target) {
+        g.tableName = target.name;
+        g.manualAssignmentTimestamp = Date.now();
+        occ.set(target.name, (occ.get(target.name) || 0) + passes);
+        changed = true;
+      }
+    }
+  });
+
+  if (changed) {
+    saveGuestsListSilently(guests);
+    const evId = getActiveEventId();
+    const msgId = 'msg_auto_' + Date.now();
+    trackProcessedMsgId(msgId);
+    broadcastLocalChannel({ type: 'SYNC_FULL_STATE', msgId, eventId: evId, allGuests: guests, allTables: tables, timestamp: Date.now() });
+    broadcastToCloud({ type: 'SYNC_FULL_STATE', msgId, eventId: evId, allGuests: guests, allTables: tables, timestamp: Date.now() });
+    schedulePanelRender();
+  }
+}
+
 function reassignGuestTableFromPanel(guestId, newTableName) {
   const guests = getStoredGuests();
   const guest = guests.find(g => g.id === guestId);
   if (!guest) return;
 
   let targetTable = null;
-  // Verificación de aforo antes de reasignar
   if (newTableName && newTableName !== 'Sin asignar') {
     const tables = getEventTables();
     targetTable = tables.find(t => matchesTableName(newTableName, t));
     if (targetTable) {
       const occ = getTableOccupancies();
-      // Si el comensal ya estaba en esta mesa, no sumar doble
       const isAlreadyThere = matchesTableName(guest.tableName, targetTable);
       const curOccupied = occ.get(targetTable.name) || 0;
       const passes = Number(guest.passesGranted || guest.passesConfirmed || 1);
@@ -1234,9 +1484,9 @@ function reassignGuestTableFromPanel(guestId, newTableName) {
 
       if (prospectiveOcc > targetTable.capacity) {
         alert(
-          `⛔ Mesa al Límite de Aforo\n\n` +
+          `Mesa al Límite de Aforo\n\n` +
           `"${targetTable.name}" ya tiene ${curOccupied}/${targetTable.capacity} lugares.\n` +
-          `"${guest.fullName}" (${passes} pases) supera el límite. Elige otra mesa.`
+          `"${guest.fullName}" (${passes} pases) supera el límite. Elige otra mesa o crea una nueva.`
         );
         loadStoredGuests();
         return;
@@ -1249,12 +1499,12 @@ function reassignGuestTableFromPanel(guestId, newTableName) {
   guest.manualAssignmentTimestamp = Date.now();
   saveGuestsListSilently(guests);
 
-  const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-  processedCloudMsgIds.add(msgId);
+  const msgId = 'msg_mv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 7);
+  trackProcessedMsgId(msgId);
 
   const payload = {
     type: 'TABLE_REASSIGNED',
-    msgId: msgId,
+    msgId,
     eventId: evId,
     guestId: guest.id,
     guestToken: guest.token,
@@ -1264,13 +1514,7 @@ function reassignGuestTableFromPanel(guestId, newTableName) {
     timestamp: guest.manualAssignmentTimestamp
   };
 
-  try {
-    if (typeof BroadcastChannel !== 'undefined') {
-      const bc = new BroadcastChannel('evenpass_invitations_channel');
-      bc.postMessage(payload);
-    }
-  } catch (e) {}
-
+  broadcastLocalChannel(payload);
   broadcastToCloud(payload);
   schedulePanelRender();
 }
@@ -1284,6 +1528,8 @@ function renderPanelTable() {
   tbody.innerHTML = '';
 
   const tables = getEventTables();
+  const meta = getEventMeta();
+  const hasCroquis = meta.hasCroquis !== false;
 
   const filtered = guests.filter(g => {
     if (!term) return true;
@@ -1296,7 +1542,7 @@ function renderPanelTable() {
   });
 
   if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 20px; color: var(--text-muted);">No se encontraron invitados.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 20px; color: var(--text-muted);">No hay invitados registrados en este filtro.</td></tr>`;
     return;
   }
 
@@ -1304,7 +1550,10 @@ function renderPanelTable() {
     const tr = document.createElement('tr');
     let badgeClass = 'badge-status pending';
     let statusText = 'PENDIENTE';
-    if (g.status === 'CONFIRMED' || g.status === 'ATTENDED') {
+    if (g.status === 'ATTENDED') {
+      badgeClass = 'badge-status confirmed';
+      statusText = `EN PUERTA (${g.passesConfirmed || g.passesGranted}p)`;
+    } else if (g.status === 'CONFIRMED') {
       badgeClass = 'badge-status confirmed';
       statusText = `CONFIRMADO (${g.passesConfirmed || g.passesGranted}p)`;
     } else if (g.status === 'DECLINED') {
@@ -1312,58 +1561,141 @@ function renderPanelTable() {
       statusText = 'NO ASISTIRÁ';
     }
 
-    // Selector interactivo de mesa por invitado
-    let tableOptions = `<option value="Sin asignar">Sin asignar</option>`;
-    tables.forEach(t => {
-      const isSelected = matchesTableName(g.tableName, t);
-      tableOptions += `<option value="${t.name}" ${isSelected ? 'selected' : ''}>${t.name.split(' - ')[0]}</option>`;
-    });
+    let tableCellHtml = `<span style="font-size: 0.78rem; color: #64748b;">Acceso General</span>`;
+    if (hasCroquis) {
+      let tableOptions = `<option value="Sin asignar">Sin asignar</option>`;
+      tables.forEach(t => {
+        const isSelected = matchesTableName(g.tableName, t);
+        tableOptions += `<option value="${t.name}" ${isSelected ? 'selected' : ''}>${t.name.split(' - ')[0]}</option>`;
+      });
+      tableCellHtml = `
+        <select class="form-input-clean table-inline-select" style="padding: 4px 8px; font-size: 0.78rem; font-weight: 700; width: auto; max-width: 175px; border-color: #cbd5e1; background: #f8fafc;" onchange="reassignGuestTableFromPanel(${g.id}, this.value)">
+          ${tableOptions}
+        </select>
+      `;
+    }
 
     tr.innerHTML = `
       <td>
         <strong style="color: #0f172a; display: block;">${g.fullName}</strong>
-        <small style="color: #64748b;">${g.phone} · ${g.updatedAt || 'Reciente'}</small>
+        <small style="color: #64748b;">${g.phone || 'Sin teléfono'} · ${g.updatedAt || 'Reciente'}</small>
       </td>
-      <td><b>${(g.status === 'CONFIRMED' || g.status === 'ATTENDED') ? (g.passesConfirmed || g.passesGranted) : g.passesGranted} pases</b></td>
-      <td>
-        <select class="form-input-clean table-inline-select" style="padding: 4px 8px; font-size: 0.78rem; font-weight: 700; width: auto; max-width: 175px; border-color: #cbd5e1; background: #f8fafc;" onchange="reassignGuestTableFromPanel(${g.id}, this.value)">
-          ${tableOptions}
-        </select>
-      </td>
+      <td><b>${g.passesGranted || g.passesConfirmed || 1} pases</b></td>
+      <td>${tableCellHtml}</td>
       <td><code style="font-size: 0.78rem;">${g.token}</code></td>
       <td><span class="${badgeClass}">${statusText}</span></td>
-      <td>
-        <button class="btn-outline" style="padding: 4px 8px; font-size: 0.72rem;" onclick="copyGuestInviteLink('${g.fullName}', ${g.passesGranted}, '${g.token}')">
-          Copiar Link
-        </button>
-        <button class="btn-outline" style="padding: 4px 8px; font-size: 0.72rem; color: #dc2626;" onclick="deleteHostGuest(${g.id})">
-          Borrar
-        </button>
+      <td style="white-space: nowrap;">
+        <button class="btn-outline" style="padding: 4px 8px; font-size: 0.72rem;" onclick="openEditGuestModal(${g.id})">Editar</button>
+        <button class="btn-outline" style="padding: 4px 8px; font-size: 0.72rem;" onclick="copyGuestInviteLink('${g.fullName.replace(/'/g, "\\'")}', ${g.passesGranted || 1}, '${g.token}')">Copiar Link</button>
+        <button class="btn-outline" style="padding: 4px 8px; font-size: 0.72rem; color: #dc2626;" onclick="deleteHostGuest(${g.id})">Borrar</button>
       </td>
     `;
     tbody.appendChild(tr);
   });
 }
 
+function openEditGuestModal(guestId) {
+  const guests = getStoredGuests();
+  const g = guests.find(item => item.id === guestId);
+  if (!g) return;
+  document.getElementById('edit-guest-id').value = g.id;
+  document.getElementById('edit-guest-name').value = g.fullName;
+  document.getElementById('edit-guest-passes').value = g.passesGranted || g.passesConfirmed || 1;
+  document.getElementById('edit-guest-status').value = g.status === 'ATTENDED' ? 'CONFIRMED' : (g.status || 'CONFIRMED');
+  document.getElementById('edit-guest-phone').value = g.phone || '';
+  const modal = document.getElementById('panel-edit-modal');
+  if (modal) modal.style.display = 'flex';
+}
 
-// Obtiene la URL base limpia para la invitación de invitados (compatible con Netlify Pretty URLs, subcarpetas y local)
+function closeEditGuestModal() {
+  const modal = document.getElementById('panel-edit-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function saveEditedGuestFromPanel(e) {
+  e.preventDefault();
+  const guestId = Number(document.getElementById('edit-guest-id').value);
+  const fullName = document.getElementById('edit-guest-name').value.trim();
+  const passes = Math.max(1, parseInt(document.getElementById('edit-guest-passes').value, 10) || 1);
+  const status = document.getElementById('edit-guest-status').value;
+  const phone = document.getElementById('edit-guest-phone').value.trim();
+
+  if (!fullName) return;
+  const guests = getStoredGuests();
+  const idx = guests.findIndex(g => Number(g.id) === guestId);
+  if (idx < 0) return;
+
+  const cur = guests[idx];
+  const meta = getEventMeta();
+  const tables = getEventTables();
+  const maxEventCap = Number(meta.maxCapacity) || tables.reduce((s, t) => s + (t.capacity || 10), 0) || 200;
+  const otherCommitted = guests
+    .filter(g => g.id !== cur.id && g.status !== 'DECLINED')
+    .reduce((s, g) => s + Number(g.passesGranted || g.passesConfirmed || 1), 0);
+
+  if (status !== 'DECLINED' && otherCommitted + passes > maxEventCap) {
+    alert(`El cambio excede el aforo máximo del evento (${otherCommitted + passes}/${maxEventCap} pases).`);
+    return;
+  }
+
+  let tableName = cur.tableName;
+  if (meta.hasCroquis !== false && status !== 'DECLINED' && tableName && tableName !== 'Sin asignar') {
+    const matchedTbl = tables.find(t => matchesTableName(tableName, t));
+    if (matchedTbl) {
+      const othersInTbl = guests
+        .filter(g => g.id !== cur.id && g.status !== 'DECLINED' && matchesTableName(g.tableName, matchedTbl))
+        .reduce((s, g) => s + Number(g.passesGranted || g.passesConfirmed || 1), 0);
+      if (othersInTbl + passes > matchedTbl.capacity) {
+        const res = autoAssignTable(passes, 'AUTO');
+        if (res.tableName) tableName = res.tableName;
+      }
+    }
+  }
+
+  const now = Date.now();
+  const updated = {
+    ...cur,
+    fullName,
+    phone,
+    passesGranted: passes,
+    passesConfirmed: (status === 'CONFIRMED' || status === 'ATTENDED') ? passes : 0,
+    status,
+    tableName,
+    manualAssignmentTimestamp: now
+  };
+  guests[idx] = updated;
+  saveGuestsListSilently(guests);
+
+  const evId = getActiveEventId();
+  const msgId = 'msg_upd_' + now + '_' + Math.random().toString(36).substr(2, 6);
+  trackProcessedMsgId(msgId);
+  broadcastLocalChannel({ type: 'GUEST_UPDATED', msgId, eventId: evId, guest: updated });
+  broadcastToCloud({ type: 'GUEST_UPDATED', msgId, eventId: evId, guest: updated, timestamp: now });
+
+  closeEditGuestModal();
+  schedulePanelRender();
+}
+
 function getGuestInvitationBaseUrl() {
   if (window.location.protocol === 'file:') {
     const raw = window.location.href.split('?')[0].split('#')[0];
     return raw.replace(/panel(\.html)?$/i, 'index.html');
   }
-
   const url = new URL(window.location.href);
-  let pathname = url.pathname;
-
-  // Limpiar sufijos como /panel.html, /panel, o /index.html
-  pathname = pathname
+  let pathname = url.pathname
     .replace(/\/panel\.html$/i, '')
     .replace(/\/panel\/?$/i, '')
     .replace(/\/index\.html$/i, '')
     .replace(/\/+$/, '');
-
   return pathname ? `${url.origin}${pathname}/index.html` : `${url.origin}/index.html`;
+}
+
+function openEventInvitationPage() {
+  const evId = getActiveEventId();
+  const params = new URLSearchParams(window.location.search);
+  const cfg = params.get('cfg');
+  const url = `${getGuestInvitationBaseUrl()}?eventId=${evId}${cfg ? '&cfg=' + cfg : ''}`;
+  window.open(url, '_blank');
 }
 
 function dispatchInvitation(e) {
@@ -1371,89 +1703,74 @@ function dispatchInvitation(e) {
 
   const nameInput = document.getElementById('dispatch-name');
   const passesInput = document.getElementById('dispatch-passes');
-  const tableInput = document.getElementById('dispatch-table');
+  const tableSelect = document.getElementById('dispatch-table');
 
   const name = nameInput.value.trim();
   const passes = parseInt(passesInput.value, 10) || 1;
-  const preferredTable = tableInput ? tableInput.value : 'AUTO';
+  const preferredTable = tableSelect ? tableSelect.value : 'AUTO';
 
   if (!name) {
     alert('Por favor ingresa el nombre del invitado.');
     return;
   }
 
-  // --- CAPACITY ENFORCEMENT: Verificar aforo antes de crear la invitación ---
   const assignResult = autoAssignTable(passes, preferredTable);
-
   if (assignResult.venueFull) {
     alert(
-      `⛔ AFORO COMPLETO\n\n` +
+      `AFORO COMPLETO\n\n` +
       `No hay capacidad disponible para ${passes} pase(s) en este evento.\n` +
-      `Para agregar más invitados, primero crea mesas adicionales en EvenPass.`
+      `Libera lugares o crea mesas adicionales primero.`
     );
     return;
   }
 
   if (assignResult.autoCreated) {
     alert(
-      `🪑 Mesa Creada Automáticamente\n\n` +
-      `Todas las mesas estaban llenas. Se creó automáticamente "${assignResult.tableName}" ` +
-      `para acomodar a ${name} (${passes} pase(s)).`
+      `Mesa Creada Automáticamente\n\n` +
+      `Todas las mesas estaban llenas. Se creó automáticamente "${assignResult.tableName}" para ${name} (${passes} pase(s)).`
     );
   }
 
-  const token = `LG10-VIP-${Math.floor(1000 + Math.random() * 9000)}`;
-  const assignedTable = assignResult.tableName;
+  const evId = getActiveEventId();
+  const token = `${evId === 6 ? 'LG10-VIP' : 'EP-' + String(evId).slice(-3)}-${Math.floor(1000 + Math.random() * 9000)}`;
+  const assignedTable = assignResult.tableName || 'Sin asignar';
+  const now = Date.now();
 
   const newGuest = {
-    id: Date.now(),
+    id: now,
     fullName: name,
     phone: 'WhatsApp Directo',
     passesGranted: passes,
     passesConfirmed: 0,
     status: 'PENDING',
     tableName: assignedTable,
-    token: token,
+    token,
     notes: 'Enlace enviado por WhatsApp',
-    updatedAt: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+    updatedAt: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }),
+    manualAssignmentTimestamp: now
   };
 
   const guests = getStoredGuests();
   guests.unshift(newGuest);
   saveGuestsListSilently(guests);
 
-  const evId = getActiveEventId();
-  const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-  processedCloudMsgIds.add(msgId);
+  const msgId = 'msg_new_' + now + '_' + Math.random().toString(36).substr(2, 7);
+  trackProcessedMsgId(msgId);
 
-  // Emitir evento explícito de nuevo invitado para EvenPass OS (Local + Nube)
-  try {
-    if (typeof BroadcastChannel !== 'undefined') {
-      const bc = new BroadcastChannel('evenpass_invitations_channel');
-      bc.postMessage({ type: 'NEW_INVITATION', msgId: msgId, eventId: evId, guest: newGuest, allGuests: guests });
-    }
-  } catch (e) {}
+  broadcastLocalChannel({ type: 'NEW_INVITATION', msgId, eventId: evId, guest: newGuest, allGuests: guests });
+  broadcastToCloud({ type: 'NEW_GUEST', msgId, eventId: evId, guest: newGuest, timestamp: now });
 
-  broadcastToCloud({
-    type: 'NEW_GUEST',
-    msgId: msgId,
-    eventId: evId,
-    guest: newGuest,
-    allGuests: guests,
-    timestamp: Date.now()
-  });
+  const params = new URLSearchParams(window.location.search);
+  const cfg = params.get('cfg');
+  const inviteUrl = `${getGuestInvitationBaseUrl()}?eventId=${evId}&nombre=${encodeURIComponent(name)}&pases=${passes}&token=${token}${cfg ? '&cfg=' + cfg : ''}`;
+  const meta = getEventMeta();
+  const evName = meta.name || DEFAULT_EVENT_6.title;
 
-  // Construir Enlace Único a index.html (compatible con Netlify, Vercel, Hosting y local)
-  const baseUrl = getGuestInvitationBaseUrl();
-  const inviteUrl = `${baseUrl}?eventId=${evId}&nombre=${encodeURIComponent(name)}&pases=${passes}&token=${token}`;
-
-  // Mensaje elegante para enviar por WhatsApp
-  const msg = 
-    `¡Hola *${name}*! 👋\n` +
-    `Nos encantaría que nos acompañes a festejar los *10 Años de Luis Gerardo* 🎮✨\n\n` +
-    `Aquí tienes tu invitación digital oficial con tus *${passes} pases reservados*:\n` +
-    `👉 ${inviteUrl}\n\n` +
-    `Por favor abre el enlace para agendar la fecha y confirmar tu asistencia. ¡Te esperamos para celebrar en grande!`;
+  const msg =
+    `Hola ${name},\n` +
+    `Te compartimos tu invitación digital oficial para ${evName} con ${passes} pases reservados:\n` +
+    `${inviteUrl}\n\n` +
+    `Abre el enlace para confirmar tu asistencia y ver tu mesa asignada.`;
 
   window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 
@@ -1464,11 +1781,12 @@ function dispatchInvitation(e) {
 
 function copyGuestInviteLink(name, passes, token) {
   const evId = getActiveEventId();
-  const baseUrl = getGuestInvitationBaseUrl();
-  const inviteUrl = `${baseUrl}?eventId=${evId}&nombre=${encodeURIComponent(name)}&pases=${passes}&token=${token}`;
+  const params = new URLSearchParams(window.location.search);
+  const cfg = params.get('cfg');
+  const inviteUrl = `${getGuestInvitationBaseUrl()}?eventId=${evId}&nombre=${encodeURIComponent(name)}&pases=${passes}&token=${token}${cfg ? '&cfg=' + cfg : ''}`;
 
   navigator.clipboard.writeText(inviteUrl).then(() => {
-    alert(`¡Enlace copiado para ${name}!\n\n${inviteUrl}`);
+    alert(`Enlace copiado para ${name}:\n\n${inviteUrl}`);
   }).catch(() => {
     prompt('Copia el siguiente enlace:', inviteUrl);
   });
@@ -1485,12 +1803,12 @@ function deleteHostGuest(id) {
   saveGuestsListSilently(list);
   schedulePanelRender();
 
-  const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-  processedCloudMsgIds.add(msgId);
+  const msgId = 'msg_del_' + Date.now() + '_' + Math.random().toString(36).substr(2, 7);
+  trackProcessedMsgId(msgId);
 
   const payload = {
     type: 'GUEST_DELETED',
-    msgId: msgId,
+    msgId,
     eventId: evId,
     guestId: id,
     guestToken: guestToDelete.token,
@@ -1499,24 +1817,17 @@ function deleteHostGuest(id) {
     timestamp: Date.now()
   };
 
-  try {
-    if (typeof BroadcastChannel !== 'undefined') {
-      const bc = new BroadcastChannel('evenpass_invitations_channel');
-      bc.postMessage(payload);
-    }
-  } catch (e) {}
-
+  broadcastLocalChannel(payload);
   broadcastToCloud(payload);
 }
 
 function exportCsvForHostess() {
   const guests = getStoredGuests();
   let csv = 'ID,Invitado,Telefono,Pases_Confirmados,Pases_Otorgados,Mesa_Asignada,Folio_QR,Estado,Hora\n';
-
   guests.forEach(g => {
-    const row = [
+    csv += [
       g.id,
-      `"${g.fullName.replace(/"/g, '""')}"`,
+      `"${(g.fullName || '').replace(/"/g, '""')}"`,
       `"${g.phone || ''}"`,
       g.passesConfirmed || 0,
       g.passesGranted || 0,
@@ -1524,21 +1835,20 @@ function exportCsvForHostess() {
       g.token || '',
       g.status,
       g.updatedAt || ''
-    ].join(',');
-    csv += row + '\n';
+    ].join(',') + '\n';
   });
 
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `Padron_Puerta_Hostess_Luis_Gerardo_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `Padron_EvenPass_Evento_${getActiveEventId()}_${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
 // ============================================================================
-// 6. UTILIDADES: GENERADOR DETERMINISTA DE CÓDIGO QR EN CANVAS
+// 8. UTILIDADES: QR EN CANVAS, CUENTA REGRESIVA, AUDIO Y CONFETI
 // ============================================================================
 function drawQrMatrix(canvas, token) {
   if (!canvas) return;
@@ -1554,12 +1864,10 @@ function drawQrMatrix(canvas, token) {
   for (let i = 0; i < token.length; i++) {
     seed = (seed * 37 + token.charCodeAt(i)) & 0xffffffff;
   }
-
   function nextRand() {
     seed = (seed * 1664525 + 1013904223) & 0xffffffff;
     return (seed >>> 0) / 4294967296;
   }
-
   function drawFinder(row, col) {
     const x = col * cellSize;
     const y = row * cellSize;
@@ -1567,10 +1875,9 @@ function drawQrMatrix(canvas, token) {
     ctx.fillRect(x, y, 7 * cellSize, 7 * cellSize);
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(x + cellSize, y + cellSize, 5 * cellSize, 5 * cellSize);
-    ctx.fillStyle = '#1d4ed8'; // Azul cobalto
+    ctx.fillStyle = '#1d4ed8';
     ctx.fillRect(x + 2 * cellSize, y + 2 * cellSize, 3 * cellSize, 3 * cellSize);
   }
-
   drawFinder(1, 1);
   drawFinder(1, gridCount - 8);
   drawFinder(gridCount - 8, 1);
@@ -1581,16 +1888,12 @@ function drawQrMatrix(canvas, token) {
       const isTL = r < 9 && c < 9;
       const isTR = r < 9 && c >= gridCount - 9;
       const isBL = r >= gridCount - 9 && c < 9;
-
-      if (!isTL && !isTR && !isBL) {
-        if (nextRand() > 0.46) {
-          ctx.fillRect(c * cellSize + 0.5, r * cellSize + 0.5, cellSize - 0.5, cellSize - 0.5);
-        }
+      if (!isTL && !isTR && !isBL && nextRand() > 0.46) {
+        ctx.fillRect(c * cellSize + 0.5, r * cellSize + 0.5, cellSize - 0.5, cellSize - 0.5);
       }
     }
   }
 
-  // Emblema central LG
   const centerSize = 5 * cellSize;
   const cx = (size - centerSize) / 2;
   const cy = (size - centerSize) / 2;
@@ -1600,12 +1903,9 @@ function drawQrMatrix(canvas, token) {
   ctx.font = `bold ${cellSize * 2.2}px 'Outfit', sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('LG', size / 2, size / 2);
+  ctx.fillText('EP', size / 2, size / 2);
 }
 
-// ============================================================================
-// 7. CUENTA REGRESIVA Y AUDIO SINTETIZADOR
-// ============================================================================
 function initCountdown() {
   const dEl = document.getElementById('lbl-days');
   const hEl = document.getElementById('lbl-hours');
@@ -1614,8 +1914,7 @@ function initCountdown() {
 
   function update() {
     const now = new Date().getTime();
-    const distance = EVENT_DATA.targetDate.getTime() - now;
-
+    const distance = DEFAULT_EVENT_6.targetDate.getTime() - now;
     if (distance < 0) {
       if (dEl) dEl.innerText = '00';
       if (hEl) hEl.innerText = '00';
@@ -1623,31 +1922,25 @@ function initCountdown() {
       if (sEl) sEl.innerText = '00';
       return;
     }
-
     const days = Math.floor(distance / (1000 * 60 * 60 * 24));
     const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
     const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
     const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-
     if (dEl) dEl.innerText = String(days).padStart(2, '0');
     if (hEl) hEl.innerText = String(hours).padStart(2, '0');
     if (mEl) mEl.innerText = String(minutes).padStart(2, '0');
     if (sEl) sEl.innerText = String(seconds).padStart(2, '0');
   }
-
   update();
   setInterval(update, 1000);
 }
 
-// Audio Sintetizador Web Audio API
 let audioCtx = null;
 let musicInterval = null;
 let isAudioPlaying = false;
-
 function toggleAudio() {
   const btn = document.getElementById('btn-toggle-audio');
   const lbl = document.getElementById('audio-btn-label');
-
   if (isAudioPlaying) {
     if (musicInterval) {
       clearInterval(musicInterval);
@@ -1659,20 +1952,13 @@ function toggleAudio() {
   } else {
     try {
       const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
-      if (!audioCtx && AudioCtxClass) {
-        audioCtx = new AudioCtxClass();
-      }
-      if (audioCtx && audioCtx.state === 'suspended') {
-        audioCtx.resume();
-      }
-
+      if (!audioCtx && AudioCtxClass) audioCtx = new AudioCtxClass();
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
       isAudioPlaying = true;
       if (btn) btn.classList.remove('muted');
       if (lbl) lbl.innerText = 'Pausar';
-
       const melody = [523, 659, 783, 1046, 783, 659, 587, 523];
       let note = 0;
-
       musicInterval = setInterval(() => {
         if (!isAudioPlaying || !audioCtx) return;
         try {
@@ -1681,10 +1967,8 @@ function toggleAudio() {
           osc.type = 'triangle';
           osc.frequency.setValueAtTime(melody[note % melody.length], audioCtx.currentTime);
           note++;
-
           gain.gain.setValueAtTime(0.06, audioCtx.currentTime);
           gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.32);
-
           osc.connect(gain);
           gain.connect(audioCtx.destination);
           osc.start();
@@ -1701,10 +1985,8 @@ function triggerConfetti() {
   const ctx = canvas.getContext('2d');
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
-
   const particles = [];
   const colors = ['#1d4ed8', '#2563eb', '#3b82f6', '#93c5fd', '#dbeafe', '#b45309'];
-
   for (let i = 0; i < 90; i++) {
     const angle = Math.random() * Math.PI * 2;
     const speed = Math.random() * 10 + 3;
@@ -1721,7 +2003,6 @@ function triggerConfetti() {
       life: 0
     });
   }
-
   function frame() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     for (let i = particles.length - 1; i >= 0; i--) {
@@ -1732,13 +2013,11 @@ function triggerConfetti() {
       p.vx *= 0.98;
       p.rotation += p.vRot;
       p.life++;
-
       if (p.life > 60) p.opacity -= 0.03;
       if (p.opacity <= 0 || p.y > canvas.height + 40) {
         particles.splice(i, 1);
         continue;
       }
-
       ctx.save();
       ctx.translate(p.x, p.y);
       ctx.rotate((p.rotation * Math.PI) / 180);
@@ -1750,13 +2029,9 @@ function triggerConfetti() {
     if (particles.length > 0) requestAnimationFrame(frame);
     else ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
-
   frame();
 }
 
-// ============================================================================
-// 8. AUTO-INICIALIZACIÓN SEGÚN LA PÁGINA ACTIVA
-// ============================================================================
 document.addEventListener('DOMContentLoaded', () => {
   if (document.getElementById('form-rsvp')) {
     initGuestPage();

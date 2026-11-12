@@ -128,10 +128,10 @@ import { SystemConfig } from '../../models/models';
                 <app-icon name="download" [size]="14"></app-icon>
                 <span>Descargar Respaldo JSON</span>
               </button>
-              <button class="btn-outline" (click)="syncDatabase()">
-                <app-icon name="refresh" [size]="14"></app-icon>
-                <span>Sincronizar PostgreSQL</span>
-              </button>
+              <span class="btn-outline" style="cursor: default; color: #059669; border-color: rgba(16, 185, 129, 0.35); background: rgba(16, 185, 129, 0.08);">
+                <app-icon name="check-circle" [size]="14"></app-icon>
+                <span>Respaldo &amp; Nube en Vivo Activa</span>
+              </span>
             </div>
           </div>
 
@@ -632,9 +632,5 @@ export class SettingsComponent {
     downloadAnchor.remove();
 
     this.notificationService.show('success', 'Respaldo Generado', 'Archivo JSON descargado exitosamente.');
-  }
-
-  syncDatabase(): void {
-    this.notificationService.show('info', 'Sincronización PostgreSQL', 'Base de datos sincronizada con el backend Spring Boot.');
   }
 }

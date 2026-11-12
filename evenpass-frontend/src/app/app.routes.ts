@@ -20,6 +20,18 @@ export const routes: Routes = [
     component: LoginComponent
   },
   {
+    path: 'invitacion/:eventId',
+    loadComponent: () => import('./components/public/public-invitation.component').then(m => m.PublicInvitationComponent)
+  },
+  {
+    path: 'p/:token',
+    loadComponent: () => import('./components/public/public-invitation.component').then(m => m.PublicInvitationComponent)
+  },
+  {
+    path: 'anfitrion/:eventId',
+    loadComponent: () => import('./components/public/host-panel.component').then(m => m.HostPanelComponent)
+  },
+  {
     path: '',
     component: LayoutComponent,
     children: [
