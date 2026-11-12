@@ -211,6 +211,11 @@ input:checked + .slider:before {
   padding: 0;
 }
 
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 body {
   font-family: var(--font-ui);
   background-color: var(--bg-app);
@@ -369,3 +374,28 @@ input:focus, select:focus, textarea:focus {
   color: var(--text-muted);
   margin-top: 2px;
 }
+
+/* ================================================================
+   GLOBAL RESPONSIVE ADAPTATIONS (Mobile, Tablet, Laptop, Ultrawide)
+   ================================================================ */
+@media (max-width: 768px) {
+  .btn-action,
+  .btn-outline {
+    padding: 9px 14px;
+    font-size: 0.84rem;
+  }
+
+  .toasts-container {
+    bottom: 12px;
+    right: 12px;
+    left: 12px;
+  }
+
+  .toast-item {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    padding: 12px 14px;
+  }
+}
+

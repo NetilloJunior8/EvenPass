@@ -1018,9 +1018,122 @@ body {
 .badge-status.pending { background: var(--warning-bg); color: var(--warning-color); border: 1px solid var(--warning-border); }
 .badge-status.declined { background: var(--danger-bg); color: var(--danger-color); border: 1px solid var(--danger-border); }
 
-/* Responsivo */
-@media (max-width: 650px) {
-  .panel-kpis-grid { grid-template-columns: repeat(2, 1fr); }
-  .location-nav-grid, .details-two-columns, .radio-choice-grid { grid-template-columns: 1fr; }
-  .card-module, .panel-table-box { padding: 18px 14px; }
+/* Layouts formularios panel anfitrión */
+.panel-dispatch-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1.5fr;
+  gap: 12px;
+  margin-bottom: 14px;
 }
+
+.panel-create-table-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin-bottom: 12px;
+}
+
+.panel-modal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* Responsivo multi-dispositivo (tablets, móviles, pantallas estrechas) */
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+@media (max-width: 900px) {
+  .panel-container {
+    padding: 18px 14px 50px;
+  }
+  .panel-dispatch-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .panel-dispatch-grid > div:first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 650px) {
+  .invitation-shell {
+    padding: 18px 12px 56px;
+  }
+  .hero-header {
+    min-height: 290px;
+    padding: 24px 16px;
+    border-radius: 16px;
+  }
+  .panel-header-strip {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 16px 14px;
+  }
+  .panel-kpis-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .panel-dispatch-grid,
+  .panel-modal-grid,
+  .location-nav-grid,
+  .details-two-columns,
+  .radio-choice-grid {
+    grid-template-columns: 1fr;
+  }
+  .panel-create-table-form > input,
+  .panel-create-table-form > select,
+  .panel-create-table-form > button {
+    flex: 1 1 100% !important;
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+  .tables-grid-preview {
+    grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
+  }
+  .panel-search-bar {
+    min-width: 0;
+    width: 100%;
+  }
+  .card-module,
+  .panel-table-box {
+    padding: 18px 14px;
+  }
+  .card-header-flex {
+    align-items: flex-start;
+  }
+  .countdown-grid {
+    gap: 6px;
+  }
+  .countdown-box {
+    padding: 10px 4px;
+  }
+}
+
+@media (max-width: 420px) {
+  .panel-kpis-grid {
+    grid-template-columns: 1fr;
+  }
+  .countdown-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .countdown-tag {
+    font-size: 0.64rem;
+  }
+  .qr-actions-bar {
+    flex-direction: column;
+    width: 100%;
+  }
+  .qr-actions-bar button,
+  .qr-actions-bar a {
+    width: 100%;
+    justify-content: center;
+  }
+}
+

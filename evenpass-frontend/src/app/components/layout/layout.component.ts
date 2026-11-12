@@ -16,8 +16,11 @@ import { IconComponent } from '../icon.component';
   template: `
     <div class="app-layout-wrapper">
       
+      <!-- Mobile Drawer Backdrop -->
+      <div class="mobile-drawer-backdrop" *ngIf="mobileMenuOpen()" (click)="closeMobileMenu()"></div>
+
       <!-- Sleek Scrollable Sidebar -->
-      <aside class="sidebar-container">
+      <aside class="sidebar-container" [class.mobile-open]="mobileMenuOpen()">
         
         <!-- Brand Header -->
         <div class="sidebar-brand-box">
@@ -27,6 +30,9 @@ import { IconComponent } from '../icon.component';
               <span class="brand-name">Even<span class="brand-accent">Pass</span></span>
               <span class="brand-sub">ENTERPRISE SAAS</span>
             </div>
+            <button class="mobile-close-drawer-btn" (click)="closeMobileMenu()" title="Cerrar menú" aria-label="Cerrar menú">
+              <app-icon name="close" [size]="16"></app-icon>
+            </button>
           </div>
         </div>
 
@@ -58,7 +64,7 @@ import { IconComponent } from '../icon.component';
         </div>
 
         <!-- Scrollable Navigation Tree -->
-        <nav class="sidebar-scrollable-nav">
+        <nav class="sidebar-scrollable-nav" (click)="closeMobileMenu()">
           
           <!-- Section 1: Eventos Globales (Oculto para Staff) -->
           <ng-container *ngIf="!authService.isStaff()">
@@ -156,8 +162,15 @@ import { IconComponent } from '../icon.component';
         
         <!-- Clean Minimalist Header with Smart Event Finder -->
         <header class="app-topbar-header">
-          <!-- Left: Back Arrow Navigation & Event Context -->
+          <!-- Left: Mobile Drawer Toggle + Back Arrow Navigation & Event Context -->
           <div class="topbar-left-meta">
+            <button class="mobile-menu-toggle-btn" (click)="toggleMobileMenu()" title="Abrir menú de navegación" aria-label="Abrir menú">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+              </svg>
+            </button>
             <button class="btn-back-to-catalog" routerLink="/events" title="Volver al Catálogo de Eventos">
               <app-icon name="arrow-left" [size]="15"></app-icon>
               <span class="back-text">Volver a Eventos</span>
@@ -1391,19 +1404,117 @@ import { IconComponent } from '../icon.component';
       line-height: 1.3;
     }
 
+    .mobile-menu-toggle-btn,
+    .mobile-close-drawer-btn {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-input);
+      border: 1px solid var(--border-ui);
+      color: var(--text-main);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .mobile-close-drawer-btn {
+      margin-left: auto;
+      width: 30px;
+      height: 30px;
+    }
+
+    .mobile-drawer-backdrop {
+      display: none;
+    }
+
     @media (max-width: 900px) {
-      .sidebar-container { display: none; }
-      .page-content-outlet { padding: 16px; }
-      .smart-event-palette-trigger { max-width: 200px; }
-      .trigger-event-sub { display: none; }
+      .mobile-menu-toggle-btn,
+      .mobile-close-drawer-btn {
+        display: inline-flex;
+      }
+      .mobile-drawer-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.55);
+        backdrop-filter: blur(2px);
+        z-index: 1100;
+      }
+      .sidebar-container {
+        position: fixed;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        height: 100dvh;
+        width: min(280px, 85vw);
+        z-index: 1200;
+        transform: translateX(-105%);
+        transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: none;
+      }
+      .sidebar-container.mobile-open {
+        transform: translateX(0);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+      }
+      .app-topbar-header {
+        padding: 0 14px;
+        gap: 8px;
+      }
+      .page-content-outlet {
+        padding: 16px;
+      }
+      .smart-event-palette-trigger {
+        max-width: 200px;
+      }
+      .trigger-event-sub {
+        display: none;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .app-topbar-header {
+        padding: 0 10px;
+        height: 58px;
+      }
+      .back-text,
+      .divider,
+      .active-context-wrapper,
+      .topbar-pwa-btn span {
+        display: none;
+      }
+      .btn-back-to-catalog {
+        padding: 6px 9px;
+      }
+      .topbar-right-actions {
+        gap: 6px;
+      }
+      .smart-event-palette-trigger {
+        max-width: 145px;
+        padding: 5px 9px;
+        gap: 6px;
+      }
+      .page-content-outlet {
+        padding: 12px;
+      }
     }
   `]
 })
 export class LayoutComponent {
   showPalette = signal(false);
   showNotificationsPanel = signal(false);
+  mobileMenuOpen = signal(false);
   searchQuery: string = '';
   statusFilter = signal<string>('ALL');
+
+  toggleMobileMenu(): void {
+    this.mobileMenuOpen.update(v => !v);
+  }
+
+  closeMobileMenu(): void {
+    this.mobileMenuOpen.set(false);
+  }
 
   deferredPrompt: any = null;
   showInstallPrompt = signal(false);

@@ -568,7 +568,7 @@ import { IconComponent } from '../icon.component';
     /* Cards Grid */
     .events-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
       gap: 20px;
     }
 
@@ -1747,6 +1747,21 @@ import { IconComponent } from '../icon.component';
     }
     .status-pill.checked-in { background: #ecfdf5; color: #059669; }
     .status-pill.synced { background: #eff6ff; color: #2563eb; }
+
+    @media (max-width: 768px) {
+      .events-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+      }
+      .connect-methods-grid {
+        grid-template-columns: 1fr;
+      }
+      .kpi-row,
+      .api-details-grid {
+        grid-template-columns: 1fr;
+      }
+    }
 
     @media (max-width: 600px) {
       .tier-plans-grid, .form-row, .invitation-modes-grid {

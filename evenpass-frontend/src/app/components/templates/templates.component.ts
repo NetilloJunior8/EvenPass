@@ -542,7 +542,7 @@ import { IconComponent } from '../icon.component';
 
     .templates-showcase-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
       gap: 24px;
     }
 
@@ -1361,6 +1361,12 @@ import { IconComponent } from '../icon.component';
       color: var(--text-muted);
       margin: 0;
       line-height: 1.4;
+    }
+
+    @media (max-width: 640px) {
+      .form-row {
+        grid-template-columns: 1fr;
+      }
     }
   `]
 })

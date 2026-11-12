@@ -1138,7 +1138,7 @@ import jsPDF from 'jspdf';
 
     .connect-methods-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr));
       gap: 16px;
     }
 
@@ -1508,6 +1508,27 @@ import jsPDF from 'jspdf';
     }
     .status-pill.checked-in { background: #ecfdf5; color: #059669; }
     .status-pill.synced { background: #eff6ff; color: #2563eb; }
+
+    @media (max-width: 768px) {
+      .guests-header,
+      .toolbar-container {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .header-actions {
+        width: 100%;
+        flex-wrap: wrap;
+      }
+      .table-wrapper {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .form-row,
+      .ticket-details-grid,
+      .api-details-grid {
+        grid-template-columns: 1fr;
+      }
+    }
   `]
 })
 export class GuestsComponent {

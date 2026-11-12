@@ -51,7 +51,7 @@
       </div>
 
       <form id="form-dispatch-invitation" onsubmit="dispatchInvitation(event)">
-        <div style="display: grid; grid-template-columns: 2fr 1fr 1.5fr; gap: 12px; margin-bottom: 14px;">
+        <div class="panel-dispatch-grid">
           <div>
             <label class="form-label">Nombre de la Familia o Invitado *</label>
             <input type="text" id="dispatch-name" class="form-input-clean" placeholder="Ej. Familia Morales Valenzuela" required autocomplete="off">
@@ -131,13 +131,13 @@
       </div>
 
       <!-- Creador rápido de nueva mesa desde Panel -->
-      <form onsubmit="createTableFromPanel(event)" style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 12px; border-radius: 10px; margin-bottom: 12px;">
+      <form onsubmit="createTableFromPanel(event)" class="panel-create-table-form">
         <input type="text" id="new-table-name" class="form-input-clean" placeholder="Nueva mesa (ej. Mesa VIP 06)" style="flex: 2; min-width: 170px; padding: 7px 10px; font-size: 0.82rem;" required>
         <select id="new-table-shape" class="form-input-clean" style="flex: 1; min-width: 130px; padding: 7px 10px; font-size: 0.82rem;">
           <option value="ROUND">Redonda</option>
           <option value="RECTANGULAR">Imperial Rectangular</option>
         </select>
-        <input type="number" id="new-table-capacity" class="form-input-clean" value="10" min="2" max="30" style="width: 82px; padding: 7px 10px; font-size: 0.82rem;" title="Capacidad de lugares">
+        <input type="number" id="new-table-capacity" class="form-input-clean table-cap-input" value="10" min="2" max="30" style="width: 82px; padding: 7px 10px; font-size: 0.82rem;" title="Capacidad de lugares">
         <button type="submit" class="btn-primary" style="padding: 8px 14px; font-size: 0.8rem; border: none; cursor: pointer;">
           + Crear Mesa en Croquis
         </button>
@@ -199,7 +199,7 @@
           <label class="form-label">Nombre completo</label>
           <input type="text" id="edit-guest-name" class="form-input-clean" required>
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+        <div class="panel-modal-grid">
           <div>
             <label class="form-label">Pases</label>
             <input type="number" id="edit-guest-passes" class="form-input-clean" min="1" max="20" required>

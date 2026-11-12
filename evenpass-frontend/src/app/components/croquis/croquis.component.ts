@@ -2880,6 +2880,59 @@ import jsPDF from 'jspdf';
       .presets-grid {
         grid-template-columns: 1fr;
       }
+      .salon-actions-col {
+        align-items: flex-start;
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .salon-selection-header-card {
+        padding: 14px;
+        gap: 12px;
+      }
+      .salon-title-col {
+        min-width: 0;
+        width: 100%;
+      }
+      .blueprint-canvas-card,
+      .table-inspector-card {
+        padding: 14px;
+      }
+      .svg-scroll-viewport {
+        justify-content: flex-start;
+        padding: 10px;
+        min-height: 340px;
+        max-height: 62vh;
+      }
+      .architectural-svg {
+        width: 100%;
+        max-width: 600px;
+      }
+      .croquis-primary-actions-row > * {
+        flex: 1 1 auto;
+      }
+      .status-legend-row {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .seated-guest-row {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .table-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .zoom-pill-controls {
+        width: 100%;
+        justify-content: center;
+      }
+      .import-mode-row {
+        flex-direction: column;
+      }
     }
   `]
 })

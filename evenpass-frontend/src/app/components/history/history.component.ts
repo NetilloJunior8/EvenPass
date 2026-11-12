@@ -394,7 +394,7 @@ import jsPDF from 'jspdf';
     /* History Grid */
     .history-list-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
       gap: 20px;
     }
 
@@ -780,6 +780,24 @@ import jsPDF from 'jspdf';
       display: flex;
       justify-content: flex-end;
       gap: 12px;
+    }
+
+    @media (max-width: 640px) {
+      .audit-summary-kpis {
+        grid-template-columns: 1fr;
+      }
+      .modal-body-scroll {
+        padding: 14px;
+      }
+      .audit-table {
+        display: block;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .modal-footer {
+        flex-wrap: wrap;
+        padding: 12px 14px;
+      }
     }
   `]
 })

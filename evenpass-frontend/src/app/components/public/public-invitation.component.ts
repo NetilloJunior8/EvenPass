@@ -665,6 +665,8 @@ import { EventItem, Guest, Salon, SalonTable } from '../../models/models';
 
     @media (max-width: 600px) {
       .field-row { grid-template-columns: 1fr; }
+      .lookup-row input { min-width: 0; width: 100%; }
+      .lookup-row .btn-primary-clean { width: 100%; }
     }
   `]
 })
