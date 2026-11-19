@@ -14,7 +14,7 @@ Esta carpeta contiene una invitación web digital interactiva, moderna y estéti
    - Totalmente responsivo para celulares (iPhone y Android) y computadoras.
 
 2. **Cuenta Regresiva en Tiempo Real:**
-   - Calcula y actualiza segundo a segundo los días, horas, minutos y segundos restantes para el sábado 14 de noviembre de 2026 a las 4:00 PM.
+   - Calcula y actualiza segundo a segundo los días, horas, minutos y segundos restantes para el miércoles 2 de diciembre de 2026 a las 4:00 PM.
 
 3. **Ubicación & Coordenadas Interactivas:**
    - Detalles de **Arena Laser Quest & Jump Park (Salón Neón VIP)**.

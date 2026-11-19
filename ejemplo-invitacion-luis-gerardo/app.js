@@ -13,9 +13,9 @@ const DEFAULT_EVENT_6 = {
   boyName: 'Luis Gerardo',
   hostName: 'Familia Morales (Papás)',
   eventType: 'Cumpleaños',
-  date: 'Sábado 14 de Noviembre, 2026',
+  date: 'Miércoles 2 de Diciembre, 2026',
   time: '4:00 PM (16:00 hrs)',
-  eventDate: '2026-11-14T16:00:00',
+  eventDate: '2026-12-02T16:00:00',
   venue: 'Arena Laser Quest & Salón Neón VIP',
   venueAddress: 'Av. Paseo de los Héroes 450, Col. Las Quintas, Culiacán, Sinaloa',
   parentPhone: '526676118835',
@@ -31,6 +31,27 @@ const DEFAULT_EVENT_6 = {
     { id: 5, name: 'Mesa 05 - Invitados Especiales', capacity: 10, shape: 'ROUND', tableNumber: 5 }
   ]
 };
+
+// Limpieza y migración automática para fecha extendida del Evento 6 (2 de Diciembre de 2026)
+(function autoMigrateEvent6Date() {
+  try {
+    const migKey = 'evenpass_event_6_migrated_dec2_clean';
+    if (typeof localStorage !== 'undefined' && !localStorage.getItem(migKey)) {
+      localStorage.setItem(migKey, '1');
+      localStorage.removeItem('evenpass_luis_gerardo_guests_db');
+      localStorage.removeItem('evenpass_event_6_guests_db');
+      localStorage.removeItem('evenpass_deleted_guests_6');
+      const rawMeta = localStorage.getItem('evenpass_event_6_meta_db');
+      if (rawMeta) {
+        try {
+          const m = JSON.parse(rawMeta);
+          m.eventDate = '2026-12-02T16:00:00';
+          localStorage.setItem('evenpass_event_6_meta_db', JSON.stringify(m));
+        } catch (e) {}
+      }
+    }
+  } catch (e) {}
+})();
 
 function getActiveEventId() {
   const params = new URLSearchParams(window.location.search);
@@ -203,7 +224,7 @@ function updateDynamicEventUI() {
       const dt = new Date(meta.eventDate);
       if (!isNaN(dt.getTime())) {
         DEFAULT_EVENT_6.targetDate = dt;
-        if (heroDate && evId !== 6) {
+        if (heroDate) {
           heroDate.innerText = dt.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
         }
         if (heroTime && evId !== 6) {
@@ -721,21 +742,7 @@ function getStoredGuests() {
     } catch (e) {}
   }
 
-  // 3. Padrón inicial exclusivo para Evento 6 (Luis Gerardo 10 años, Mario en Mesa 02 = EvenPass)
-  if (evId === 6) {
-    const initial = [
-      { id: 1, fullName: 'Familia Morales Valenzuela', phone: '667-112-3344', passesGranted: 4, passesConfirmed: 4, status: 'CONFIRMED', tableName: 'Mesa 01 - Familia Cercana', token: 'LG10-VIP-1102', notes: 'Abuelos y tíos', updatedAt: '09:30 AM' },
-      { id: 2, fullName: 'Mateo González & Padres', phone: '667-223-4455', passesGranted: 3, passesConfirmed: 3, status: 'CONFIRMED', tableName: 'Mesa 02 - Amigos de Colegio', token: 'LG10-VIP-2481', notes: 'Compañero de salón', updatedAt: '10:15 AM' },
-      { id: 3, fullName: 'Lic. Roberto Somoza & Fam.', phone: '667-334-5566', passesGranted: 3, passesConfirmed: 3, status: 'CONFIRMED', tableName: 'Mesa 03 - Padrinos & Tíos', token: 'LG10-VIP-3392', notes: 'Padrino', updatedAt: '11:00 AM' },
-      { id: 4, fullName: 'Santiago Beltrán & Papás', phone: '667-445-6677', passesGranted: 3, passesConfirmed: 3, status: 'CONFIRMED', tableName: 'Mesa 04 - Amigos Deportes & Laser', token: 'LG10-VIP-4819', notes: 'Fútbol', updatedAt: '11:45 AM' },
-      { id: 5, fullName: 'Familia Quiñónez Rivas', phone: '667-556-7788', passesGranted: 4, passesConfirmed: 0, status: 'PENDING', tableName: 'Mesa 05 - Invitados Especiales', token: 'LG10-VIP-5520', notes: 'Enviado por WhatsApp', updatedAt: '12:20 PM' },
-      { id: 6, fullName: 'Mario', phone: '667-611-8835', passesGranted: 3, passesConfirmed: 0, status: 'PENDING', tableName: 'Mesa 02 - Amigos de Colegio', token: 'LG10-VIP-8835', notes: 'Invitación con 3 pases', updatedAt: '12:45 PM' }
-    ];
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
-    localStorage.setItem('evenpass_luis_gerardo_guests_db', JSON.stringify(initial));
-    return initial;
-  }
-
+  // 3. Padrón inicial: limpio y listo para demostración del flujo completo
   return [];
 }
 
@@ -846,7 +853,14 @@ function getGoogleCalendarUrl(guestName = '', passes = 2, table = '') {
   const venue = meta.venueName || meta.venue || DEFAULT_EVENT_6.venue;
   const address = meta.locationAddress || DEFAULT_EVENT_6.venueAddress;
   const title = encodeURIComponent(evTitle);
-  const dates = '20261114T220000Z/20261115T023000Z';
+  const dt = new Date(meta.eventDate || DEFAULT_EVENT_6.eventDate);
+  let dates = '20261202T220000Z/20261203T023000Z';
+  if (!isNaN(dt.getTime())) {
+    const startIso = dt.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    const endDt = new Date(dt.getTime() + 4.5 * 3600 * 1000);
+    const endIso = endDt.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    dates = `${startIso}/${endIso}`;
+  }
   const location = encodeURIComponent(address || venue);
   const details = encodeURIComponent(
     `${evTitle} en ${venue}.\n\n` +
@@ -1060,6 +1074,7 @@ function renderIssuedPass(name, passes, tableName, token, notes = '') {
   const pTable = document.getElementById('pass-table-name');
   const pFolio = document.getElementById('pass-folio-code');
   const pPasses = document.getElementById('pass-passes-count');
+  const pDate = document.getElementById('pass-event-date');
   const qrCanvas = document.getElementById('pass-qr-canvas');
   const waBtn = document.getElementById('btn-notify-parents-wa');
   const calBtn = document.getElementById('btn-pass-calendar');
@@ -1069,6 +1084,13 @@ function renderIssuedPass(name, passes, tableName, token, notes = '') {
   if (pTable) pTable.innerText = `Mesa Asignada: ${tableName || 'Por asignar'}`;
   if (pFolio) pFolio.innerText = token;
   if (pPasses) pPasses.innerText = `${passes} ${passes === 1 ? 'Persona' : 'Personas'}`;
+  if (pDate) {
+    const meta = getEventMeta();
+    const dt = new Date(meta.eventDate || DEFAULT_EVENT_6.eventDate);
+    if (!isNaN(dt.getTime())) {
+      pDate.innerText = dt.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+  }
 
   if (qrCanvas) {
     drawQrMatrix(qrCanvas, token);
@@ -2206,7 +2228,7 @@ function initCountdown() {
   function update() {
     const now = new Date().getTime();
     const meta = getEventMeta();
-    const targetMs = new Date(meta.eventDate || DEFAULT_EVENT_6.eventDate).getTime() || new Date('2026-11-14T16:00:00').getTime();
+    const targetMs = new Date(meta.eventDate || DEFAULT_EVENT_6.eventDate).getTime() || new Date('2026-12-02T16:00:00').getTime();
     const distance = targetMs - now;
     if (distance < 0) {
       if (dEl) dEl.innerText = '00';

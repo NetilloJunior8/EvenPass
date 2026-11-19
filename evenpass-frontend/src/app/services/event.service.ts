@@ -632,8 +632,8 @@ export class EventService {
         hostName: 'Familia Morales (Papás)',
         description: 'Celebración de 10 años con torneo Laser Tag, arena de trampolines y banquete.',
         eventType: 'Cumpleaños',
-        eventDate: '2026-11-14T16:00:00',
-        createdAt: '2026-11-03T10:00:00',
+        eventDate: '2026-12-02T16:00:00',
+        createdAt: '2026-11-18T10:00:00',
         venueName: 'Arena Laser Quest & Salón Neón VIP',
         locationAddress: 'Av. Paseo de los Héroes 450, Col. Las Quintas, Culiacán',
         maxCapacity: 50,
@@ -645,8 +645,8 @@ export class EventService {
         hasCroquis: true,
         hasScanner: true,
         numTables: 5,
-        totalGuests: 20,
-        confirmedGuests: 13,
+        totalGuests: 0,
+        confirmedGuests: 0,
         attendedGuests: 0,
         itinerary: [
           { id: 1, time: '16:00', title: 'Recepción & Registro con Pase Digital', description: 'Escaneo en puerta por hostess y entrega de brazaletes de juego', status: 'UPCOMING', location: 'Acceso Salón Neón' },
@@ -784,6 +784,14 @@ export class EventService {
           const evMap = new Map<number, EventItem>();
           demoEvents.forEach(e => evMap.set(e.id, e));
           parsed.forEach((e: EventItem) => evMap.set(e.id, { ...(evMap.get(e.id) || {}), ...e }));
+          const ev6 = evMap.get(6);
+          if (ev6) {
+            ev6.eventDate = '2026-12-02T16:00:00';
+            ev6.status = 'PENDIENTE';
+            ev6.totalGuests = 0;
+            ev6.confirmedGuests = 0;
+            ev6.attendedGuests = 0;
+          }
           loadedEvents = Array.from(evMap.values());
         }
       }
@@ -1001,111 +1009,8 @@ export class EventService {
     // Event 5: Bautizo Santiago (32 passes, 0 attended, Basic Plan, EP-55xx)
     generateEventGuests(5, 'Bautizo & Almuerzo Familiar Santiago', 32, 0, 'Zona Familiar', 'EP-55');
 
-    // Event 6: Mis 10 Años · Luis Gerardo (Padrón Oficial Sincronizado del Panel del Anfitrión)
-    const luisGerardoRealGuests: Guest[] = [
-      {
-        id: guestSeq++,
-        eventId: 6,
-        fullName: 'Familia Morales Valenzuela',
-        email: 'morales.valenzuela@gmail.com',
-        phone: '667-112-3344',
-        numCompanions: 3,
-        totalPasses: 4,
-        status: 'CONFIRMED',
-        qrCodeToken: 'LG10-VIP-1102',
-        assignedTableId: 401,
-        assignedTableName: 'Mesa 01 - Familia Cercana',
-        dietNotes: 'Abuelos y tíos',
-        confirmedAt: '2026-11-03 09:30',
-        source: 'DIGITAL_INVITATION',
-        externalSyncId: 'SYNC-6-1102'
-      },
-      {
-        id: guestSeq++,
-        eventId: 6,
-        fullName: 'Mateo González & Padres',
-        email: 'mateo.gonzalez@gmail.com',
-        phone: '667-223-4455',
-        numCompanions: 2,
-        totalPasses: 3,
-        status: 'CONFIRMED',
-        qrCodeToken: 'LG10-VIP-2481',
-        assignedTableId: 402,
-        assignedTableName: 'Mesa 02 - Amigos de Colegio',
-        dietNotes: 'Compañero de salón',
-        confirmedAt: '2026-11-03 10:15',
-        source: 'DIGITAL_INVITATION',
-        externalSyncId: 'SYNC-6-2481'
-      },
-      {
-        id: guestSeq++,
-        eventId: 6,
-        fullName: 'Lic. Roberto Somoza & Fam.',
-        email: 'roberto.somoza@gmail.com',
-        phone: '667-334-5566',
-        numCompanions: 2,
-        totalPasses: 3,
-        status: 'CONFIRMED',
-        qrCodeToken: 'LG10-VIP-3392',
-        assignedTableId: 403,
-        assignedTableName: 'Mesa 03 - Padrinos & Tíos',
-        dietNotes: 'Padrino',
-        confirmedAt: '2026-11-03 11:00',
-        source: 'DIGITAL_INVITATION',
-        externalSyncId: 'SYNC-6-3392'
-      },
-      {
-        id: guestSeq++,
-        eventId: 6,
-        fullName: 'Santiago Beltrán & Papás',
-        email: 'santiago.beltran@gmail.com',
-        phone: '667-445-6677',
-        numCompanions: 2,
-        totalPasses: 3,
-        status: 'CONFIRMED',
-        qrCodeToken: 'LG10-VIP-4819',
-        assignedTableId: 404,
-        assignedTableName: 'Mesa 04 - Amigos Deportes & Laser',
-        dietNotes: 'Fútbol',
-        confirmedAt: '2026-11-03 11:45',
-        source: 'DIGITAL_INVITATION',
-        externalSyncId: 'SYNC-6-4819'
-      },
-      {
-        id: guestSeq++,
-        eventId: 6,
-        fullName: 'Familia Quiñónez Rivas',
-        email: 'fam.quinonez@gmail.com',
-        phone: '667-556-7788',
-        numCompanions: 3,
-        totalPasses: 4,
-        status: 'PENDING',
-        qrCodeToken: 'LG10-VIP-5520',
-        assignedTableId: 405,
-        assignedTableName: 'Mesa 05 - Invitados Especiales',
-        dietNotes: 'Enviado por WhatsApp',
-        confirmedAt: undefined,
-        source: 'DIGITAL_INVITATION',
-        externalSyncId: 'SYNC-6-5520'
-      },
-      {
-        id: guestSeq++,
-        eventId: 6,
-        fullName: 'Mario',
-        email: 'mario@gmail.com',
-        phone: '667-611-8835',
-        numCompanions: 2,
-        totalPasses: 3,
-        status: 'PENDING',
-        qrCodeToken: 'LG10-VIP-8835',
-        assignedTableId: 402,
-        assignedTableName: 'Mesa 02 - Amigos de Colegio',
-        dietNotes: 'Invitación con 3 pases',
-        confirmedAt: undefined,
-        source: 'DIGITAL_INVITATION',
-        externalSyncId: 'SYNC-6-8835'
-      }
-    ];
+    // Event 6: Mis 10 Años · Luis Gerardo (Padrón Oficial - Inicialmente limpio para demostración en vivo)
+    const luisGerardoRealGuests: Guest[] = [];
 
     luisGerardoRealGuests.forEach(g => {
       demoGuests.push(g);
@@ -1131,24 +1036,8 @@ export class EventService {
       if (rawGuests) {
         const parsed = JSON.parse(rawGuests);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // Self-healing migration for Event 6 overcapacity if legacy cached:
-          parsed.forEach((g: Guest) => {
-            if (g.eventId === 6) {
-              if (g.qrCodeToken === 'LG10-VIP-5520' || g.fullName?.includes('Quiñónez')) {
-                if (g.assignedTableId === 401 || !g.assignedTableId) {
-                  g.assignedTableId = 405;
-                  g.assignedTableName = 'Mesa 05 - Invitados Especiales';
-                }
-              }
-              if (g.qrCodeToken === 'LG10-VIP-8835' || g.fullName?.toLowerCase() === 'mario') {
-                if (g.assignedTableId === 401 || !g.assignedTableId) {
-                  g.assignedTableId = 402;
-                  g.assignedTableName = 'Mesa 02 - Amigos de Colegio';
-                }
-              }
-            }
-          });
-          loadedGuests = parsed;
+          // Reset Event 6 guests so the presentation starts with a clean slate as requested
+          loadedGuests = parsed.filter((g: Guest) => g.eventId !== 6);
         }
       }
     } catch (e) {}
@@ -1159,15 +1048,11 @@ export class EventService {
     this.allAuditEntries.set(demoAudit);
     this.persistGuests();
 
-    // Sincronizar pases existentes desde panel del anfitrión si hay alguno registrado
+    // Limpiar almacenamiento legado del anfitrión para asegurar inicio fresco del Evento 6
     try {
-      const rawHost = localStorage.getItem('evenpass_luis_gerardo_guests_db');
-      if (rawHost) {
-        const list = JSON.parse(rawHost);
-        if (Array.isArray(list) && list.length > 0) {
-          this.syncDigitalGuestsList(6, list, false);
-        }
-      }
+      localStorage.removeItem('evenpass_luis_gerardo_guests_db');
+      localStorage.removeItem('evenpass_event_6_guests_db');
+      localStorage.removeItem('evenpass_deleted_guests_6');
     } catch (e) {}
 
     // Self-healing: Enforce hard zero-overcapacity limits across all tables immediately
